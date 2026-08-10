@@ -377,6 +377,8 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
     const media = await downloadInboundMedia(m, unwrapped, sock, accountId);
     if (!text && !media) return;
 
+    const quote = extractQuotedContext(unwrapped);
+
     await postWebhook(accountId, {
       type: "message",
       phoneE164: phone,
@@ -385,6 +387,7 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
       sentAt: new Date(Number(m?.messageTimestamp || 0) * 1000 || Date.now()).toISOString(),
       pushName: m?.pushName ?? null,
       media: media ?? undefined,
+      quoted: quote ?? undefined,
     });
     console.log(
       `[wa:${accountId}] inbound de ${phone}${media ? ` +${media.kind}` : ""} → app ok`
@@ -593,13 +596,46 @@ function extractTextFromContent(msg: any): string | null {
   if (typeof msg.documentMessage?.caption === "string" && msg.documentMessage.caption.trim()) {
     return msg.documentMessage.caption;
   }
-  // placeholders só se não houver caption
-  if (msg.imageMessage) return null; // mídia pura — label vem de mediaLabel
+  // mídia pura — label vem de mediaLabel
+  if (msg.imageMessage) return null;
   if (msg.documentMessage) return null;
   if (msg.audioMessage) return null;
   if (msg.stickerMessage) return null;
   if (msg.videoMessage) return null;
   return null;
+}
+
+/** Reply-to / citação inbound (contextInfo). */
+function extractQuotedContext(
+  msg: any
+): { stanzaId: string; text: string; participant?: string } | null {
+  if (!msg) return null;
+  const ctx =
+    msg.extendedTextMessage?.contextInfo ||
+    msg.imageMessage?.contextInfo ||
+    msg.videoMessage?.contextInfo ||
+    msg.documentMessage?.contextInfo ||
+    msg.audioMessage?.contextInfo ||
+    null;
+  if (!ctx?.stanzaId) return null;
+  const q = ctx.quotedMessage;
+  let text = "";
+  if (q) {
+    text =
+      q.conversation ||
+      q.extendedTextMessage?.text ||
+      q.imageMessage?.caption ||
+      q.documentMessage?.caption ||
+      (q.imageMessage ? "[imagem]" : "") ||
+      (q.audioMessage ? "[áudio]" : "") ||
+      (q.documentMessage?.fileName ? `[doc: ${q.documentMessage.fileName}]` : "") ||
+      "";
+  }
+  return {
+    stanzaId: String(ctx.stanzaId),
+    text: String(text || "").slice(0, 500),
+    participant: ctx.participant ? String(ctx.participant) : undefined,
+  };
 }
 
 export type SendMediaInput = {
@@ -611,11 +647,22 @@ export type SendMediaInput = {
   kind?: "image" | "document";
 };
 
+/** Citação WhatsApp (reply-to): key da mensagem original. */
+export type QuotedMessageInput = {
+  /** id externo (wamid / Baileys key.id) */
+  id: string;
+  /** fromMe no WhatsApp */
+  fromMe?: boolean;
+  /** trecho para o protocol (conversation) */
+  text?: string;
+};
+
 export async function sendText(
   accountId: string,
   to: string,
   body: string,
-  media?: SendMediaInput | null
+  media?: SendMediaInput | null,
+  quoted?: QuotedMessageInput | null
 ): Promise<{ ok: true; externalId: string | null } | { ok: false; reason: string }> {
   const s = getOrCreate(accountId);
   if (s.status !== "connected" || !s.sock) {
@@ -634,6 +681,22 @@ export async function sendText(
     };
   }
 
+  const sendOpts =
+    quoted?.id
+      ? {
+          quoted: {
+            key: {
+              remoteJid: jid,
+              id: quoted.id,
+              fromMe: Boolean(quoted.fromMe),
+            },
+            message: {
+              conversation: (quoted.text || " ").slice(0, 500),
+            },
+          },
+        }
+      : undefined;
+
   try {
     let result: any;
     if (media?.base64) {
@@ -641,7 +704,6 @@ export async function sendText(
       if (raw.includes(",")) raw = raw.split(",")[1] ?? raw;
       const buf = Buffer.from(raw, "base64");
       if (buf.length < 20) return { ok: false, reason: "Arquivo inválido ou vazio." };
-      // ~8MB raw after decode — WhatsApp costuma recusar bem acima disso
       if (buf.length > 8_000_000) {
         return { ok: false, reason: "Arquivo muito grande (máx. ~8 MB)." };
       }
@@ -650,34 +712,39 @@ export async function sendText(
       const fileName =
         media.fileName?.trim() ||
         (mime.startsWith("image/") ? "image.jpg" : "document.bin");
-      // Alguns browsers mandam type vazio — infere pela extensão
       if (!mime || mime === "application/octet-stream") {
         mime = guessMimeFromName(fileName);
       }
-      const isImage =
-        media.kind === "image" ||
-        mime.startsWith("image/");
+      const isImage = media.kind === "image" || mime.startsWith("image/");
 
       if (isImage) {
-        result = await s.sock.sendMessage(jid, {
-          image: buf,
-          caption: text || undefined,
-          mimetype: mime.startsWith("image/") ? mime : "image/jpeg",
-        });
+        result = await s.sock.sendMessage(
+          jid,
+          {
+            image: buf,
+            caption: text || undefined,
+            mimetype: mime.startsWith("image/") ? mime : "image/jpeg",
+          },
+          sendOpts
+        );
       } else {
-        result = await s.sock.sendMessage(jid, {
-          document: buf,
-          mimetype: mime || "application/octet-stream",
-          fileName,
-          caption: text || undefined,
-        });
+        result = await s.sock.sendMessage(
+          jid,
+          {
+            document: buf,
+            mimetype: mime || "application/octet-stream",
+            fileName,
+            caption: text || undefined,
+          },
+          sendOpts
+        );
       }
       console.log(
-        `[wa:${accountId}] enviou ${isImage ? "image" : "document"} → ${jid} name=${fileName} mime=${mime} bytes=${buf.length}`
+        `[wa:${accountId}] enviou ${isImage ? "image" : "document"} → ${jid} name=${fileName} mime=${mime} bytes=${buf.length}${quoted?.id ? " quoted" : ""}`
       );
     } else {
-      result = await s.sock.sendMessage(jid, { text });
-      console.log(`[wa:${accountId}] enviou texto → ${jid}`);
+      result = await s.sock.sendMessage(jid, { text }, sendOpts);
+      console.log(`[wa:${accountId}] enviou texto → ${jid}${quoted?.id ? " quoted" : ""}`);
     }
 
     const externalId = result?.key?.id ?? null;

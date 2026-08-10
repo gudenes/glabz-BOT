@@ -375,6 +375,11 @@ const server = createServer(async (req, res) => {
             fileName?: string;
             kind?: "image" | "document";
           } | null;
+          quoted?: {
+            id?: string;
+            fromMe?: boolean;
+            text?: string;
+          } | null;
         }>(await readBody(req));
         if (!body) {
           json(res, 400, { ok: false, reason: "invalidJson" });
@@ -389,7 +394,21 @@ const server = createServer(async (req, res) => {
                 kind: body.media.kind,
               }
             : null;
-        const result = await sendText(accountId, body.to ?? "", body.body ?? "", media);
+        const quoted =
+          body.quoted?.id
+            ? {
+                id: body.quoted.id,
+                fromMe: body.quoted.fromMe,
+                text: body.quoted.text,
+              }
+            : null;
+        const result = await sendText(
+          accountId,
+          body.to ?? "",
+          body.body ?? "",
+          media,
+          quoted
+        );
         if (!result.ok) {
           json(res, 409, result);
           return;
