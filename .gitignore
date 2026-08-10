@@ -1,0 +1,9 @@
+node_modules/
+data/
+auth_state/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+package-lock.json.bak

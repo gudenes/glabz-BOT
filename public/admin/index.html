@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Glabs Bot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/admin/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Login -->
+      <section id="view-login" class="login-shell hidden">
+        <div class="login-card">
+          <div class="brand-row">
+            <div class="logo-mark" aria-hidden="true">G</div>
+            <div>
+              <h1>Glabs Bot</h1>
+              <p class="muted">Canal WhatsApp multi-product</p>
+            </div>
+          </div>
+          <label class="field">
+            <span>Secret do bot</span>
+            <input
+              id="login-secret"
+              type="password"
+              autocomplete="current-password"
+              placeholder="GLABS_BOT_SECRET"
+            />
+          </label>
+          <p id="login-error" class="err hidden"></p>
+          <button id="login-btn" class="btn primary block" type="button">Entrar</button>
+          <p class="hint">
+            Mesmo valor de <code>GLABS_BOT_SECRET</code> no Railway. Fica só neste navegador.
+          </p>
+        </div>
+      </section>
+
+      <!-- App shell -->
+      <section id="view-app" class="app-shell hidden">
+        <aside class="sidebar">
+          <div class="brand-row compact">
+            <div class="logo-mark sm" aria-hidden="true">G</div>
+            <div>
+              <div class="brand-title">Glabs Bot</div>
+              <div class="brand-sub muted" id="health-label">—</div>
+            </div>
+          </div>
+          <nav class="nav">
+            <button type="button" class="nav-item active" data-tab="overview">Overview</button>
+            <button type="button" class="nav-item" data-tab="accounts">Contas</button>
+            <button type="button" class="nav-item" data-tab="products">Products</button>
+          </nav>
+          <div class="sidebar-foot">
+            <button type="button" id="logout-btn" class="btn ghost block sm">Sair</button>
+          </div>
+        </aside>
+
+        <main class="main">
+          <header class="topbar">
+            <div>
+              <h2 id="page-title">Overview</h2>
+              <p class="muted" id="page-sub">Sessões e saúde do canal</p>
+            </div>
+            <div class="topbar-actions">
+              <button type="button" id="refresh-btn" class="btn secondary sm">Atualizar</button>
+              <button type="button" id="new-account-btn" class="btn primary sm">Nova conta</button>
+            </div>
+          </header>
+
+          <div id="toast" class="toast hidden"></div>
+          <div id="global-error" class="banner-err hidden"></div>
+
+          <!-- Overview -->
+          <div id="tab-overview" class="tab">
+            <div class="stats" id="stats-row"></div>
+            <div class="panel">
+              <div class="panel-head">
+                <h3>Contas recentes</h3>
+              </div>
+              <div id="overview-accounts" class="account-list"></div>
+            </div>
+          </div>
+
+          <!-- Accounts -->
+          <div id="tab-accounts" class="tab hidden">
+            <div class="toolbar">
+              <input id="filter-product" class="input" placeholder="Filtrar product…" />
+              <select id="filter-status" class="input select">
+                <option value="">Todos os status</option>
+                <option value="connected">Conectado</option>
+                <option value="pending_qr">Aguardando QR</option>
+                <option value="disconnected">Desconectado</option>
+                <option value="error">Erro</option>
+              </select>
+            </div>
+            <div id="accounts-list" class="account-list"></div>
+          </div>
+
+          <!-- Products -->
+          <div id="tab-products" class="tab hidden">
+            <div class="panel">
+              <div class="panel-head">
+                <h3>Products (apps GLabs)</h3>
+                <button type="button" id="new-product-btn" class="btn secondary sm">Novo product</button>
+              </div>
+              <div id="products-list" class="product-list"></div>
+            </div>
+          </div>
+
+          <!-- Account detail drawer -->
+          <div id="drawer-backdrop" class="drawer-backdrop hidden"></div>
+          <aside id="account-drawer" class="drawer hidden" aria-hidden="true">
+            <div class="drawer-head">
+              <div>
+                <h3 id="drawer-title">Conta</h3>
+                <p class="muted mono sm" id="drawer-id"></p>
+              </div>
+              <button type="button" id="drawer-close" class="btn ghost sm">Fechar</button>
+            </div>
+            <div class="drawer-body" id="drawer-body"></div>
+          </aside>
+        </main>
+      </section>
+    </div>
+
+    <!-- Modals -->
+    <dialog id="modal-account" class="modal">
+      <form method="dialog" id="form-account" class="modal-card">
+        <h3>Nova conta WhatsApp</h3>
+        <p class="muted">1 account = 1 número. Product + tenant do app cliente.</p>
+        <label class="field">
+          <span>Product</span>
+          <select id="acc-product" class="input" required></select>
+        </label>
+        <label class="field">
+          <span>externalTenantId</span>
+          <input id="acc-tenant" class="input" required placeholder="id do tenant no app" />
+        </label>
+        <label class="field">
+          <span>Webhook URL</span>
+          <input
+            id="acc-webhook"
+            class="input"
+            required
+            placeholder="https://app…/api/webhooks/glabs-bot"
+          />
+        </label>
+        <label class="field">
+          <span>Label (opcional)</span>
+          <input id="acc-label" class="input" placeholder="Corretora XPTO" />
+        </label>
+        <p id="acc-form-err" class="err hidden"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn secondary" data-close>Cancelar</button>
+          <button type="submit" class="btn primary">Criar / atualizar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="modal-product" class="modal">
+      <form method="dialog" id="form-product" class="modal-card">
+        <h3>Novo product</h3>
+        <p class="muted">Registra um app GLabs que vai consumir o bot.</p>
+        <label class="field">
+          <span>Slug</span>
+          <input id="prod-slug" class="input" required placeholder="gestor" pattern="[a-z0-9_-]+" />
+        </label>
+        <label class="field">
+          <span>Nome</span>
+          <input id="prod-name" class="input" placeholder="Gestor de Seguros" />
+        </label>
+        <label class="field">
+          <span>Webhook default (opcional)</span>
+          <input id="prod-webhook" class="input" placeholder="https://…" />
+        </label>
+        <p id="prod-form-err" class="err hidden"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn secondary" data-close>Cancelar</button>
+          <button type="submit" class="btn primary">Salvar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/admin/app.js" type="module"></script>
+  </body>
+</html>
