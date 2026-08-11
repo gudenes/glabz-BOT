@@ -133,8 +133,11 @@ export function demoConsultationFlow(): Flow {
 }
 
 /**
- * Fluxo demo estúdio de pilates:
- * marcar sessão · tirar dúvida · atendimento administrativo
+ * Fluxo demo estúdio de pilates — layout em 3 colunas claras:
+ *
+ *          [Início] → [Boas-vindas] → [Entender pedido]
+ *                         /              |              \
+ *              marcar sessão      tirar dúvida     atendimento admin
  */
 export function demoPilatesFlow(): Flow {
   const now = new Date().toISOString();
@@ -142,29 +145,31 @@ export function demoPilatesFlow(): Flow {
     trigger: "p_trigger",
     welcome: "p_welcome",
     intent: "p_intent",
-    // marcar sessão
     askName: "p_ask_name",
     askWhen: "p_ask_when",
     askLevel: "p_ask_level",
     confirm: "p_confirm",
     handoffBook: "p_handoff_book",
-    // dúvida
     askDoubt: "p_ask_doubt",
     doubtAck: "p_doubt_ack",
     handoffDoubt: "p_handoff_doubt",
-    // admin
     askAdmin: "p_ask_admin",
     adminAck: "p_admin_ack",
     handoffAdmin: "p_handoff_admin",
-    // fallback
     clarify: "p_clarify",
     end: "p_end",
   };
 
+  // Colunas: esquerda (marcar) · centro (dúvida + tronco) · direita (admin)
+  const CX = 420;
+  const L = 80;
+  const R = 760;
+  const y0 = 40;
+  const gap = 130;
+
   return {
     id: randomUUID(),
     name: "Demo · Marcar sessão de pilates",
-    // product alinhado à conta demo do Gestor; troque no builder se precisar
     product: "gestor",
     accountId: null,
     status: "draft",
@@ -174,108 +179,108 @@ export function demoPilatesFlow(): Flow {
       {
         id: ids.trigger,
         type: "trigger",
-        x: 60,
-        y: 40,
-        data: { label: "Mensagem recebida" },
+        x: CX,
+        y: y0,
+        data: { label: "Cliente mandou mensagem" },
       },
       {
         id: ids.welcome,
         type: "message",
-        x: 60,
-        y: 150,
+        x: CX,
+        y: y0 + gap,
         data: {
           text:
-            "Olá{{name_greet}}! 🧘‍♀️ Bem-vinda(o) ao estúdio.\n\nComo posso te ajudar hoje?\n\n• *Marcar uma sessão*\n• *Tirar uma dúvida*\n• *Atendimento administrativo*\n\nPode escrever com suas palavras 🙂",
+            "Olá! 🧘‍♀️ Bem-vinda(o) ao estúdio.\n\nComo posso te ajudar?\n\n• Marcar uma sessão\n• Tirar uma dúvida\n• Atendimento administrativo",
         },
       },
       {
         id: ids.intent,
         type: "llm_intent",
-        x: 60,
-        y: 300,
+        x: CX,
+        y: y0 + gap * 2,
         data: {
           label: "Entender o pedido",
           prompt:
-            "Você atende um estúdio de pilates. Classifique a mensagem do cliente em UMA intenção. Responda APENAS o slug.",
+            "Você atende um estúdio de pilates. Classifique a mensagem em UMA intenção. Responda APENAS o slug.",
           intents: [
             {
               slug: "marcar_sessao",
               description:
-                "marcar sessão, agendar aula, horários, vaga, pilates, treino, aula experimental, remarcar",
+                "marcar sessão, agendar aula, horários, vaga, pilates, treino, experimental, remarcar",
             },
             {
               slug: "tirar_duvida",
               description:
-                "dúvida, pergunta, como funciona, valores, planos, iniciante, gravidez, dor, o que levar",
+                "dúvida, pergunta, como funciona, valores, planos, iniciante, o que levar",
             },
             {
               slug: "atendimento_admin",
               description:
-                "administrativo, boleto, nota fiscal, cancelar, mensalidade, contrato, financeiro, rematrícula",
+                "administrativo, boleto, nota fiscal, cancelar, mensalidade, contrato, financeiro",
             },
           ],
         },
       },
-      // ── Marcar sessão ───────────────────────────────────
+      // Coluna esquerda — marcar sessão
       {
         id: ids.askName,
         type: "ask",
-        x: 340,
-        y: 160,
+        x: L,
+        y: y0 + gap * 3,
         data: {
-          prompt: "Perfeito! Vamos *marcar uma sessão* 💪\n\nQual o *seu nome*?",
+          prompt: "Perfeito! Vamos marcar uma sessão 💪\n\nQual o *seu nome*?",
           varName: "nome",
         },
       },
       {
         id: ids.askWhen,
         type: "ask",
-        x: 340,
-        y: 300,
+        x: L,
+        y: y0 + gap * 4,
         data: {
           prompt:
-            "Oi, {{nome}}! Qual *dia e horário* prefere?\n(ex.: terça 18h, ou amanhã de manhã)",
+            "Oi, {{nome}}! Qual *dia e horário* prefere?\n(ex.: terça 18h)",
           varName: "quando",
         },
       },
       {
         id: ids.askLevel,
         type: "ask",
-        x: 340,
-        y: 440,
+        x: L,
+        y: y0 + gap * 5,
         data: {
           prompt:
-            "Você já pratica pilates ou é *primeira vez*?\n(assim a equipe prepara a aula certinha)",
+            "Você já pratica pilates ou é *primeira vez*?",
           varName: "nivel",
         },
       },
       {
         id: ids.confirm,
         type: "message",
-        x: 340,
-        y: 580,
+        x: L,
+        y: y0 + gap * 6,
         data: {
           text:
-            "Anotado ✅\n\n*Nome:* {{nome}}\n*Quando:* {{quando}}\n*Nível:* {{nivel}}\n\nVou chamar a equipe para *confirmar a vaga*. Um instante!",
+            "Anotado ✅\n\nNome: {{nome}}\nQuando: {{quando}}\nNível: {{nivel}}\n\nVou chamar a equipe para confirmar a vaga.",
         },
       },
       {
         id: ids.handoffBook,
         type: "handoff",
-        x: 340,
-        y: 720,
+        x: L,
+        y: y0 + gap * 7,
         data: {
           reason: "marcar_sessao_pilates",
           message:
-            "Pronto! Um atendente do estúdio vai confirmar sua sessão e te retornar por aqui 💚",
+            "Pronto! Um atendente do estúdio vai confirmar sua sessão por aqui 💚",
         },
       },
-      // ── Tirar dúvida ─────────────────────────────────────
+      // Coluna centro — dúvida
       {
         id: ids.askDoubt,
         type: "ask",
-        x: 620,
-        y: 240,
+        x: CX,
+        y: y0 + gap * 3,
         data: {
           prompt: "Claro! Pode mandar sua *dúvida* com calma 👇",
           varName: "duvida",
@@ -284,72 +289,72 @@ export function demoPilatesFlow(): Flow {
       {
         id: ids.doubtAck,
         type: "message",
-        x: 620,
-        y: 380,
+        x: CX,
+        y: y0 + gap * 4,
         data: {
           text:
-            "Entendi sua dúvida:\n\n„{{duvida}}“\n\nVou passar para a equipe responder com carinho ✨",
+            "Entendi:\n\n“{{duvida}}”\n\nVou passar para a equipe responder ✨",
         },
       },
       {
         id: ids.handoffDoubt,
         type: "handoff",
-        x: 620,
-        y: 520,
+        x: CX,
+        y: y0 + gap * 5,
         data: {
           reason: "duvida_pilates",
-          message: "Um atendente vai te responder em breve. Obrigada pela paciência!",
+          message: "Um atendente vai te responder em breve. Obrigada!",
         },
       },
-      // ── Administrativo ───────────────────────────────────
+      // Coluna direita — admin
       {
         id: ids.askAdmin,
         type: "ask",
-        x: 900,
-        y: 240,
+        x: R,
+        y: y0 + gap * 3,
         data: {
           prompt:
-            "Certo — assunto *administrativo*.\n\nPode detalhar o que precisa?\n(ex.: boleto, cancelamento, nota fiscal, rematrícula)",
+            "Certo — assunto *administrativo*.\n\nO que você precisa?\n(ex.: boleto, cancelamento, nota fiscal)",
           varName: "pedido_admin",
         },
       },
       {
         id: ids.adminAck,
         type: "message",
-        x: 900,
-        y: 380,
+        x: R,
+        y: y0 + gap * 4,
         data: {
           text:
-            "Recebi:\n\n„{{pedido_admin}}“\n\nEncaminhando para o atendimento administrativo 📋",
+            "Recebi:\n\n“{{pedido_admin}}”\n\nEncaminhando para o administrativo 📋",
         },
       },
       {
         id: ids.handoffAdmin,
         type: "handoff",
-        x: 900,
-        y: 520,
+        x: R,
+        y: y0 + gap * 5,
         data: {
           reason: "admin_pilates",
           message:
-            "Pronto! Nossa equipe administrativa continua por aqui. Qualquer doc que precisar, pode enviar nesta conversa.",
+            "Pronto! Nossa equipe administrativa continua por aqui.",
         },
       },
-      // ── Fallback ─────────────────────────────────────────
+      // Fallback abaixo do centro
       {
         id: ids.clarify,
         type: "message",
-        x: 60,
-        y: 480,
+        x: CX,
+        y: y0 + gap * 6.5,
         data: {
           text:
-            "Sem problemas! Me diga se você quer:\n\n1️⃣ *Marcar uma sessão*\n2️⃣ *Tirar uma dúvida*\n3️⃣ *Atendimento administrativo*\n\nÉ só responder com o número ou em texto 🙂",
+            "Sem problemas! Me diga se você quer:\n\n1) Marcar uma sessão\n2) Tirar uma dúvida\n3) Atendimento administrativo",
         },
       },
       {
         id: ids.end,
         type: "end",
-        x: 60,
-        y: 640,
+        x: CX,
+        y: y0 + gap * 7.5,
         data: { label: "Aguarda nova mensagem" },
       },
     ],

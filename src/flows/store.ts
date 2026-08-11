@@ -8,14 +8,25 @@ import { allSeedTemplates } from "./templates.js";
 type FlowsFile = { version: 1; flows: Flow[] };
 type StatesFile = { version: 1; states: FlowConversationState[] };
 
-/** Garante templates de demo se ainda não existirem (por nome). */
+/**
+ * Garante templates de demo por nome.
+ * Se já existir com o mesmo nome, atualiza nodes/edges (layout) mantendo id/status.
+ */
 function ensureSeedTemplates(file: FlowsFile): boolean {
   let changed = false;
   for (const seed of allSeedTemplates()) {
-    if (!file.flows.some((f) => f.name === seed.name)) {
+    const existing = file.flows.find((f) => f.name === seed.name);
+    if (!existing) {
       file.flows.push(seed);
       changed = true;
+      continue;
     }
+    // Atualiza layout/copy do seed (não mexe em status live/draft escolhido)
+    existing.nodes = seed.nodes;
+    existing.edges = seed.edges;
+    existing.product = seed.product;
+    existing.updatedAt = new Date().toISOString();
+    changed = true;
   }
   return changed;
 }

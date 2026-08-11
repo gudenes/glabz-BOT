@@ -73,17 +73,90 @@ function defaultData(type) {
   }
 }
 
+/** Preview legível no cartão (sem {{vars}} crus). */
+function prettyPreview(text) {
+  return String(text || "")
+    .replace(/\{\{\s*name_greet\s*\}\}/g, "")
+    .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, k) => `[${k}]`)
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/\n+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 90);
+}
+
 function nodeTitle(node) {
   const d = node.data || {};
-  if (node.type === "message") return String(d.text || "Mensagem").slice(0, 80);
-  if (node.type === "ask") return String(d.prompt || "Pergunta").slice(0, 80);
-  if (node.type === "llm_intent") return d.label || "LLM intenção";
+  if (node.type === "message") return prettyPreview(d.text || "Mensagem") || "Mensagem";
+  if (node.type === "ask") return prettyPreview(d.prompt || "Pergunta") || "Pergunta";
+  if (node.type === "llm_intent") return d.label || "Entender intenção";
   if (node.type === "condition")
-    return `${d.field || "last"} ${d.op || "contains"} “${d.value || ""}”`;
-  if (node.type === "handoff") return d.reason || "Handoff";
+    return `${d.field || "texto"} ${d.op || "contém"} “${d.value || ""}”`;
+  if (node.type === "handoff") return "Passar para atendente";
   if (node.type === "end") return d.label || "Fim";
-  if (node.type === "trigger") return d.label || "Trigger";
+  if (node.type === "trigger") return d.label || "Início";
   return node.type;
+}
+
+const NODE_W = 220;
+const NODE_H = 96; // altura visual aprox. (conteúdo + botão +)
+
+/** Linha em “degrau” — vertical + horizontal, sem laços soltos. */
+function edgePath(a, b) {
+  const x1 = a.x + NODE_W / 2;
+  const y1 = a.y + NODE_H;
+  const x2 = b.x + NODE_W / 2;
+  const y2 = b.y;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+
+  // Mesma coluna: linha reta (com leve curva se muito curto)
+  if (Math.abs(dx) < 28) {
+    return `M ${x1} ${y1} L ${x2} ${Math.max(y2, y1 + 8)}`;
+  }
+
+  // Alvo abaixo: desce, cruza, desce
+  if (dy > 20) {
+    const midY = y1 + Math.min(48, Math.max(28, dy * 0.35));
+    return `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
+  }
+
+  // Alvo ao lado / acima: desce um pouco, cruza, sobe/desce
+  const drop = y1 + 36;
+  return `M ${x1} ${y1} L ${x1} ${drop} L ${x2} ${drop} L ${x2} ${y2}`;
+}
+
+function edgeLabelPos(a, b) {
+  const x1 = a.x + NODE_W / 2;
+  const y1 = a.y + NODE_H;
+  const x2 = b.x + NODE_W / 2;
+  const y2 = b.y;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  if (Math.abs(dx) < 28) {
+    return { x: x1 + 8, y: (y1 + y2) / 2 };
+  }
+  if (dy > 20) {
+    const midY = y1 + Math.min(48, Math.max(28, dy * 0.35));
+    return { x: (x1 + x2) / 2, y: midY - 6 };
+  }
+  const drop = y1 + 36;
+  return { x: (x1 + x2) / 2, y: drop - 6 };
+}
+
+function friendlyEdgeLabel(label) {
+  const map = {
+    marcar_sessao: "marcar sessão",
+    tirar_duvida: "tirar dúvida",
+    atendimento_admin: "administrativo",
+    marcar_consulta: "marcar consulta",
+    falar_humano: "falar com humano",
+    outro: "outro",
+    default: "não entendeu",
+    true: "sim",
+    false: "não",
+  };
+  return map[label] || label;
 }
 
 function typeLabel(type) {
@@ -239,34 +312,56 @@ function renderCanvas() {
   svg.innerHTML = "";
   if (!state.flow) return;
 
-  // edges
+  // edges — só desenha se from/to existem (sem laços soltos)
   const ns = "http://www.w3.org/2000/svg";
+  const nodeIds = new Set(state.flow.nodes.map((n) => n.id));
+  // limpa edges órfãs no modelo
+  state.flow.edges = state.flow.edges.filter(
+    (e) => nodeIds.has(e.from) && nodeIds.has(e.to) && e.from !== e.to
+  );
+
   for (const e of state.flow.edges) {
     const a = state.flow.nodes.find((n) => n.id === e.from);
     const b = state.flow.nodes.find((n) => n.id === e.to);
     if (!a || !b) continue;
-    const x1 = a.x + 100;
-    const y1 = a.y + 40;
-    const x2 = b.x + 100;
-    const y2 = b.y + 10;
-    const midY = (y1 + y2) / 2;
     const path = document.createElementNS(ns, "path");
-    path.setAttribute(
-      "d",
-      `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`
-    );
+    path.setAttribute("d", edgePath(a, b));
     path.setAttribute("class", "edge-path");
     path.dataset.edgeId = e.id;
+    // seta no fim
+    path.setAttribute("marker-end", "url(#arrowhead)");
     svg.appendChild(path);
     if (e.label) {
+      const pos = edgeLabelPos(a, b);
+      const bg = document.createElementNS(ns, "rect");
+      const label = friendlyEdgeLabel(e.label);
+      const tw = Math.max(52, label.length * 6.2 + 12);
+      bg.setAttribute("x", pos.x - tw / 2);
+      bg.setAttribute("y", pos.y - 11);
+      bg.setAttribute("width", tw);
+      bg.setAttribute("height", 18);
+      bg.setAttribute("rx", 9);
+      bg.setAttribute("fill", "#0c0e14");
+      bg.setAttribute("stroke", "rgba(255,255,255,0.08)");
+      svg.appendChild(bg);
       const t = document.createElementNS(ns, "text");
-      t.setAttribute("x", (x1 + x2) / 2);
-      t.setAttribute("y", midY - 4);
+      t.setAttribute("x", pos.x);
+      t.setAttribute("y", pos.y + 3);
       t.setAttribute("text-anchor", "middle");
       t.setAttribute("class", "edge-label");
-      t.textContent = e.label;
+      t.textContent = label;
       svg.appendChild(t);
     }
+  }
+
+  // defs seta (uma vez)
+  if (!svg.querySelector("defs")) {
+    const defs = document.createElementNS(ns, "defs");
+    defs.innerHTML = `
+      <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L6,3 L0,6 Z" fill="rgba(148,163,184,0.55)" />
+      </marker>`;
+    svg.insertBefore(defs, svg.firstChild);
   }
 
   closeAddMenu();
