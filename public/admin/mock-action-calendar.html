@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mock · Ação + Calendário · Glabs Bot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0a0c10;
+        --panel: #12151c;
+        --card: linear-gradient(165deg, #161b26 0%, #12171f 100%);
+        --line: rgba(255, 255, 255, 0.08);
+        --text: #f1f5f9;
+        --muted: #94a3b8;
+        --indigo: #6366f1;
+        --indigo-2: #4f46e5;
+        --amber: #f59e0b;
+        --pink: #ec4899;
+        --green: #10b981;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Inter, system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 18px;
+        background: rgba(99, 102, 241, 0.12);
+        border-bottom: 1px solid rgba(99, 102, 241, 0.25);
+        font-size: 13px;
+      }
+      .banner strong {
+        color: #c7d2fe;
+      }
+      .banner a {
+        color: #a5b4fc;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(12, 14, 20, 0.9);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--line);
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--indigo);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+      }
+      .title {
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+      .status {
+        font-size: 11px;
+        font-weight: 700;
+        color: #fcd34d;
+        background: rgba(245, 158, 11, 0.12);
+        border: 1px solid rgba(245, 158, 11, 0.25);
+        padding: 3px 8px;
+        border-radius: 999px;
+        margin-left: 8px;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+      }
+      .btn {
+        border: 0;
+        border-radius: 10px;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: default;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--muted);
+      }
+      .btn-sec {
+        background: rgba(255, 255, 255, 0.08);
+        color: #e2e8f0;
+        border: 1px solid var(--line);
+      }
+      .btn-pri {
+        background: linear-gradient(145deg, var(--indigo), var(--indigo-2));
+        color: #fff;
+        box-shadow: 0 4px 16px rgba(79, 70, 229, 0.35);
+      }
+      .body {
+        display: grid;
+        grid-template-columns: 200px 1fr 300px;
+        height: calc(100vh - 98px);
+        min-height: 640px;
+      }
+      .aside {
+        border-right: 1px solid var(--line);
+        background: #0d0f14;
+        overflow: auto;
+      }
+      .aside-r {
+        border-right: 0;
+        border-left: 1px solid var(--line);
+      }
+      .aside-h {
+        padding: 14px 14px 8px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #64748b;
+      }
+      .pal {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 0 10px 16px;
+      }
+      .pal-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 10px;
+        border-radius: 12px;
+        border: 1px solid transparent;
+      }
+      .pal-item.new {
+        border-color: rgba(245, 158, 11, 0.45);
+        background: rgba(245, 158, 11, 0.08);
+        box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.12);
+      }
+      .pal-item .ic {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .pal-item.new .ic {
+        background: rgba(245, 158, 11, 0.18);
+      }
+      .pal-item strong {
+        display: block;
+        font-size: 13px;
+      }
+      .pal-item small {
+        display: block;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .badge-new {
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        color: #fcd34d;
+        background: rgba(245, 158, 11, 0.2);
+        padding: 2px 6px;
+        border-radius: 999px;
+        margin-left: auto;
+      }
+      .canvas-wrap {
+        position: relative;
+        overflow: auto;
+        background:
+          radial-gradient(ellipse 80% 50% at 50% 0%, rgba(99, 102, 241, 0.08), transparent 55%),
+          radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.04) 1px, transparent 0) 0 0 /
+            24px 24px,
+          #080a0e;
+      }
+      .canvas-label {
+        position: sticky;
+        top: 12px;
+        left: 12px;
+        z-index: 5;
+        display: inline-flex;
+        margin: 12px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #64748b;
+        background: rgba(8, 10, 14, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .canvas {
+        position: relative;
+        width: 1100px;
+        height: 920px;
+        margin: 8px 20px 40px;
+      }
+      svg.edges {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 1;
+      }
+      .edge {
+        fill: none;
+        stroke: rgba(165, 180, 252, 0.75);
+        stroke-width: 2.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .edge-dim {
+        stroke: rgba(148, 163, 184, 0.45);
+      }
+      .edge-lab {
+        fill: #e2e8f0;
+        font-size: 11px;
+        font-weight: 600;
+        font-family: Inter, system-ui, sans-serif;
+      }
+      .edge-lab-bg {
+        fill: #12151c;
+        stroke: rgba(255, 255, 255, 0.12);
+      }
+      .node {
+        position: absolute;
+        width: 210px;
+        min-height: 84px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 12px 12px 16px;
+        z-index: 2;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+      }
+      .node .k {
+        display: inline-flex;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 999px;
+        margin-bottom: 6px;
+      }
+      .node .b {
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.35;
+        letter-spacing: -0.015em;
+      }
+      .node .plus {
+        position: absolute;
+        left: 50%;
+        bottom: -14px;
+        transform: translateX(-50%);
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        border: 2px solid #0a0c10;
+        background: linear-gradient(145deg, var(--indigo), var(--indigo-2));
+        color: #fff;
+        font-size: 16px;
+        display: grid;
+        place-items: center;
+        box-shadow: 0 4px 14px rgba(79, 70, 229, 0.45);
+      }
+      .t-trigger {
+        border-color: rgba(16, 185, 129, 0.28);
+      }
+      .t-trigger .k {
+        color: #6ee7b7;
+        background: rgba(16, 185, 129, 0.12);
+      }
+      .t-message {
+        border-color: rgba(59, 130, 246, 0.25);
+      }
+      .t-message .k {
+        color: #93c5fd;
+        background: rgba(59, 130, 246, 0.12);
+      }
+      .t-ask {
+        border-color: rgba(16, 185, 129, 0.25);
+      }
+      .t-ask .k {
+        color: #6ee7b7;
+        background: rgba(16, 185, 129, 0.12);
+      }
+      .t-llm {
+        border-color: rgba(139, 92, 246, 0.3);
+      }
+      .t-llm .k {
+        color: #c4b5fd;
+        background: rgba(139, 92, 246, 0.14);
+      }
+      .t-hand {
+        border-color: rgba(236, 72, 153, 0.3);
+      }
+      .t-hand .k {
+        color: #f9a8d4;
+        background: rgba(236, 72, 153, 0.12);
+      }
+      .t-action {
+        border-color: rgba(245, 158, 11, 0.45);
+        box-shadow:
+          0 0 0 1px rgba(245, 158, 11, 0.2),
+          0 12px 32px rgba(0, 0, 0, 0.35);
+      }
+      .t-action .k {
+        color: #fcd34d;
+        background: rgba(245, 158, 11, 0.14);
+      }
+      .t-action.selected {
+        border-color: rgba(245, 158, 11, 0.7);
+        box-shadow:
+          0 0 0 2px rgba(245, 158, 11, 0.3),
+          0 16px 40px rgba(245, 158, 11, 0.15);
+      }
+      .t-action.selected::after {
+        content: "selecionado";
+        position: absolute;
+        top: -10px;
+        right: 10px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #422006;
+        background: #fbbf24;
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+      .props {
+        padding-bottom: 24px;
+      }
+      .field {
+        margin: 0 14px 14px;
+      }
+      .field label {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        color: #64748b;
+        margin-bottom: 6px;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+      .field input,
+      .field select,
+      .field textarea {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px 12px;
+        color: var(--text);
+        font-size: 13px;
+        font-family: inherit;
+      }
+      .field textarea {
+        min-height: 64px;
+        resize: none;
+      }
+      .map-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+      .map-row span {
+        font-size: 11px;
+        color: var(--muted);
+        padding: 8px 10px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 10px;
+        border: 1px dashed rgba(255, 255, 255, 0.08);
+      }
+      .hint {
+        margin: 0 14px;
+        font-size: 12px;
+        color: #64748b;
+        line-height: 1.45;
+      }
+      .hint code {
+        color: #c7d2fe;
+        font-size: 11px;
+      }
+      .conn-card {
+        margin: 0 14px 14px;
+        padding: 12px;
+        border-radius: 14px;
+        background: rgba(245, 158, 11, 0.08);
+        border: 1px solid rgba(245, 158, 11, 0.22);
+      }
+      .conn-card .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .conn-card .ico {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: rgba(245, 158, 11, 0.18);
+        display: grid;
+        place-items: center;
+        font-size: 18px;
+      }
+      .conn-card strong {
+        display: block;
+        font-size: 13px;
+      }
+      .conn-card small {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .pill {
+        margin-left: auto;
+        font-size: 10px;
+        font-weight: 700;
+        color: #6ee7b7;
+        background: rgba(16, 185, 129, 0.12);
+        padding: 3px 8px;
+        border-radius: 999px;
+      }
+      /* Simulator */
+      .sim {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        width: 360px;
+        height: 520px;
+        z-index: 40;
+        display: flex;
+        flex-direction: column;
+        background: linear-gradient(180deg, #141820 0%, #0e1118 100%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+        overflow: hidden;
+      }
+      .sim-h {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .sim-h strong {
+        display: block;
+        font-size: 14px;
+      }
+      .sim-h small {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .sim-meta {
+        padding: 8px 14px;
+        font-size: 11px;
+        color: var(--muted);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      }
+      .sim-meta b {
+        color: #c7d2fe;
+      }
+      .sim-chat {
+        flex: 1;
+        overflow: auto;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        background: #0a0c10;
+      }
+      .bub {
+        max-width: 88%;
+        padding: 10px 12px;
+        border-radius: 14px;
+        font-size: 13px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+      }
+      .bub.user {
+        align-self: flex-end;
+        background: linear-gradient(145deg, var(--indigo), var(--indigo-2));
+        border-bottom-right-radius: 4px;
+      }
+      .bub.bot {
+        align-self: flex-start;
+        background: #1a1f2b;
+        border: 1px solid var(--line);
+        border-bottom-left-radius: 4px;
+      }
+      .bub.sys {
+        align-self: center;
+        background: transparent;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 600;
+        text-align: center;
+        max-width: 100%;
+        padding: 2px 6px;
+      }
+      .sim-c {
+        display: flex;
+        gap: 8px;
+        padding: 12px;
+        border-top: 1px solid var(--line);
+      }
+      .sim-c input {
+        flex: 1;
+        background: #0f1218;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px 12px;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 13px;
+      }
+      .tabs {
+        display: flex;
+        gap: 4px;
+        padding: 0 14px 10px;
+      }
+      .tab {
+        flex: 1;
+        text-align: center;
+        padding: 8px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        background: transparent;
+        border: 1px solid transparent;
+      }
+      .tab.on {
+        color: #e2e8f0;
+        background: rgba(255, 255, 255, 0.06);
+        border-color: var(--line);
+      }
+      .callout {
+        margin: 12px 14px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(99, 102, 241, 0.1);
+        border: 1px solid rgba(99, 102, 241, 0.22);
+        font-size: 12px;
+        color: #c7d2fe;
+        line-height: 1.45;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="banner">
+      <span
+        ><strong>Mock visual · não é o produto real</strong> — preview do nó
+        <em>Ação</em> + calendário no builder</span
+      >
+      <a href="/admin/flows.html">← Voltar aos fluxos</a>
+    </div>
+
+    <header class="top">
+      <div class="brand">
+        <div class="chip"><span class="dot"></span> Fluxos</div>
+        <div>
+          <span class="title">Demo · Marcar sessão de pilates</span>
+          <span class="status">Rascunho</span>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-sec">▶ Testar</button>
+        <button class="btn btn-ghost">Salvar</button>
+        <button class="btn btn-pri">Publicar</button>
+      </div>
+    </header>
+
+    <div class="body">
+      <!-- Palette -->
+      <aside class="aside">
+        <div class="aside-h">Passos</div>
+        <div class="pal">
+          <div class="pal-item">
+            <span class="ic">💬</span>
+            <span><strong>Mensagem</strong><small>Enviar texto</small></span>
+          </div>
+          <div class="pal-item">
+            <span class="ic">❓</span>
+            <span><strong>Perguntar</strong><small>Guardar resposta</small></span>
+          </div>
+          <div class="pal-item">
+            <span class="ic">✨</span>
+            <span
+              ><strong>Entender intenção</strong
+              ><small>IA classifica</small></span
+            >
+          </div>
+          <div class="pal-item new">
+            <span class="ic">⚡</span>
+            <span
+              ><strong>Ação</strong
+              ><small>Calendário, HTTP…</small></span
+            >
+            <span class="badge-new">NOVO</span>
+          </div>
+          <div class="pal-item">
+            <span class="ic">👤</span>
+            <span><strong>Atendente</strong><small>Handoff</small></span>
+          </div>
+          <div class="pal-item">
+            <span class="ic">✓</span>
+            <span><strong>Encerrar</strong><small>Fim</small></span>
+          </div>
+        </div>
+        <div class="callout">
+          O passo <b>Ação</b> conecta o fluxo a ferramentas externas. Fase 1:
+          calendário (mock + webhook).
+        </div>
+      </aside>
+
+      <!-- Canvas -->
+      <main class="canvas-wrap">
+        <div class="canvas-label">Fluxo com calendário · mock</div>
+        <div class="canvas">
+          <svg class="edges" viewBox="0 0 1100 920">
+            <defs>
+              <marker
+                id="arr"
+                markerWidth="8"
+                markerHeight="8"
+                refX="7"
+                refY="3.5"
+                orient="auto"
+              >
+                <path d="M0,0 L7,3.5 L0,7 Z" fill="rgba(165,180,252,0.9)" />
+              </marker>
+            </defs>
+            <!-- tronco -->
+            <path
+              class="edge edge-dim"
+              d="M 450 100 L 450 130"
+              marker-end="url(#arr)"
+            />
+            <path
+              class="edge edge-dim"
+              d="M 450 230 L 450 260"
+              marker-end="url(#arr)"
+            />
+            <!-- intent → ask nome (só ramo agendar) -->
+            <path
+              class="edge"
+              d="M 420 360 L 420 380 L 160 380 L 160 400"
+              marker-end="url(#arr)"
+            />
+            <rect class="edge-lab-bg" x="250" y="368" width="58" height="18" rx="9" />
+            <text class="edge-lab" x="279" y="381" text-anchor="middle">
+              agendar
+            </text>
+            <!-- ask nome → quando -->
+            <path
+              class="edge edge-dim"
+              d="M 160 500 L 160 530"
+              marker-end="url(#arr)"
+            />
+            <!-- quando → list_slots ACTION -->
+            <path
+              class="edge"
+              d="M 160 630 L 160 660"
+              marker-end="url(#arr)"
+            />
+            <!-- list_slots ok → msg vagas -->
+            <path
+              class="edge"
+              d="M 160 760 L 160 790"
+              marker-end="url(#arr)"
+            />
+            <rect class="edge-lab-bg" x="168" y="768" width="36" height="18" rx="9" />
+            <text class="edge-lab" x="186" y="781" text-anchor="middle">ok</text>
+            <!-- coluna create (direita do action chain) -->
+            <path
+              class="edge"
+              d="M 400 790 L 400 820"
+              marker-end="url(#arr)"
+            />
+            <path
+              class="edge"
+              d="M 400 920 L 400 950"
+              marker-end="url(#arr)"
+              opacity="0"
+            />
+          </svg>
+
+          <!-- Tronco -->
+          <div class="node t-trigger" style="left: 345px; top: 24px">
+            <div class="k">Início</div>
+            <div class="b">Cliente mandou mensagem</div>
+            <div class="plus">+</div>
+          </div>
+          <div class="node t-message" style="left: 345px; top: 130px">
+            <div class="k">Mensagem</div>
+            <div class="b">Olá! 🧘‍♀️ Bem-vinda(o) ao estúdio…</div>
+            <div class="plus">+</div>
+          </div>
+          <div class="node t-llm" style="left: 345px; top: 260px">
+            <div class="k">Entender intenção</div>
+            <div class="b">Entender o pedido</div>
+            <div class="plus">+</div>
+          </div>
+
+          <!-- Ramo agendar + calendário -->
+          <div class="node t-ask" style="left: 55px; top: 400px">
+            <div class="k">Perguntar</div>
+            <div class="b">Qual o seu nome?</div>
+            <div class="plus">+</div>
+          </div>
+          <div class="node t-ask" style="left: 55px; top: 530px">
+            <div class="k">Perguntar</div>
+            <div class="b">Qual dia e horário prefere?</div>
+            <div class="plus">+</div>
+          </div>
+
+          <!-- NOVO: list_slots -->
+          <div class="node t-action selected" style="left: 55px; top: 660px">
+            <div class="k">⚡ Ação · calendário</div>
+            <div class="b">Listar horários livres</div>
+            <div class="plus">+</div>
+          </div>
+
+          <div class="node t-message" style="left: 55px; top: 790px">
+            <div class="k">Mensagem</div>
+            <div class="b">
+              Encontrei estes horários:<br />{{slots_text}}
+            </div>
+          </div>
+
+          <!-- Continuação sugerida à direita -->
+          <div class="node t-ask" style="left: 295px; top: 660px">
+            <div class="k">Perguntar</div>
+            <div class="b">Qual horário você prefere?</div>
+            <div class="plus">+</div>
+          </div>
+          <div class="node t-action" style="left: 295px; top: 790px">
+            <div class="k">⚡ Ação · calendário</div>
+            <div class="b">Criar evento na agenda</div>
+          </div>
+          <div class="node t-message" style="left: 535px; top: 790px">
+            <div class="k">Mensagem</div>
+            <div class="b">Agendado ✅<br />Link: {{event_link}}</div>
+          </div>
+          <div class="node t-hand" style="left: 535px; top: 660px">
+            <div class="k">Atendente</div>
+            <div class="b">Se der erro → handoff</div>
+          </div>
+
+          <!-- labels laterais -->
+          <div
+            style="
+              position: absolute;
+              left: 760px;
+              top: 280px;
+              width: 280px;
+              padding: 14px 16px;
+              border-radius: 16px;
+              background: rgba(18, 21, 28, 0.9);
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              font-size: 12px;
+              line-height: 1.5;
+              color: #94a3b8;
+            "
+          >
+            <div style="color: #fcd34d; font-weight: 700; margin-bottom: 6px">
+              ⚡ O que é novo
+            </div>
+            Cartões âmbar = <b style="color: #e2e8f0">Ação</b>. Ligam o WhatsApp
+            ao calendário (ou qualquer API). Saídas
+            <b style="color: #c7d2fe">ok</b> / <b style="color: #f9a8d4">erro</b>.
+          </div>
+        </div>
+      </main>
+
+      <!-- Props -->
+      <aside class="aside aside-r props">
+        <div class="aside-h">Detalhes do passo</div>
+        <div class="tabs">
+          <div class="tab on">Ação</div>
+          <div class="tab">Avançado</div>
+        </div>
+
+        <div class="conn-card">
+          <div class="row">
+            <div class="ico">📅</div>
+            <div>
+              <strong>Calendário</strong>
+              <small>Mock · demo (sem OAuth)</small>
+            </div>
+            <span class="pill">ligado</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Tipo</label>
+          <input value="Ação" disabled />
+        </div>
+        <div class="field">
+          <label>Integração</label>
+          <select>
+            <option selected>📅 Calendário</option>
+            <option>🔗 HTTP / webhook</option>
+            <option disabled>📇 CRM (em breve)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Operação</label>
+          <select>
+            <option selected>Listar horários livres</option>
+            <option>Criar evento</option>
+            <option>Cancelar evento</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Entrada (variáveis do fluxo)</label>
+          <div class="map-row">
+            <span>quando → {{quando}}</span>
+            <span>nome → {{nome}}</span>
+          </div>
+          <div class="map-row">
+            <span>duração → 60 min</span>
+            <span>agenda → Estúdio</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Gravar resposta em</label>
+          <input value="slots_text, slots_json" />
+        </div>
+        <p class="hint">
+          Se falhar, o fluxo segue a ligação <code>erro</code> (ex.: atendente).
+          No simulador usa mock automático.
+        </p>
+        <div style="padding: 14px; display: flex; gap: 8px">
+          <button class="btn btn-pri" style="flex: 1">Aplicar</button>
+          <button class="btn btn-sec">Ligar a…</button>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Simulator preview -->
+    <div class="sim" aria-label="Simulador mock">
+      <div class="sim-h">
+        <div style="display: flex; gap: 10px; align-items: center">
+          <span
+            style="
+              width: 10px;
+              height: 10px;
+              border-radius: 99px;
+              background: #22c55e;
+              box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.15);
+            "
+          ></span>
+          <div>
+            <strong>Testar fluxo</strong>
+            <small>Com calendário mock</small>
+          </div>
+        </div>
+        <span style="color: #64748b; font-size: 12px">↺ ✕</span>
+      </div>
+      <div class="sim-meta">
+        ação: <b>list_slots</b> · ok · mock · vars: <b>quando</b>=terça 18h
+      </div>
+      <div class="sim-chat">
+        <div class="bub user">Oi, quero marcar uma sessão</div>
+        <div class="bub bot">
+          Olá! 🧘‍♀️ Bem-vinda(o) ao estúdio.
+
+Como posso te ajudar?
+• Marcar uma sessão
+• Tirar uma dúvida
+• Atendimento administrativo
+        </div>
+        <div class="bub sys">intent → marcar_sessao (keyword)</div>
+        <div class="bub bot">Perfeito! Vamos marcar 💪 Qual o seu nome?</div>
+        <div class="bub user">Ana</div>
+        <div class="bub bot">Oi, Ana! Qual dia e horário prefere?</div>
+        <div class="bub user">terça à noite</div>
+        <div class="bub sys">⚡ calendário · list_slots · ok</div>
+        <div class="bub bot">
+          Encontrei estes horários:
+
+1) Terça 18:00
+2) Terça 19:00
+3) Quarta 10:00
+
+Qual prefere? (1, 2 ou 3)
+        </div>
+        <div class="bub user">1</div>
+        <div class="bub sys">⚡ calendário · create_event · ok</div>
+        <div class="bub bot">
+          Agendado ✅
+
+Ana · Terça 18:00
+Link: https://cal.example/e/demo-ana
+        </div>
+      </div>
+      <div class="sim-c">
+        <input value="Mensagem do cliente…" disabled />
+        <button class="btn btn-pri">Enviar</button>
+      </div>
+    </div>
+  </body>
+</html>
