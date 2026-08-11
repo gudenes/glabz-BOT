@@ -18,7 +18,7 @@ const toastEl = $("toast");
 
 function toast(msg, kind = "ok") {
   toastEl.textContent = msg;
-  toastEl.className = `toast ${kind}`;
+  toastEl.className = `fb-toast ${kind}`;
   clearTimeout(toastEl._t);
   toastEl._t = setTimeout(() => toastEl.classList.add("hidden"), 2800);
 }
@@ -89,15 +89,19 @@ function nodeTitle(node) {
 function typeLabel(type) {
   return (
     {
-      trigger: "Trigger",
+      trigger: "Início",
       message: "Mensagem",
       ask: "Perguntar",
-      llm_intent: "LLM · intenção",
-      condition: "Condição",
-      handoff: "Handoff",
-      end: "Fim",
+      llm_intent: "Entender intenção",
+      condition: "Se / senão",
+      handoff: "Atendente",
+      end: "Encerrar",
     }[type] || type
   );
+}
+
+function statusLabel(status) {
+  return status === "live" ? "No ar" : "Rascunho";
 }
 
 // ── Login ────────────────────────────────────────────────
@@ -140,11 +144,11 @@ async function loadAll() {
   state.flows = data.flows || [];
   state.llmConfigured = Boolean(data.llmConfigured);
   $("llm-badge").textContent = state.llmConfigured
-    ? "LLM pronto"
-    : "LLM fallback keywords";
+    ? "IA ligada"
+    : "IA · palavras-chave";
   $("llm-badge").className = state.llmConfigured
-    ? "fb-pill live"
-    : "fb-pill dim";
+    ? "fb-meta-chip on"
+    : "fb-meta-chip";
 
   if (!state.flow && state.flows.length) {
     selectFlow(state.flows[0].id);
@@ -195,9 +199,9 @@ function renderAll() {
   if (state.flow) {
     $("flow-name").value = state.flow.name;
     $("flow-product").value = state.flow.product || "gestor";
-    $("flow-status").textContent = state.flow.status || "draft";
+    $("flow-status").textContent = statusLabel(state.flow.status || "draft");
     $("flow-status").className =
-      "fb-pill " + (state.flow.status === "live" ? "live" : "draft");
+      "fb-status " + (state.flow.status === "live" ? "live" : "draft");
   }
 }
 
@@ -211,12 +215,14 @@ function renderList() {
       "flow-card" + (state.flow?.id === f.id ? " active" : "");
     b.innerHTML = `<div class="n"></div><div class="m"></div>`;
     b.querySelector(".n").textContent = f.name;
-    b.querySelector(".m").textContent = `${f.product} · ${f.status}`;
+    const productLabel =
+      f.product === "prontuario" ? "Prontuário" : f.product === "gestor" ? "Gestor" : f.product;
+    b.querySelector(".m").textContent = `${productLabel} · ${statusLabel(f.status)}`;
     b.onclick = () => selectFlow(f.id);
     el.appendChild(b);
   }
   if (!state.flows.length) {
-    el.innerHTML = `<p class="fb-hint">Nenhum fluxo ainda. O demo “Marcar consulta” aparece no 1º boot do bot.</p>`;
+    el.innerHTML = `<p class="fb-palette-hint" style="margin:8px 4px">Nenhum fluxo ainda. O demo “Marcar consulta” aparece no primeiro uso.</p>`;
   }
 }
 
@@ -310,12 +316,12 @@ function renderCanvas() {
 }
 
 const ADDABLE_TYPES = [
-  { type: "message", label: "Mensagem" },
-  { type: "ask", label: "Perguntar" },
-  { type: "llm_intent", label: "LLM · intenção" },
-  { type: "condition", label: "Condição" },
-  { type: "handoff", label: "Handoff humano" },
-  { type: "end", label: "Fim" },
+  { type: "message", label: "Mensagem", icon: "💬", ic: "msg" },
+  { type: "ask", label: "Perguntar", icon: "❓", ic: "ask" },
+  { type: "llm_intent", label: "Entender intenção", icon: "✨", ic: "llm" },
+  { type: "condition", label: "Se / senão", icon: "⑂", ic: "cond" },
+  { type: "handoff", label: "Atendente", icon: "👤", ic: "hand" },
+  { type: "end", label: "Encerrar", icon: "✓", ic: "end" },
 ];
 
 function closeAddMenu() {
@@ -327,14 +333,12 @@ function openAddMenu(parentNode, anchorBtn) {
   const canvas = $("canvas");
   const menu = document.createElement("div");
   menu.className = "node-add-menu";
-  menu.innerHTML = `<div class="m-title">Adicionar depois</div>`;
+  menu.innerHTML = `<div class="m-title">Próximo passo</div>`;
 
   for (const item of ADDABLE_TYPES) {
     const b = document.createElement("button");
     b.type = "button";
-    b.innerHTML = `<span class="dot ${
-      item.type === "llm_intent" ? "llm" : item.type === "handoff" ? "hand" : item.type === "condition" ? "cond" : item.type === "message" ? "msg" : item.type === "ask" ? "ask" : "end"
-    }"></span>${item.label}`;
+    b.innerHTML = `<span class="pal-icon ${item.ic}">${item.icon}</span>${item.label}`;
     b.onclick = (ev) => {
       ev.stopPropagation();
       addChildNode(parentNode, item.type);
@@ -523,19 +527,19 @@ function renderProps() {
       <p class="fb-hint">Ligações: label <code>true</code> / <code>false</code></p>`;
   }
   if (node.type === "llm_intent") {
-    html += `<div class="field"><label>Instrução ao modelo</label>
+    html += `<div class="field"><label>Como a IA deve decidir</label>
       <textarea id="p-prompt">${escapeHtml(String(d.prompt || ""))}</textarea></div>
-      <div class="field"><label>Intenções (slug | descrição)</label>
+      <div class="field"><label>Intenções (código · o que significa)</label>
       <div id="p-intents"></div>
-      <button type="button" class="btn secondary sm" id="p-add-intent">+ intenção</button>
+      <button type="button" class="fb-btn fb-btn-secondary" id="p-add-intent" style="margin-top:6px">+ intenção</button>
       </div>
-      <p class="fb-hint">Ligações: use o <code>slug</code> como label da edge (e <code>default</code>).</p>`;
+      <p class="fb-hint">Ao ligar o próximo passo, use o mesmo código (ex.: marcar_consulta) ou “default”.</p>`;
   }
 
   html += `<div class="btn-row">
-    <button type="button" class="btn primary sm" id="p-apply">Aplicar</button>
-    <button type="button" class="btn secondary sm" id="p-link">Ligar a…</button>
-    <button type="button" class="btn ghost sm" id="p-del">Apagar nó</button>
+    <button type="button" class="fb-btn fb-btn-primary" id="p-apply">Aplicar</button>
+    <button type="button" class="fb-btn fb-btn-secondary" id="p-link">Ligar a…</button>
+    <button type="button" class="fb-btn fb-btn-danger" id="p-del">Remover</button>
   </div>`;
 
   body.innerHTML = html;
@@ -586,7 +590,7 @@ function renderProps() {
         })),
       };
       renderCanvas();
-      toast("Nó atualizado");
+      toast("Passo atualizado");
     };
   } else {
     $("p-apply").onclick = () => {
@@ -613,17 +617,17 @@ function renderProps() {
         };
       }
       renderCanvas();
-      toast("Nó atualizado");
+      toast("Passo atualizado");
     };
   }
 
   $("p-link").onclick = () => {
     state.linkFrom = node.id;
-    toast("Clique no nó de destino para ligar");
+    toast("Clique no próximo cartão para ligar");
   };
   $("p-del").onclick = () => {
     if (node.type === "trigger") {
-      toast("Não remova o trigger", "err");
+      toast("O início do fluxo não pode ser removido", "err");
       return;
     }
     state.flow.nodes = state.flow.nodes.filter((n) => n.id !== node.id);
@@ -707,7 +711,7 @@ $("btn-publish").onclick = async () => {
       method: "POST",
     });
     state.flow = data.flow;
-    toast("Publicado · live");
+    toast("Publicado — no ar");
     await loadAll();
   } catch (e) {
     toast(e.message, "err");
@@ -721,7 +725,7 @@ $("btn-unpublish").onclick = async () => {
       method: "POST",
     });
     state.flow = data.flow;
-    toast("Voltou para draft");
+    toast("Pausado — rascunho");
     await loadAll();
   } catch (e) {
     toast(e.message, "err");

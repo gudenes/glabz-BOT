@@ -7,106 +7,118 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/admin/styles.css" />
     <link rel="stylesheet" href="/admin/flows.css" />
   </head>
   <body class="flows-body">
-    <div id="login-gate" class="login-shell">
-      <div class="login-card">
-        <div class="brand-row">
-          <div class="logo-mark" aria-hidden="true">G</div>
-          <div>
-            <h1>Glabs Bot</h1>
-            <p class="muted">Workflow builder</p>
-          </div>
+    <div id="login-gate" class="fb-login">
+      <div class="fb-login-card">
+        <div class="fb-login-mark" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <path d="M4 8h6v12H4V8zm10-4h6v16h-6V4z" fill="currentColor" opacity=".9"/>
+          </svg>
         </div>
-        <label class="field">
-          <span>Secret do bot</span>
-          <input id="login-secret" type="password" placeholder="GLABS_BOT_SECRET" />
+        <h1>Fluxos de atendimento</h1>
+        <p class="fb-login-sub">Monte automações de WhatsApp com visual limpo — sem código.</p>
+        <label class="fb-field">
+          <span>Senha do bot</span>
+          <input id="login-secret" type="password" placeholder="Cole o secret" autocomplete="current-password" />
         </label>
         <p id="login-error" class="err hidden"></p>
-        <button id="login-btn" class="btn primary block" type="button">Entrar</button>
-        <p class="hint"><a href="/admin/">← Voltar ao admin</a></p>
+        <button id="login-btn" class="fb-btn fb-btn-primary fb-btn-block" type="button">Entrar</button>
+        <a class="fb-login-back" href="/admin/">Voltar ao painel</a>
       </div>
     </div>
 
     <div id="builder-app" class="builder-app hidden">
-      <!-- Top bar -->
       <header class="fb-top">
         <div class="fb-top-left">
-          <a href="/admin/" class="fb-back">← Admin</a>
+          <a href="/admin/" class="fb-icon-btn" title="Painel">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </a>
+          <div class="fb-brand-chip">
+            <span class="fb-brand-dot"></span>
+            Fluxos
+          </div>
           <div class="fb-title-wrap">
-            <input id="flow-name" class="fb-name" value="Novo fluxo" />
-            <span id="flow-status" class="fb-pill draft">draft</span>
-            <span id="llm-badge" class="fb-pill dim">LLM —</span>
+            <input id="flow-name" class="fb-name" value="Novo fluxo" spellcheck="false" />
+            <span id="flow-status" class="fb-status draft">Rascunho</span>
           </div>
         </div>
         <div class="fb-top-right">
-          <select id="flow-product" class="fb-select" title="Product">
-            <option value="gestor">gestor</option>
-            <option value="prontuario">prontuario</option>
-          </select>
-          <button type="button" id="btn-new" class="btn secondary sm">Novo</button>
-          <button type="button" id="btn-save" class="btn secondary sm">Salvar</button>
-          <button type="button" id="btn-publish" class="btn primary sm">Publicar live</button>
-          <button type="button" id="btn-unpublish" class="btn ghost sm">Despublicar</button>
+          <span id="llm-badge" class="fb-meta-chip">IA · —</span>
+          <div class="fb-select-wrap">
+            <select id="flow-product" class="fb-select" title="Produto">
+              <option value="gestor">Gestor de Seguros</option>
+              <option value="prontuario">Prontuário Contábil</option>
+            </select>
+          </div>
+          <div class="fb-actions">
+            <button type="button" id="btn-new" class="fb-btn fb-btn-ghost">Novo</button>
+            <button type="button" id="btn-save" class="fb-btn fb-btn-secondary">Salvar</button>
+            <button type="button" id="btn-unpublish" class="fb-btn fb-btn-ghost">Pausar</button>
+            <button type="button" id="btn-publish" class="fb-btn fb-btn-primary">Publicar</button>
+          </div>
         </div>
       </header>
 
       <div class="fb-body">
-        <!-- Flow list -->
         <aside class="fb-list">
-          <div class="fb-list-head">Fluxos</div>
+          <div class="fb-aside-head">
+            <span>Seus fluxos</span>
+          </div>
           <div id="flow-list" class="fb-list-items"></div>
         </aside>
 
-        <!-- Palette -->
         <aside class="fb-palette">
-          <div class="fb-list-head">Blocos</div>
+          <div class="fb-aside-head"><span>Passos</span></div>
+          <p class="fb-palette-hint">Ou use o <strong>+</strong> em cada cartão</p>
           <button type="button" class="pal-item" data-type="message">
-            <span class="dot msg"></span> Mensagem
+            <span class="pal-icon msg">💬</span>
+            <span class="pal-text"><strong>Mensagem</strong><small>Enviar texto</small></span>
           </button>
           <button type="button" class="pal-item" data-type="ask">
-            <span class="dot ask"></span> Perguntar
+            <span class="pal-icon ask">❓</span>
+            <span class="pal-text"><strong>Perguntar</strong><small>Guardar resposta</small></span>
           </button>
           <button type="button" class="pal-item" data-type="llm_intent">
-            <span class="dot llm"></span> LLM · intenção
+            <span class="pal-icon llm">✨</span>
+            <span class="pal-text"><strong>Entender intenção</strong><small>IA classifica o pedido</small></span>
           </button>
           <button type="button" class="pal-item" data-type="condition">
-            <span class="dot cond"></span> Condição
+            <span class="pal-icon cond">⑂</span>
+            <span class="pal-text"><strong>Se / senão</strong><small>Caminho condicional</small></span>
           </button>
           <button type="button" class="pal-item" data-type="handoff">
-            <span class="dot hand"></span> Handoff humano
+            <span class="pal-icon hand">👤</span>
+            <span class="pal-text"><strong>Atendente</strong><small>Passar para humano</small></span>
           </button>
           <button type="button" class="pal-item" data-type="end">
-            <span class="dot end"></span> Fim
+            <span class="pal-icon end">✓</span>
+            <span class="pal-text"><strong>Encerrar</strong><small>Fim do fluxo</small></span>
           </button>
-          <p class="fb-hint">
-            Use o <strong>+</strong> embaixo de cada nó para o próximo passo
-            (já ligado). Arraste para reposicionar.
-          </p>
         </aside>
 
-        <!-- Canvas -->
         <main class="fb-canvas-wrap">
+          <div class="fb-canvas-label">Área do fluxo · arraste os cartões</div>
           <svg id="edges-svg" class="fb-edges"></svg>
           <div id="canvas" class="fb-canvas"></div>
         </main>
 
-        <!-- Props -->
         <aside class="fb-props">
-          <div class="fb-list-head">Propriedades</div>
+          <div class="fb-aside-head"><span>Detalhes</span></div>
           <div id="props-empty" class="fb-props-empty">
-            Selecione um nó no canvas
+            <div class="fb-empty-icon">◇</div>
+            <p>Selecione um passo no fluxo para editar o texto e as opções.</p>
           </div>
           <div id="props-body" class="hidden"></div>
         </aside>
       </div>
 
-      <div id="toast" class="toast hidden"></div>
+      <div id="toast" class="fb-toast hidden"></div>
     </div>
 
     <script src="/admin/flows.js" type="module"></script>
