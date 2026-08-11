@@ -3,25 +3,41 @@ import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { flowStatesPath, flowsPath } from "../config.js";
 import type { Flow, FlowConversationState, FlowEdge, FlowNode } from "./types.js";
-import { demoConsultationFlow } from "./templates.js";
+import { allSeedTemplates } from "./templates.js";
 
 type FlowsFile = { version: 1; flows: Flow[] };
 type StatesFile = { version: 1; states: FlowConversationState[] };
 
+/** Garante templates de demo se ainda não existirem (por nome). */
+function ensureSeedTemplates(file: FlowsFile): boolean {
+  let changed = false;
+  for (const seed of allSeedTemplates()) {
+    if (!file.flows.some((f) => f.name === seed.name)) {
+      file.flows.push(seed);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 function loadFlows(): FlowsFile {
   try {
     if (!existsSync(flowsPath())) {
-      const seed = demoConsultationFlow();
-      const file: FlowsFile = { version: 1, flows: [seed] };
+      const file: FlowsFile = { version: 1, flows: allSeedTemplates() };
       saveFlows(file);
       return file;
     }
     const raw = readFileSync(flowsPath(), "utf8");
     const data = JSON.parse(raw) as FlowsFile;
-    if (!data?.flows || !Array.isArray(data.flows)) return { version: 1, flows: [] };
+    if (!data?.flows || !Array.isArray(data.flows)) {
+      const file: FlowsFile = { version: 1, flows: allSeedTemplates() };
+      saveFlows(file);
+      return file;
+    }
+    if (ensureSeedTemplates(data)) saveFlows(data);
     return data;
   } catch {
-    return { version: 1, flows: [] };
+    return { version: 1, flows: allSeedTemplates() };
   }
 }
 

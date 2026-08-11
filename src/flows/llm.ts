@@ -77,8 +77,29 @@ export async function classifyIntent(opts: {
   }
 
   // Heuristics for demo intents
-  if (/consulta|agend|marcar|hor[aá]rio|visita|reuni[aã]o/.test(t)) {
-    const m = intents.find((i) => i.slug.includes("consulta") || i.slug.includes("agend"));
+  if (
+    /sess[aã]o|pilates|aula|vaga|experimental|remarcar/.test(t) ||
+    /consulta|agend|marcar|hor[aá]rio|visita|reuni[aã]o/.test(t)
+  ) {
+    const m = intents.find(
+      (i) =>
+        i.slug.includes("sessao") ||
+        i.slug.includes("consulta") ||
+        i.slug.includes("agend") ||
+        i.slug.includes("marcar")
+    );
+    if (m) return { intent: m.slug, source: "keyword" };
+  }
+  if (/d[uú]vida|como funciona|valor|pre[cç]o|plano|iniciante/.test(t)) {
+    const m = intents.find(
+      (i) => i.slug.includes("duvida") || i.slug.includes("faq") || i.slug.includes("outro")
+    );
+    if (m) return { intent: m.slug, source: "keyword" };
+  }
+  if (
+    /admin|boleto|nota fiscal|cancel|mensalidade|financeiro|contrato|rematr/.test(t)
+  ) {
+    const m = intents.find((i) => i.slug.includes("admin"));
     if (m) return { intent: m.slug, source: "keyword" };
   }
   if (/humano|atendente|pessoa|operador|algu[eé]m/.test(t)) {

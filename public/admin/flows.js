@@ -216,7 +216,13 @@ function renderList() {
     b.innerHTML = `<div class="n"></div><div class="m"></div>`;
     b.querySelector(".n").textContent = f.name;
     const productLabel =
-      f.product === "prontuario" ? "Prontuário" : f.product === "gestor" ? "Gestor" : f.product;
+      f.product === "prontuario"
+        ? "Prontuário"
+        : f.product === "gestor"
+          ? "Gestor"
+          : f.product === "pilates"
+            ? "Pilates"
+            : f.product;
     b.querySelector(".m").textContent = `${productLabel} · ${statusLabel(f.status)}`;
     b.onclick = () => selectFlow(f.id);
     el.appendChild(b);
