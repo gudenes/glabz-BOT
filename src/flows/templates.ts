@@ -164,7 +164,8 @@ export function demoPilatesFlow(): Flow {
   return {
     id: randomUUID(),
     name: "Demo · Marcar sessão de pilates",
-    product: "pilates",
+    // product alinhado à conta demo do Gestor; troque no builder se precisar
+    product: "gestor",
     accountId: null,
     status: "draft",
     createdAt: now,
