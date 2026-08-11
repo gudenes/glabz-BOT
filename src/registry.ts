@@ -207,7 +207,15 @@ export function ensureAccount(input: {
   }
 
   if (existing) {
-    existing.webhookUrl = webhook;
+    // Não deixa dev local (localhost) sobrescrever webhook de produção
+    const nextIsLoopback = isLoopbackWebhook(webhook);
+    const prevIsPublic =
+      Boolean(existing.webhookUrl) && !isLoopbackWebhook(existing.webhookUrl);
+    if (nextIsLoopback && prevIsPublic) {
+      // mantém existing.webhookUrl
+    } else {
+      existing.webhookUrl = webhook;
+    }
     if (input.label !== undefined) existing.label = input.label?.trim() || null;
     existing.updatedAt = now;
     save(reg);
@@ -267,4 +275,15 @@ function normalizeUrl(raw: string | null | undefined): string | null {
   if (!u) return null;
   if (!/^https?:\/\//i.test(u)) return null;
   return u;
+}
+
+/** localhost / 127.0.0.1 — não deve substituir webhook público em produção. */
+function isLoopbackWebhook(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return /localhost|127\.0\.0\.1/i.test(url);
+  }
 }

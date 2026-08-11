@@ -344,17 +344,26 @@ async function postWebhook(accountId: string, payload: Record<string, unknown>):
     product: acc.product,
     externalTenantId: acc.externalTenantId,
   };
-  const res = await fetch(acc.webhookUrl, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(secret ? { authorization: `Bearer ${secret}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    console.error(`[wa:${accountId}] webhook ${res.status}: ${t.slice(0, 200)}`);
+  try {
+    const res = await fetch(acc.webhookUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(secret ? { authorization: `Bearer ${secret}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      console.error(
+        `[wa:${accountId}] webhook ${res.status} → ${acc.webhookUrl}: ${t.slice(0, 200)}`
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[wa:${accountId}] webhook fetch failed → ${acc.webhookUrl}:`,
+      (err as Error).message
+    );
   }
 }
 
