@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fluxos · Glabs Bot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/admin/styles.css" />
+    <link rel="stylesheet" href="/admin/flows.css" />
+  </head>
+  <body class="flows-body">
+    <div id="login-gate" class="login-shell">
+      <div class="login-card">
+        <div class="brand-row">
+          <div class="logo-mark" aria-hidden="true">G</div>
+          <div>
+            <h1>Glabs Bot</h1>
+            <p class="muted">Workflow builder</p>
+          </div>
+        </div>
+        <label class="field">
+          <span>Secret do bot</span>
+          <input id="login-secret" type="password" placeholder="GLABS_BOT_SECRET" />
+        </label>
+        <p id="login-error" class="err hidden"></p>
+        <button id="login-btn" class="btn primary block" type="button">Entrar</button>
+        <p class="hint"><a href="/admin/">← Voltar ao admin</a></p>
+      </div>
+    </div>
+
+    <div id="builder-app" class="builder-app hidden">
+      <!-- Top bar -->
+      <header class="fb-top">
+        <div class="fb-top-left">
+          <a href="/admin/" class="fb-back">← Admin</a>
+          <div class="fb-title-wrap">
+            <input id="flow-name" class="fb-name" value="Novo fluxo" />
+            <span id="flow-status" class="fb-pill draft">draft</span>
+            <span id="llm-badge" class="fb-pill dim">LLM —</span>
+          </div>
+        </div>
+        <div class="fb-top-right">
+          <select id="flow-product" class="fb-select" title="Product">
+            <option value="gestor">gestor</option>
+            <option value="prontuario">prontuario</option>
+          </select>
+          <button type="button" id="btn-new" class="btn secondary sm">Novo</button>
+          <button type="button" id="btn-save" class="btn secondary sm">Salvar</button>
+          <button type="button" id="btn-publish" class="btn primary sm">Publicar live</button>
+          <button type="button" id="btn-unpublish" class="btn ghost sm">Despublicar</button>
+        </div>
+      </header>
+
+      <div class="fb-body">
+        <!-- Flow list -->
+        <aside class="fb-list">
+          <div class="fb-list-head">Fluxos</div>
+          <div id="flow-list" class="fb-list-items"></div>
+        </aside>
+
+        <!-- Palette -->
+        <aside class="fb-palette">
+          <div class="fb-list-head">Blocos</div>
+          <button type="button" class="pal-item" data-type="message">
+            <span class="dot msg"></span> Mensagem
+          </button>
+          <button type="button" class="pal-item" data-type="ask">
+            <span class="dot ask"></span> Perguntar
+          </button>
+          <button type="button" class="pal-item" data-type="llm_intent">
+            <span class="dot llm"></span> LLM · intenção
+          </button>
+          <button type="button" class="pal-item" data-type="condition">
+            <span class="dot cond"></span> Condição
+          </button>
+          <button type="button" class="pal-item" data-type="handoff">
+            <span class="dot hand"></span> Handoff humano
+          </button>
+          <button type="button" class="pal-item" data-type="end">
+            <span class="dot end"></span> Fim
+          </button>
+          <p class="fb-hint">
+            Arraste no canvas. Clique num nó e depois em outro para
+            <strong>ligar</strong>. Shift+clique remove ligação.
+          </p>
+        </aside>
+
+        <!-- Canvas -->
+        <main class="fb-canvas-wrap">
+          <svg id="edges-svg" class="fb-edges"></svg>
+          <div id="canvas" class="fb-canvas"></div>
+        </main>
+
+        <!-- Props -->
+        <aside class="fb-props">
+          <div class="fb-list-head">Propriedades</div>
+          <div id="props-empty" class="fb-props-empty">
+            Selecione um nó no canvas
+          </div>
+          <div id="props-body" class="hidden"></div>
+        </aside>
+      </div>
+
+      <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="/admin/flows.js" type="module"></script>
+  </body>
+</html>

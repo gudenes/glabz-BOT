@@ -12,12 +12,21 @@
  *   GET/PATCH/DELETE /v1/accounts/:id
  *   GET  /v1/accounts/:id/status
  *   POST /v1/accounts/:id/connect · disconnect · send · profile
+ *   GET/POST /v1/flows · GET/PUT/DELETE /v1/flows/:id
+ *   POST /v1/flows/:id/publish · /reset-state
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { mkdirSync, existsSync, readFileSync, statSync } from "node:fs";
 import { join, extname, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
-import { authDir, botSecret, dataDir, isProduction, listenPort } from "./config.js";
+import {
+  authDir,
+  botSecret,
+  dataDir,
+  isProduction,
+  listenPort,
+  llmApiKey,
+} from "./config.js";
 import {
   deleteAccount,
   ensureAccount,
@@ -35,6 +44,14 @@ import {
   snapshot,
   updateProfile,
 } from "./session.js";
+import {
+  deleteFlow,
+  getFlow,
+  listFlows,
+  resetConversationToBot,
+  saveFlow,
+} from "./flows/store.js";
+import type { FlowEdge, FlowNode } from "./flows/types.js";
 
 const PORT = listenPort();
 const SECRET = botSecret();
@@ -231,6 +248,152 @@ const server = createServer(async (req, res) => {
         });
       }
       return;
+    }
+
+    // ── Flows (workflow builder) ──────────────────────────
+    if (method === "GET" && path === "/v1/flows") {
+      const product = url.searchParams.get("product") ?? undefined;
+      const accountId = url.searchParams.get("accountId");
+      json(res, 200, {
+        ok: true,
+        flows: listFlows({
+          product,
+          accountId: accountId === "" ? null : accountId ?? undefined,
+        }),
+        llmConfigured: Boolean(llmApiKey()),
+      });
+      return;
+    }
+
+    if (method === "POST" && path === "/v1/flows") {
+      const body = parseJson<{
+        id?: string;
+        name?: string;
+        product?: string;
+        accountId?: string | null;
+        status?: "draft" | "live";
+        nodes?: FlowNode[];
+        edges?: FlowEdge[];
+      }>(await readBody(req));
+      try {
+        const flow = saveFlow({
+          id: body?.id,
+          name: body?.name || "Novo fluxo",
+          product: body?.product || "gestor",
+          accountId: body?.accountId ?? null,
+          status: body?.status,
+          nodes: body?.nodes || [],
+          edges: body?.edges || [],
+        });
+        json(res, 200, { ok: true, flow });
+      } catch (e) {
+        json(res, 400, {
+          ok: false,
+          reason: e instanceof Error ? e.message : "invalid",
+        });
+      }
+      return;
+    }
+
+    const flowMatch = path.match(
+      /^\/v1\/flows\/([a-zA-Z0-9_-]+)(?:\/(publish|unpublish|reset-state))?$/
+    );
+    if (flowMatch) {
+      const flowId = flowMatch[1];
+      const action = flowMatch[2] || "";
+
+      if (method === "GET" && !action) {
+        const flow = getFlow(flowId);
+        if (!flow) {
+          json(res, 404, { ok: false, reason: "flowNotFound" });
+          return;
+        }
+        json(res, 200, { ok: true, flow });
+        return;
+      }
+
+      if (method === "PUT" && !action) {
+        const body = parseJson<{
+          name?: string;
+          product?: string;
+          accountId?: string | null;
+          status?: "draft" | "live";
+          nodes?: FlowNode[];
+          edges?: FlowEdge[];
+        }>(await readBody(req));
+        const existing = getFlow(flowId);
+        if (!existing) {
+          json(res, 404, { ok: false, reason: "flowNotFound" });
+          return;
+        }
+        try {
+          const flow = saveFlow({
+            id: flowId,
+            name: body?.name ?? existing.name,
+            product: body?.product ?? existing.product,
+            accountId:
+              body?.accountId !== undefined ? body.accountId : existing.accountId,
+            status: body?.status ?? existing.status,
+            nodes: body?.nodes ?? existing.nodes,
+            edges: body?.edges ?? existing.edges,
+          });
+          json(res, 200, { ok: true, flow });
+        } catch (e) {
+          json(res, 400, {
+            ok: false,
+            reason: e instanceof Error ? e.message : "invalid",
+          });
+        }
+        return;
+      }
+
+      if (method === "DELETE" && !action) {
+        const ok = deleteFlow(flowId);
+        json(res, ok ? 200 : 404, {
+          ok,
+          reason: ok ? undefined : "flowNotFound",
+        });
+        return;
+      }
+
+      if (method === "POST" && action === "publish") {
+        const existing = getFlow(flowId);
+        if (!existing) {
+          json(res, 404, { ok: false, reason: "flowNotFound" });
+          return;
+        }
+        const flow = saveFlow({ ...existing, status: "live" });
+        json(res, 200, { ok: true, flow });
+        return;
+      }
+
+      if (method === "POST" && action === "unpublish") {
+        const existing = getFlow(flowId);
+        if (!existing) {
+          json(res, 404, { ok: false, reason: "flowNotFound" });
+          return;
+        }
+        const flow = saveFlow({ ...existing, status: "draft" });
+        json(res, 200, { ok: true, flow });
+        return;
+      }
+
+      if (method === "POST" && action === "reset-state") {
+        const body = parseJson<{
+          accountId?: string;
+          phoneE164?: string;
+        }>(await readBody(req));
+        if (!body?.accountId || !body?.phoneE164) {
+          json(res, 400, {
+            ok: false,
+            reason: "accountId e phoneE164 obrigatórios",
+          });
+          return;
+        }
+        resetConversationToBot(body.accountId, body.phoneE164);
+        json(res, 200, { ok: true });
+        return;
+      }
     }
 
     // ── Accounts collection ───────────────────────────────

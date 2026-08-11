@@ -27,6 +27,14 @@ export function registryPath(): string {
   return `${dataDir()}/registry.json`;
 }
 
+export function flowsPath(): string {
+  return `${dataDir()}/flows.json`;
+}
+
+export function flowStatesPath(): string {
+  return `${dataDir()}/flow_states.json`;
+}
+
 /** Secret compartilhado entre bot e apps clientes (Bearer). */
 export function botSecret(): string {
   return (
@@ -42,4 +50,26 @@ export function logLevel(): string {
 
 export function isProduction(): boolean {
   return process.env.NODE_ENV === "production" || Boolean(process.env.RAILWAY_ENVIRONMENT);
+}
+
+/** LLM para nó de intenção (xAI / OpenAI-compatible). */
+export function llmApiKey(): string {
+  return (
+    process.env.GLABS_LLM_API_KEY?.trim() ||
+    process.env.XAI_API_KEY?.trim() ||
+    process.env.OPENAI_API_KEY?.trim() ||
+    ""
+  );
+}
+
+export function llmBaseUrl(): string {
+  return (
+    process.env.GLABS_LLM_BASE_URL?.trim() ||
+    process.env.XAI_BASE_URL?.trim() ||
+    "https://api.x.ai/v1"
+  );
+}
+
+export function llmModel(): string {
+  return process.env.GLABS_LLM_MODEL?.trim() || "grok-4-1-fast-non-reasoning";
 }

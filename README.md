@@ -80,6 +80,15 @@ npm run dev   # :3099 → http://127.0.0.1:3099/admin
 3. Volume em `/data` (persistir sessões + registry).
 4. Domínio público HTTPS para os apps chamarem.
 
+## Fluxos & atendimento automático
+
+Admin visual: **`/admin/flows.html`**
+
+- Builder drag-and-drop (mensagem, perguntar, condição, **LLM intenção**, handoff)
+- Runtime no inbound: se houver fluxo `live`, o bot responde e pode transferir para humano
+- Demo seed: **“Demo · Marcar consulta”** (publicada no 1º boot)
+- LLM opcional via `XAI_API_KEY` / `GLABS_LLM_API_KEY` (senão keywords)
+
 ## Env
 
 | Var | Descrição |
@@ -88,3 +97,6 @@ npm run dev   # :3099 → http://127.0.0.1:3099/admin
 | `AUTH_DIR` / `DATA_DIR` | Root de dados (default `/data` no Railway) |
 | `PORT` | Default 3099 |
 | `LOG_LEVEL` | Default `warn` |
+| `XAI_API_KEY` ou `GLABS_LLM_API_KEY` | LLM para nó de intenção (opcional) |
+| `GLABS_LLM_BASE_URL` | Default `https://api.x.ai/v1` |
+| `GLABS_LLM_MODEL` | Default `grok-4-1-fast-non-reasoning` |

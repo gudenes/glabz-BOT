@@ -387,11 +387,77 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
     if (!text && !media) return;
 
     const quote = extractQuotedContext(unwrapped);
+    const bodyText = text || mediaLabel(media);
+    const meta = accountMeta(accountId);
+    const product = meta?.product || "gestor";
 
+    // ── Flow engine (atendimento automático) ───────────────
+    try {
+      const { processInboundFlow } = await import("./flows/engine.js");
+      const flowResult = await processInboundFlow({
+        accountId,
+        product,
+        phoneE164: phone,
+        text: bodyText,
+        pushName: m?.pushName ?? null,
+      });
+
+      if (flowResult) {
+        for (const reply of flowResult.replies) {
+          try {
+            await sendText(accountId, phone, reply);
+          } catch (e) {
+            console.warn(`[wa:${accountId}] flow reply failed:`, (e as Error).message);
+          }
+        }
+
+        if (flowResult.handoff) {
+          await postWebhook(accountId, {
+            type: "handoff",
+            phoneE164: phone,
+            body: bodyText,
+            externalId: m?.key?.id ?? null,
+            sentAt: new Date(
+              Number(m?.messageTimestamp || 0) * 1000 || Date.now()
+            ).toISOString(),
+            pushName: m?.pushName ?? null,
+            reason: flowResult.handoffReason || "handoff",
+            vars: flowResult.vars,
+          });
+        }
+
+        // Sempre espelha a msg do user no app (histórico); bot replies já foram no WA
+        await postWebhook(accountId, {
+          type: "message",
+          phoneE164: phone,
+          body: bodyText,
+          externalId: m?.key?.id ?? null,
+          sentAt: new Date(
+            Number(m?.messageTimestamp || 0) * 1000 || Date.now()
+          ).toISOString(),
+          pushName: m?.pushName ?? null,
+          media: media ?? undefined,
+          quoted: quote ?? undefined,
+          botHandled: !flowResult.handoff,
+          flowVars: flowResult.vars,
+        });
+
+        console.log(
+          `[wa:${accountId}] inbound de ${phone} → flow` +
+            `${flowResult.handoff ? " handoff" : ""}` +
+            ` replies=${flowResult.replies.length}`
+        );
+        return;
+      }
+    } catch (e) {
+      console.warn(`[wa:${accountId}] flow engine:`, (e as Error).message);
+    }
+
+    // ── Sem fluxo live: só webhook (comportamento clássico) ─
     await postWebhook(accountId, {
       type: "message",
       phoneE164: phone,
-      body: text || mediaLabel(media),
+      body: bodyText,
       externalId: m?.key?.id ?? null,
       sentAt: new Date(Number(m?.messageTimestamp || 0) * 1000 || Date.now()).toISOString(),
       pushName: m?.pushName ?? null,
