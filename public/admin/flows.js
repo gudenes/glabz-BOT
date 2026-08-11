@@ -257,6 +257,8 @@ function renderCanvas() {
     }
   }
 
+  closeAddMenu();
+
   // nodes
   for (const n of state.flow.nodes) {
     const el = document.createElement("div");
@@ -271,14 +273,129 @@ function renderCanvas() {
     el.querySelector(".k").textContent = typeLabel(n.type);
     el.querySelector(".b").textContent = nodeTitle(n);
 
-    el.addEventListener("mousedown", (ev) => onNodeDown(ev, n));
-    el.addEventListener("click", (ev) => onNodeClick(ev, n));
+    // + para adicionar próximo nó (exceto end)
+    if (n.type !== "end") {
+      const plus = document.createElement("button");
+      plus.type = "button";
+      plus.className = "node-plus";
+      plus.title = "Adicionar próximo passo";
+      plus.setAttribute("aria-label", "Adicionar próximo passo");
+      plus.textContent = "+";
+      plus.addEventListener("mousedown", (ev) => {
+        ev.stopPropagation();
+        ev.preventDefault();
+      });
+      plus.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        ev.preventDefault();
+        openAddMenu(n, plus);
+      });
+      el.appendChild(plus);
+    }
+
+    el.addEventListener("mousedown", (ev) => {
+      if (ev.target.closest(".node-plus")) return;
+      onNodeDown(ev, n);
+    });
+    el.addEventListener("click", (ev) => {
+      if (ev.target.closest(".node-plus")) return;
+      onNodeClick(ev, n);
+    });
     canvas.appendChild(el);
   }
 
   // size svg
   svg.setAttribute("width", "2200");
   svg.setAttribute("height", "1400");
+}
+
+const ADDABLE_TYPES = [
+  { type: "message", label: "Mensagem" },
+  { type: "ask", label: "Perguntar" },
+  { type: "llm_intent", label: "LLM · intenção" },
+  { type: "condition", label: "Condição" },
+  { type: "handoff", label: "Handoff humano" },
+  { type: "end", label: "Fim" },
+];
+
+function closeAddMenu() {
+  document.querySelectorAll(".node-add-menu").forEach((m) => m.remove());
+}
+
+function openAddMenu(parentNode, anchorBtn) {
+  closeAddMenu();
+  const canvas = $("canvas");
+  const menu = document.createElement("div");
+  menu.className = "node-add-menu";
+  menu.innerHTML = `<div class="m-title">Adicionar depois</div>`;
+
+  for (const item of ADDABLE_TYPES) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.innerHTML = `<span class="dot ${
+      item.type === "llm_intent" ? "llm" : item.type === "handoff" ? "hand" : item.type === "condition" ? "cond" : item.type === "message" ? "msg" : item.type === "ask" ? "ask" : "end"
+    }"></span>${item.label}`;
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      addChildNode(parentNode, item.type);
+      closeAddMenu();
+    };
+    menu.appendChild(b);
+  }
+
+  // posiciona sob o botão +
+  const left = parentNode.x + 100 - 90;
+  const top = parentNode.y + 78;
+  menu.style.left = Math.max(8, left) + "px";
+  menu.style.top = top + "px";
+  canvas.appendChild(menu);
+
+  // fecha ao clicar fora
+  const closer = (e) => {
+    if (!menu.contains(e.target) && e.target !== anchorBtn) {
+      closeAddMenu();
+      document.removeEventListener("mousedown", closer, true);
+    }
+  };
+  setTimeout(() => document.addEventListener("mousedown", closer, true), 0);
+}
+
+/** Cria nó filho já ligado ao pai (abaixo, levemente deslocado se já houver filhos). */
+function addChildNode(parentNode, type) {
+  if (!state.flow) return;
+  const siblings = state.flow.edges.filter((e) => e.from === parentNode.id).length;
+  const child = {
+    id: uid("n"),
+    type,
+    x: parentNode.x + siblings * 40,
+    y: parentNode.y + 130,
+    data: defaultData(type),
+  };
+  state.flow.nodes.push(child);
+
+  let edgeLabel;
+  if (parentNode.type === "llm_intent") {
+    edgeLabel =
+      prompt(
+        "Rótulo da intenção (slug, ex.: marcar_consulta) — vazio = default",
+        siblings === 0 ? "marcar_consulta" : "default"
+      )?.trim() || "default";
+  } else if (parentNode.type === "condition") {
+    edgeLabel = siblings === 0 ? "true" : "false";
+  }
+
+  state.flow.edges.push({
+    id: uid("e"),
+    from: parentNode.id,
+    to: child.id,
+    label: edgeLabel,
+  });
+
+  state.selectedNodeId = child.id;
+  state.linkFrom = null;
+  renderCanvas();
+  renderProps();
+  toast("Passo adicionado");
 }
 
 function onNodeDown(ev, node) {
@@ -526,11 +643,16 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
-// ── Palette ──────────────────────────────────────────────
+// ── Palette (fallback: nó solto; preferir o + nos nós) ───
 document.querySelectorAll(".pal-item").forEach((btn) => {
   btn.onclick = () => {
     if (!state.flow) return;
     const type = btn.dataset.type;
+    const selected = state.flow.nodes.find((n) => n.id === state.selectedNodeId);
+    if (selected && selected.type !== "end") {
+      addChildNode(selected, type);
+      return;
+    }
     const n = {
       id: uid("n"),
       type,

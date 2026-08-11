@@ -233,7 +233,7 @@
   background: linear-gradient(180deg, #1a2230, #151c28);
   border: 1px solid var(--border-strong);
   border-radius: 12px;
-  padding: 10px 12px;
+  padding: 10px 12px 14px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
   cursor: grab;
   user-select: none;
@@ -262,6 +262,77 @@
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Botão + sob o nó — adiciona próximo passo já ligado */
+.fb-node .node-plus {
+  position: absolute;
+  left: 50%;
+  bottom: -14px;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(61, 139, 253, 0.55);
+  background: #121821;
+  color: #93c5fd;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 5;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  transition: background 0.15s, transform 0.15s, border-color 0.15s;
+  padding: 0;
+}
+.fb-node .node-plus:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  transform: translateX(-50%) scale(1.08);
+}
+.fb-node.type-end .node-plus {
+  display: none;
+}
+
+/* Menu de tipos ao clicar no + */
+.node-add-menu {
+  position: absolute;
+  z-index: 30;
+  min-width: 180px;
+  background: #151c28;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+.node-add-menu .m-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding: 6px 8px 4px;
+}
+.node-add-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.node-add-menu button:hover {
+  background: var(--accent-soft);
 }
 .fb-node.type-trigger { border-color: rgba(74, 222, 128, 0.45); }
 .fb-node.type-trigger .k { color: #4ade80; }
