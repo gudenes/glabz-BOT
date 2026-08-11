@@ -11,6 +11,11 @@ const state = {
   linkFrom: null,
   drag: null,
   llmConfigured: false,
+  /** Simulador */
+  simOpen: false,
+  simState: null, // { nodeId, waitingFor, vars, mode, finished }
+  simActiveNodeId: null,
+  simBusy: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -99,59 +104,71 @@ function nodeTitle(node) {
 }
 
 const NODE_W = 220;
-const NODE_H_FALLBACK = 100; // altura se o DOM ainda não mediu
+const NODE_H_FALLBACK = 100;
 
-/** Altura real do cartão (sem o botão +). */
 function nodeHeight(node, heightMap) {
   if (heightMap && heightMap.has(node.id)) return heightMap.get(node.id);
   return NODE_H_FALLBACK;
 }
 
 /**
- * Rota ortogonal limpa (sem laços soltos).
- * exitIndex/exitCount espalham as saídas no fundo do pai;
- * rank escalona a altura do degrau para não empilhar labels.
+ * Ligação ortogonal conectada de cartão → cartão.
+ * Cantos levemente arredondados (não é “flecha solta”).
  */
 function routeEdge(a, b, opts = {}) {
   const { exitIndex = 0, exitCount = 1, rank = 0, heightMap } = opts;
   const aH = nodeHeight(a, heightMap);
-  const pad = 28; // margem interna para ports
+  const pad = 32;
   const spread =
-    exitCount > 1 ? Math.min(NODE_W - pad * 2, (exitCount - 1) * 44) : 0;
+    exitCount > 1 ? Math.min(NODE_W - pad * 2, (exitCount - 1) * 48) : 0;
   const x1 =
     a.x +
     NODE_W / 2 -
     spread / 2 +
     (exitCount > 1 ? exitIndex * (spread / (exitCount - 1)) : 0);
-  const y1 = a.y + aH; // base do cartão (o + fica por cima da linha)
+  // sai um pouco abaixo do cartão (porta de saída)
+  const y1 = a.y + aH + 2;
   const x2 = b.x + NODE_W / 2;
-  const y2 = b.y;
+  // entra no topo do cartão destino
+  const y2 = b.y - 2;
   const dx = x2 - x1;
 
-  // Mesma coluna → reta vertical
-  if (Math.abs(dx) < 24) {
-    const yEnd = Math.max(y2, y1 + 6);
+  // Mesma coluna → reta
+  if (Math.abs(dx) < 20) {
+    const yEnd = Math.max(y2, y1 + 8);
     return {
       d: `M ${x1} ${y1} L ${x2} ${yEnd}`,
-      label: { x: x1 + 10, y: (y1 + yEnd) / 2 },
+      label: { x: x1 + 12, y: (y1 + yEnd) / 2 },
     };
   }
 
-  // Degrau: desce → cruza → desce/sobe até o topo do alvo
-  // rank separa faixas horizontais (evita 4 linhas coladas)
-  const gapY = 22 + rank * 18;
-  let midY = y1 + gapY;
-  // Se o alvo está logo abaixo, cabe o degrau no meio do vão
-  if (y2 > y1 + 12) {
-    midY = Math.min(midY, y1 + Math.max(18, (y2 - y1) * 0.4));
-    midY = Math.max(midY, y1 + 16);
-    // não invadir o cartão destino
-    if (midY > y2 - 12) midY = Math.max(y1 + 14, y2 - 14);
+  // Faixa horizontal escalonada entre pai e filho
+  const room = Math.max(0, y2 - y1);
+  const base = 18 + rank * 14;
+  let midY = y1 + Math.min(base, Math.max(16, room * 0.45));
+  if (room > 24) {
+    midY = Math.min(midY, y2 - 12);
+    midY = Math.max(midY, y1 + 12);
+  } else {
+    // pouco espaço: sai, desce um pouco mesmo assim
+    midY = y1 + 16 + rank * 10;
   }
 
+  const r = 8; // raio do canto
+  // path com cantos arredondados (continua conectado ponta a ponta)
+  const dir = x2 >= x1 ? 1 : -1;
+  const d = [
+    `M ${x1} ${y1}`,
+    `L ${x1} ${midY - r}`,
+    `Q ${x1} ${midY} ${x1 + dir * r} ${midY}`,
+    `L ${x2 - dir * r} ${midY}`,
+    `Q ${x2} ${midY} ${x2} ${midY + r}`,
+    `L ${x2} ${y2}`,
+  ].join(" ");
+
   return {
-    d: `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`,
-    label: { x: (x1 + x2) / 2, y: midY - 8 },
+    d,
+    label: { x: (x1 + x2) / 2, y: midY - 10 },
   };
 }
 
@@ -251,6 +268,10 @@ function selectFlow(id) {
   state.flow = structuredClone(f);
   state.selectedNodeId = null;
   state.linkFrom = null;
+  // troca de fluxo = simulação limpa
+  state.simState = null;
+  state.simActiveNodeId = null;
+  if (state.simOpen) resetSim();
   renderAll();
 }
 
@@ -273,6 +294,9 @@ function newBlankFlow() {
     edges: [],
   };
   state.selectedNodeId = null;
+  state.simState = null;
+  state.simActiveNodeId = null;
+  if (state.simOpen) resetSim();
   renderAll();
 }
 
@@ -318,28 +342,38 @@ function renderList() {
 
 function renderCanvas() {
   const canvas = $("canvas");
-  const svg = $("edges-svg");
-  canvas.innerHTML = "";
+  let svg = $("edges-svg");
+  if (!canvas) return;
+
+  // remove nós/menus; mantém o SVG no mesmo sistema de coordenadas do canvas
+  canvas.querySelectorAll(".fb-node, .node-add-menu").forEach((el) => el.remove());
+  if (!svg) {
+    svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.id = "edges-svg";
+    svg.classList.add("fb-edges");
+    svg.setAttribute("aria-hidden", "true");
+    canvas.prepend(svg);
+  }
   svg.innerHTML = "";
   if (!state.flow) return;
 
   const ns = "http://www.w3.org/2000/svg";
   const nodeIds = new Set(state.flow.nodes.map((n) => n.id));
-  // limpa edges órfãs no modelo
   state.flow.edges = state.flow.edges.filter(
     (e) => nodeIds.has(e.from) && nodeIds.has(e.to) && e.from !== e.to
   );
 
   closeAddMenu();
 
-  // 1) nós primeiro — para medir altura real e ancorar bem as linhas
+  // 1) nós
   for (const n of state.flow.nodes) {
     const el = document.createElement("div");
     el.className =
       "fb-node type-" +
       n.type +
       (state.selectedNodeId === n.id ? " selected" : "") +
-      (state.linkFrom === n.id ? " link-from" : "");
+      (state.linkFrom === n.id ? " link-from" : "") +
+      (state.simActiveNodeId === n.id ? " sim-active" : "");
     el.style.left = n.x + "px";
     el.style.top = n.y + "px";
     el.dataset.id = n.id;
@@ -377,14 +411,14 @@ function renderCanvas() {
     canvas.appendChild(el);
   }
 
-  // 2) medir alturas reais
+  // 2) alturas reais
   const heightMap = new Map();
   for (const n of state.flow.nodes) {
     const el = canvas.querySelector(`.fb-node[data-id="${n.id}"]`);
     if (el) heightMap.set(n.id, el.offsetHeight || NODE_H_FALLBACK);
   }
 
-  // 3) agrupar saídas por origem, ordenar por X do destino (fan-out limpo)
+  // 3) fan-out por origem
   const byFrom = new Map();
   for (const e of state.flow.edges) {
     if (!byFrom.has(e.from)) byFrom.set(e.from, []);
@@ -398,15 +432,17 @@ function renderCanvas() {
     });
   }
 
-  // defs seta
   const defs = document.createElementNS(ns, "defs");
   defs.innerHTML = `
-    <marker id="arrowhead" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
-      <path d="M0,0 L7,3.5 L0,7 Z" fill="rgba(148,163,184,0.7)" />
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,4 L0,8 Z" fill="rgba(165,180,252,0.95)" />
+    </marker>
+    <marker id="arrowhead-hot" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,4 L0,8 Z" fill="rgba(99,102,241,1)" />
     </marker>`;
   svg.appendChild(defs);
 
-  // 4) desenhar edges com ports espalhados
+  // 4) edges conectadas
   for (const e of state.flow.edges) {
     const a = state.flow.nodes.find((n) => n.id === e.from);
     const b = state.flow.nodes.find((n) => n.id === e.to);
@@ -414,22 +450,31 @@ function renderCanvas() {
     const siblings = byFrom.get(e.from) || [e];
     const exitIndex = siblings.indexOf(e);
     const exitCount = siblings.length;
-    // rank: saídas da esquerda → rank crescente; default um pouco mais baixo
     let rank = exitIndex;
-    if (e.label === "default" || e.label === "outro") rank = exitCount; // faixa extra
+    if (e.label === "default" || e.label === "outro") rank = exitCount;
     const routed = routeEdge(a, b, { exitIndex, exitCount, rank, heightMap });
+
+    const isHot =
+      state.simActiveNodeId &&
+      (e.to === state.simActiveNodeId || e.from === state.simActiveNodeId);
 
     const path = document.createElementNS(ns, "path");
     path.setAttribute("d", routed.d);
-    path.setAttribute("class", "edge-path" + (e.label ? " labeled" : ""));
+    path.setAttribute(
+      "class",
+      "edge-path" + (e.label ? " labeled" : "") + (isHot ? " sim-hot" : "")
+    );
     path.dataset.edgeId = e.id;
-    path.setAttribute("marker-end", "url(#arrowhead)");
+    path.setAttribute(
+      "marker-end",
+      isHot ? "url(#arrowhead-hot)" : "url(#arrowhead)"
+    );
     svg.appendChild(path);
 
     if (e.label) {
       const pos = routed.label;
       const label = friendlyEdgeLabel(e.label);
-      const tw = Math.max(48, label.length * 6.4 + 14);
+      const tw = Math.max(52, label.length * 6.6 + 16);
       const bg = document.createElementNS(ns, "rect");
       bg.setAttribute("x", pos.x - tw / 2);
       bg.setAttribute("y", pos.y - 11);
@@ -448,17 +493,19 @@ function renderCanvas() {
     }
   }
 
-  // tamanho do svg cobre o conteúdo
   let maxX = 1200;
   let maxY = 900;
   for (const n of state.flow.nodes) {
-    maxX = Math.max(maxX, n.x + NODE_W + 80);
-    maxY = Math.max(maxY, n.y + (heightMap.get(n.id) || NODE_H_FALLBACK) + 120);
+    maxX = Math.max(maxX, n.x + NODE_W + 120);
+    maxY = Math.max(maxY, n.y + (heightMap.get(n.id) || NODE_H_FALLBACK) + 140);
   }
+  // width/height em atributos = sistema de coordenadas 1:1 (sem escala CSS)
   svg.setAttribute("width", String(maxX));
   svg.setAttribute("height", String(maxY));
-  canvas.style.minWidth = maxX + "px";
-  canvas.style.minHeight = maxY + "px";
+  svg.style.width = maxX + "px";
+  svg.style.height = maxY + "px";
+  canvas.style.width = maxX + "px";
+  canvas.style.height = maxY + "px";
 }
 
 const ADDABLE_TYPES = [
@@ -881,3 +928,207 @@ $("btn-unpublish").onclick = async () => {
 $("flow-name").onchange = () => {
   if (state.flow) state.flow.name = $("flow-name").value;
 };
+
+// ── Simulador ────────────────────────────────────────────
+function openSim() {
+  if (!state.flow) {
+    toast("Abra um fluxo primeiro", "err");
+    return;
+  }
+  state.simOpen = true;
+  $("sim-panel").classList.remove("hidden");
+  $("sim-input")?.focus();
+  updateSimStatus();
+}
+
+function closeSim() {
+  state.simOpen = false;
+  $("sim-panel").classList.add("hidden");
+}
+
+function resetSim() {
+  state.simState = null;
+  state.simActiveNodeId = null;
+  const chat = $("sim-chat");
+  chat.innerHTML = "";
+  const empty = document.createElement("div");
+  empty.className = "sim-empty";
+  empty.id = "sim-empty";
+  empty.innerHTML = `<p>Simule o WhatsApp do cliente.<br/>A primeira mensagem inicia o fluxo.</p>
+    <div class="sim-chips">
+      <button type="button" class="sim-chip" data-text="Oi, quero marcar uma sessão">marcar sessão</button>
+      <button type="button" class="sim-chip" data-text="Quanto custa?">dúvida</button>
+      <button type="button" class="sim-chip" data-text="Preciso da nota fiscal">admin</button>
+    </div>`;
+  chat.appendChild(empty);
+  bindSimChips();
+  $("sim-meta").textContent = "";
+  updateSimStatus("Conversas reiniciada");
+  renderCanvas();
+}
+
+function bindSimChips() {
+  document.querySelectorAll(".sim-chip").forEach((btn) => {
+    btn.onclick = () => {
+      const t = btn.dataset.text || btn.textContent;
+      $("sim-input").value = t;
+      sendSimMessage();
+    };
+  });
+}
+
+function updateSimStatus(extra) {
+  const el = $("sim-status");
+  if (!el) return;
+  if (state.simState?.mode === "human") {
+    el.textContent = extra || "Em atendimento humano";
+    return;
+  }
+  if (state.simState?.waitingFor) {
+    el.textContent = extra || `Aguardando: ${state.simState.waitingFor}`;
+    return;
+  }
+  if (state.simState?.finished) {
+    el.textContent = extra || "Fluxo terminou — mande outra msg";
+    return;
+  }
+  el.textContent = extra || "Digite como o cliente";
+}
+
+function appendSimBubble(kind, text) {
+  const chat = $("sim-chat");
+  const empty = $("sim-empty");
+  if (empty) empty.remove();
+  const b = document.createElement("div");
+  b.className = "sim-bubble " + kind;
+  b.textContent = text;
+  chat.appendChild(b);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function renderSimMeta(data) {
+  const parts = [];
+  if (data.lastIntent) {
+    parts.push(
+      `intenção: <b>${escapeHtml(data.lastIntent)}</b>` +
+        (data.intentSource ? ` · ${escapeHtml(data.intentSource)}` : "")
+    );
+  }
+  if (data.state?.waitingFor) {
+    parts.push(`salva em <b>${escapeHtml(data.state.waitingFor)}</b>`);
+  }
+  if (data.handoff) {
+    parts.push(`handoff · ${escapeHtml(data.handoffReason || "")}`);
+  }
+  const vars = data.state?.vars || {};
+  const keys = Object.keys(vars).filter(
+    (k) => !["last_intent", "intent_source", "handoff_reason", "pushName"].includes(k)
+  );
+  if (keys.length) {
+    parts.push(
+      "vars: " +
+        keys
+          .map((k) => `<b>${escapeHtml(k)}</b>=${escapeHtml(String(vars[k]).slice(0, 24))}`)
+          .join(", ")
+    );
+  }
+  $("sim-meta").innerHTML = parts.join(" · ");
+}
+
+async function sendSimMessage() {
+  if (!state.flow || state.simBusy) return;
+  const input = $("sim-input");
+  const text = (input.value || "").trim();
+  if (!text) return;
+
+  if (state.simState?.mode === "human") {
+    appendSimBubble("sys", "Conversa em handoff — reinicie para testar de novo");
+    return;
+  }
+
+  input.value = "";
+  appendSimBubble("user", text);
+  state.simBusy = true;
+  $("sim-send").disabled = true;
+  updateSimStatus("Pensando…");
+
+  try {
+    const data = await api("/v1/flows/simulate", {
+      method: "POST",
+      body: JSON.stringify({
+        flowId: state.flow.id || undefined,
+        name: state.flow.name,
+        product: state.flow.product,
+        nodes: state.flow.nodes,
+        edges: state.flow.edges,
+        text,
+        state: state.simState,
+      }),
+    });
+
+    state.simState = data.state || null;
+
+    // último nó do trace = onde o fluxo parou
+    const trace = data.trace || [];
+    if (trace.length) {
+      state.simActiveNodeId = trace[trace.length - 1].nodeId;
+    } else if (data.state?.nodeId) {
+      state.simActiveNodeId = data.state.nodeId;
+    }
+
+    for (const reply of data.replies || []) {
+      appendSimBubble("bot", reply);
+    }
+
+    if (data.handoff) {
+      appendSimBubble(
+        "handoff",
+        "→ Passou para atendente humano" +
+          (data.handoffReason ? ` (${data.handoffReason})` : "")
+      );
+    } else if (!data.replies?.length && !trace.length) {
+      appendSimBubble("sys", "Sem resposta do fluxo");
+    }
+
+    // mini-trace
+    if (trace.length > 1) {
+      const path = trace
+        .map((t) => t.detail || t.type)
+        .filter(Boolean)
+        .join(" → ");
+      if (path) appendSimBubble("sys", path);
+    }
+
+    renderSimMeta(data);
+    updateSimStatus();
+    renderCanvas();
+
+    // scroll canvas para o nó ativo
+    if (state.simActiveNodeId) {
+      const nodeEl = document.querySelector(
+        `.fb-node[data-id="${state.simActiveNodeId}"]`
+      );
+      nodeEl?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    }
+  } catch (e) {
+    appendSimBubble("sys", "Erro: " + e.message);
+    toast(e.message, "err");
+    updateSimStatus("Erro");
+  } finally {
+    state.simBusy = false;
+    $("sim-send").disabled = false;
+    input.focus();
+  }
+}
+
+$("btn-sim").onclick = () => {
+  if (state.simOpen) closeSim();
+  else openSim();
+};
+$("sim-close").onclick = () => closeSim();
+$("sim-reset").onclick = () => resetSim();
+$("sim-form").onsubmit = (e) => {
+  e.preventDefault();
+  sendSimMessage();
+};
+bindSimChips();

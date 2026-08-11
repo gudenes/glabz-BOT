@@ -10,8 +10,8 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/styles.css?v=2" />
-    <link rel="stylesheet" href="/admin/flows.css?v=2" />
+    <link rel="stylesheet" href="/admin/styles.css?v=3" />
+    <link rel="stylesheet" href="/admin/flows.css?v=3" />
   </head>
   <body class="flows-body">
     <div id="login-gate" class="fb-login">
@@ -58,6 +58,7 @@
             </select>
           </div>
           <div class="fb-actions">
+            <button type="button" id="btn-sim" class="fb-btn fb-btn-secondary" title="Testar o fluxo digitando">▶ Testar</button>
             <button type="button" id="btn-new" class="fb-btn fb-btn-ghost">Novo</button>
             <button type="button" id="btn-save" class="fb-btn fb-btn-secondary">Salvar</button>
             <button type="button" id="btn-unpublish" class="fb-btn fb-btn-ghost">Pausar</button>
@@ -105,8 +106,9 @@
 
         <main class="fb-canvas-wrap">
           <div class="fb-canvas-label">Área do fluxo · arraste os cartões</div>
-          <svg id="edges-svg" class="fb-edges"></svg>
-          <div id="canvas" class="fb-canvas"></div>
+          <div id="canvas" class="fb-canvas">
+            <svg id="edges-svg" class="fb-edges" aria-hidden="true"></svg>
+          </div>
         </main>
 
         <aside class="fb-props">
@@ -119,9 +121,47 @@
         </aside>
       </div>
 
+      <!-- Simulador: preview de conversa -->
+      <div id="sim-panel" class="sim-panel hidden" aria-label="Simulador de fluxo">
+        <div class="sim-head">
+          <div class="sim-head-left">
+            <span class="sim-dot"></span>
+            <div>
+              <strong>Testar fluxo</strong>
+              <small id="sim-status">Digite como o cliente</small>
+            </div>
+          </div>
+          <div class="sim-head-actions">
+            <button type="button" id="sim-reset" class="fb-btn fb-btn-ghost" title="Recomeçar">↺</button>
+            <button type="button" id="sim-close" class="fb-btn fb-btn-ghost" title="Fechar">✕</button>
+          </div>
+        </div>
+        <div class="sim-meta" id="sim-meta"></div>
+        <div class="sim-chat" id="sim-chat">
+          <div class="sim-empty" id="sim-empty">
+            <p>Simule o WhatsApp do cliente.<br/>A primeira mensagem inicia o fluxo.</p>
+            <div class="sim-chips">
+              <button type="button" class="sim-chip" data-text="Oi, quero marcar uma sessão">marcar sessão</button>
+              <button type="button" class="sim-chip" data-text="Quanto custa?">dúvida</button>
+              <button type="button" class="sim-chip" data-text="Preciso da nota fiscal">admin</button>
+            </div>
+          </div>
+        </div>
+        <form class="sim-composer" id="sim-form">
+          <input
+            id="sim-input"
+            type="text"
+            placeholder="Mensagem do cliente…"
+            autocomplete="off"
+            maxlength="500"
+          />
+          <button type="submit" class="fb-btn fb-btn-primary" id="sim-send">Enviar</button>
+        </form>
+      </div>
+
       <div id="toast" class="fb-toast hidden"></div>
     </div>
 
-    <script src="/admin/flows.js?v=2" type="module"></script>
+    <script src="/admin/flows.js?v=3" type="module"></script>
   </body>
 </html>

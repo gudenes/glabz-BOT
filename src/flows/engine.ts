@@ -39,11 +39,278 @@ function triggerNode(flow: Flow): FlowNode | null {
   return flow.nodes.find((n) => n.type === "trigger") ?? flow.nodes[0] ?? null;
 }
 
+/** Estado in-memory do simulador (não grava em disco). */
+export type FlowSimState = {
+  nodeId: string | null;
+  waitingFor: string | null;
+  vars: Record<string, string>;
+  mode: "bot" | "human";
+  /** true após end — próxima msg reentra */
+  finished?: boolean;
+};
+
+export type FlowTraceStep = {
+  nodeId: string;
+  type: string;
+  detail?: string;
+};
+
+export type FlowStepResult = EngineResult & {
+  nodeId: string | null;
+  waitingFor: string | null;
+  trace: FlowTraceStep[];
+  /** slug escolhido no llm_intent, se houver */
+  lastIntent?: string;
+  intentSource?: string;
+};
+
 /**
- * Processa mensagem do usuário no fluxo live.
- * - Se mode=human → não intercepta (apps cuidam).
- * - Se waitingFor ask → grava var e avança.
- * - Caso contrário, inicia/continua o fluxo.
+ * Executa um passo do fluxo em memória (produção e simulador).
+ * Não exige status=live — o simulador testa rascunhos.
+ */
+export async function runFlowStep(opts: {
+  flow: Flow;
+  state: FlowSimState;
+  text: string;
+  pushName?: string | null;
+}): Promise<FlowStepResult> {
+  const flow = opts.flow;
+  const text = (opts.text || "").trim();
+  let state = opts.state;
+
+  if (state.mode === "human") {
+    return {
+      replies: [],
+      handoff: true,
+      handoffReason: state.vars.handoff_reason || "human",
+      vars: state.vars,
+      mode: "human",
+      nodeId: null,
+      waitingFor: null,
+      trace: [],
+    };
+  }
+
+  const vars = { ...state.vars };
+  if (opts.pushName && !vars.pushName) vars.pushName = opts.pushName;
+
+  const replies: string[] = [];
+  const trace: FlowTraceStep[] = [];
+  let handoff = false;
+  let handoffReason: string | undefined;
+  let lastIntent: string | undefined;
+  let intentSource: string | undefined;
+  let node: FlowNode | null = null;
+
+  // Continuação de ask
+  if (state.waitingFor && state.nodeId) {
+    const askNode = flow.nodes.find((n) => n.id === state.nodeId);
+    if (askNode?.type === "ask") {
+      const varName = String(askNode.data.varName || "answer");
+      vars[varName] = text;
+      trace.push({
+        nodeId: askNode.id,
+        type: "ask",
+        detail: `salvou ${varName}="${text.slice(0, 60)}"`,
+      });
+      node = nextNode(flow, askNode.id);
+    } else {
+      node = triggerNode(flow);
+      if (node) node = nextNode(flow, node.id) || node;
+    }
+  } else if (!state.nodeId || state.finished) {
+    // início ou reentrada após end
+    node = triggerNode(flow);
+    if (node?.type === "trigger") {
+      trace.push({ nodeId: node.id, type: "trigger", detail: "início" });
+      node = nextNode(flow, node.id);
+    }
+  } else {
+    // mensagem no meio — re-entra no intent se houver
+    const intentNode = flow.nodes.find((n) => n.type === "llm_intent");
+    if (intentNode) {
+      node = intentNode;
+    } else {
+      node = triggerNode(flow);
+      if (node) node = nextNode(flow, node.id);
+    }
+  }
+
+  let guard = 0;
+  let waitingFor: string | null = null;
+  let currentId: string | null = null;
+  let finished = false;
+
+  while (node && guard++ < 20) {
+    currentId = node.id;
+
+    if (node.type === "trigger") {
+      trace.push({ nodeId: node.id, type: "trigger" });
+      node = nextNode(flow, node.id);
+      continue;
+    }
+
+    if (node.type === "message") {
+      const msg = render(String(node.data.text || ""), vars);
+      if (msg.trim()) replies.push(msg);
+      trace.push({ nodeId: node.id, type: "message", detail: "enviou texto" });
+      node = nextNode(flow, node.id);
+      continue;
+    }
+
+    if (node.type === "ask") {
+      const prompt = render(String(node.data.prompt || "Pode me dizer?"), vars);
+      replies.push(prompt);
+      waitingFor = String(node.data.varName || "answer");
+      trace.push({
+        nodeId: node.id,
+        type: "ask",
+        detail: `aguarda ${waitingFor}`,
+      });
+      break;
+    }
+
+    if (node.type === "condition") {
+      const field = String(node.data.field || "last");
+      const op = String(node.data.op || "contains");
+      const value = String(node.data.value || "").toLowerCase();
+      const hay = (field === "last" ? text : vars[field] || "").toLowerCase();
+      let ok = false;
+      if (op === "contains") ok = hay.includes(value);
+      else if (op === "equals") ok = hay === value;
+      else if (op === "regex") {
+        try {
+          ok = new RegExp(value, "i").test(hay);
+        } catch {
+          ok = false;
+        }
+      }
+      trace.push({
+        nodeId: node.id,
+        type: "condition",
+        detail: ok ? "sim" : "não",
+      });
+      node = nextNode(flow, node.id, ok ? "true" : "false");
+      continue;
+    }
+
+    if (node.type === "llm_intent") {
+      const intents = (
+        Array.isArray(node.data.intents) ? node.data.intents : []
+      ) as { slug: string; description: string }[];
+      const result = await classifyIntent({
+        text,
+        intents,
+        systemHint: String(node.data.prompt || ""),
+      });
+      lastIntent = result.intent;
+      intentSource = result.source;
+      vars.last_intent = result.intent;
+      vars.intent_source = result.source;
+      trace.push({
+        nodeId: node.id,
+        type: "llm_intent",
+        detail: `${result.intent} (${result.source})`,
+      });
+      node = nextNode(flow, node.id, result.intent);
+      continue;
+    }
+
+    if (node.type === "handoff") {
+      const msg = render(
+        String(
+          node.data.message ||
+            "Vou te transferir para um atendente humano. Um momento!"
+        ),
+        vars
+      );
+      if (msg.trim()) replies.push(msg);
+      handoff = true;
+      handoffReason = String(node.data.reason || "handoff");
+      vars.handoff_reason = handoffReason;
+      trace.push({
+        nodeId: node.id,
+        type: "handoff",
+        detail: handoffReason,
+      });
+      break;
+    }
+
+    if (node.type === "end") {
+      trace.push({ nodeId: node.id, type: "end", detail: "fim" });
+      currentId = null;
+      waitingFor = null;
+      finished = true;
+      break;
+    }
+
+    node = nextNode(flow, node.id);
+  }
+
+  const mode = handoff ? "human" : "bot";
+
+  return {
+    replies,
+    handoff,
+    handoffReason,
+    suppressAppWebhook: false,
+    vars,
+    mode,
+    nodeId: waitingFor ? currentId : handoff ? null : currentId,
+    waitingFor,
+    lastIntent,
+    intentSource,
+    trace,
+    // attach finished for simulator via vars is awkward — return via extended use
+  };
+}
+
+/**
+ * Wrapper do simulador: devolve também o próximo estado.
+ */
+export async function simulateFlowMessage(opts: {
+  flow: Flow;
+  state?: Partial<FlowSimState> | null;
+  text: string;
+}): Promise<{ result: FlowStepResult; state: FlowSimState }> {
+  const prev: FlowSimState = {
+    nodeId: opts.state?.nodeId ?? null,
+    waitingFor: opts.state?.waitingFor ?? null,
+    vars: { ...(opts.state?.vars || {}) },
+    mode: opts.state?.mode || "bot",
+    finished: opts.state?.finished ?? false,
+  };
+
+  // se human, não avança
+  if (prev.mode === "human") {
+    const result = await runFlowStep({
+      flow: opts.flow,
+      state: prev,
+      text: opts.text,
+    });
+    return { result, state: prev };
+  }
+
+  const result = await runFlowStep({
+    flow: opts.flow,
+    state: prev,
+    text: opts.text,
+  });
+
+  const next: FlowSimState = {
+    nodeId: result.nodeId,
+    waitingFor: result.waitingFor,
+    vars: result.vars,
+    mode: result.mode,
+    finished:
+      result.trace.some((t) => t.type === "end") && !result.waitingFor && !result.handoff,
+  };
+
+  return { result, state: next };
+}
+
+/**
+ * Processa mensagem do usuário no fluxo live (produção WhatsApp).
  */
 export async function processInboundFlow(opts: {
   accountId: string;
@@ -66,7 +333,7 @@ export async function processInboundFlow(opts: {
       updatedAt: new Date().toISOString(),
     } satisfies FlowConversationState);
 
-  // Já em handoff humano — não processa fluxo
+  // Já em handoff humano — não intercepta
   if (state.mode === "human") return null;
 
   const flow =
@@ -75,149 +342,35 @@ export async function processInboundFlow(opts: {
 
   if (!flow || flow.status !== "live") return null;
 
-  const vars = { ...state.vars };
-  if (opts.pushName && !vars.pushName) vars.pushName = opts.pushName;
+  const step = await runFlowStep({
+    flow,
+    state: {
+      nodeId: state.nodeId,
+      waitingFor: state.waitingFor ?? null,
+      vars: state.vars || {},
+      mode: state.mode,
+    },
+    text: opts.text,
+    pushName: opts.pushName,
+  });
 
-  const replies: string[] = [];
-  let handoff = false;
-  let handoffReason: string | undefined;
-  let node: FlowNode | null = null;
-
-  // Continuação de ask
-  if (state.waitingFor && state.nodeId) {
-    const askNode = flow.nodes.find((n) => n.id === state.nodeId);
-    if (askNode?.type === "ask") {
-      const varName = String(askNode.data.varName || "answer");
-      vars[varName] = opts.text.trim();
-      node = nextNode(flow, askNode.id);
-    } else {
-      node = triggerNode(flow);
-      if (node) node = nextNode(flow, node.id) || node;
-    }
-  } else if (!state.nodeId || !state.flowId) {
-    // início
-    node = triggerNode(flow);
-    if (node?.type === "trigger") node = nextNode(flow, node.id);
-  } else {
-    // mensagem no meio (ex.: depois de end) — re-entra no intent se houver
-    const intentNode = flow.nodes.find((n) => n.type === "llm_intent");
-    if (intentNode) {
-      node = intentNode;
-    } else {
-      node = triggerNode(flow);
-      if (node) node = nextNode(flow, node.id);
-    }
-  }
-
-  // Executa cadeia até ask/handoff/end ou limite
-  let guard = 0;
-  let waitingFor: string | null = null;
-  let currentId: string | null = null;
-
-  while (node && guard++ < 20) {
-    currentId = node.id;
-
-    if (node.type === "trigger") {
-      node = nextNode(flow, node.id);
-      continue;
-    }
-
-    if (node.type === "message") {
-      const text = render(String(node.data.text || ""), vars);
-      if (text.trim()) replies.push(text);
-      node = nextNode(flow, node.id);
-      continue;
-    }
-
-    if (node.type === "ask") {
-      const prompt = render(String(node.data.prompt || "Pode me dizer?"), vars);
-      replies.push(prompt);
-      waitingFor = String(node.data.varName || "answer");
-      break; // espera próxima msg
-    }
-
-    if (node.type === "condition") {
-      const field = String(node.data.field || "last");
-      const op = String(node.data.op || "contains");
-      const value = String(node.data.value || "").toLowerCase();
-      const hay = (
-        field === "last" ? opts.text : vars[field] || ""
-      ).toLowerCase();
-      let ok = false;
-      if (op === "contains") ok = hay.includes(value);
-      else if (op === "equals") ok = hay === value;
-      else if (op === "regex") {
-        try {
-          ok = new RegExp(value, "i").test(hay);
-        } catch {
-          ok = false;
-        }
-      }
-      node = nextNode(flow, node.id, ok ? "true" : "false");
-      continue;
-    }
-
-    if (node.type === "llm_intent") {
-      const intents = (Array.isArray(node.data.intents) ? node.data.intents : []) as {
-        slug: string;
-        description: string;
-      }[];
-      const result = await classifyIntent({
-        text: opts.text,
-        intents,
-        systemHint: String(node.data.prompt || ""),
-      });
-      vars.last_intent = result.intent;
-      vars.intent_source = result.source;
-      node = nextNode(flow, node.id, result.intent);
-      continue;
-    }
-
-    if (node.type === "handoff") {
-      const msg = render(
-        String(
-          node.data.message ||
-            "Vou te transferir para um atendente humano. Um momento!"
-        ),
-        vars
-      );
-      if (msg.trim()) replies.push(msg);
-      handoff = true;
-      handoffReason = String(node.data.reason || "handoff");
-      break;
-    }
-
-    if (node.type === "end") {
-      // volta a aceitar nova intenção na próxima msg
-      currentId = null;
-      waitingFor = null;
-      break;
-    }
-
-    // tipo desconhecido
-    node = nextNode(flow, node.id);
-  }
-
-  const mode = handoff ? "human" : "bot";
   upsertConversationState({
     accountId: opts.accountId,
     phoneE164: phone,
-    mode,
+    mode: step.mode,
     flowId: flow.id,
-    nodeId: waitingFor ? currentId : handoff ? null : currentId,
-    waitingFor,
-    vars,
+    nodeId: step.waitingFor ? step.nodeId : step.handoff ? null : step.nodeId,
+    waitingFor: step.waitingFor,
+    vars: step.vars,
     updatedAt: new Date().toISOString(),
   });
 
   return {
-    replies,
-    handoff,
-    handoffReason,
-    // Enquanto o bot conduz o fluxo, ainda podemos espelhar no app;
-    // no handoff sempre mandamos webhook com a última msg do user.
+    replies: step.replies,
+    handoff: step.handoff,
+    handoffReason: step.handoffReason,
     suppressAppWebhook: false,
-    vars,
-    mode,
+    vars: step.vars,
+    mode: step.mode,
   };
 }

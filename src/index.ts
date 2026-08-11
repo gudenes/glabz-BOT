@@ -13,7 +13,7 @@
  *   GET  /v1/accounts/:id/status
  *   POST /v1/accounts/:id/connect · disconnect · send · profile
  *   GET/POST /v1/flows · GET/PUT/DELETE /v1/flows/:id
- *   POST /v1/flows/:id/publish · /reset-state
+ *   POST /v1/flows/simulate · /v1/flows/:id/publish · /reset-state
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { mkdirSync, existsSync, readFileSync, statSync } from "node:fs";
@@ -51,7 +51,9 @@ import {
   resetConversationToBot,
   saveFlow,
 } from "./flows/store.js";
-import type { FlowEdge, FlowNode } from "./flows/types.js";
+import { simulateFlowMessage } from "./flows/engine.js";
+import type { Flow, FlowEdge, FlowNode } from "./flows/types.js";
+import type { FlowSimState } from "./flows/engine.js";
 
 const PORT = listenPort();
 const SECRET = botSecret();
@@ -290,6 +292,75 @@ const server = createServer(async (req, res) => {
         json(res, 400, {
           ok: false,
           reason: e instanceof Error ? e.message : "invalid",
+        });
+      }
+      return;
+    }
+
+    /** Simulador: testa o fluxo atual (rascunho ou live) sem WhatsApp. */
+    if (method === "POST" && path === "/v1/flows/simulate") {
+      const body = parseJson<{
+        flowId?: string;
+        nodes?: FlowNode[];
+        edges?: FlowEdge[];
+        name?: string;
+        product?: string;
+        text?: string;
+        state?: Partial<FlowSimState> | null;
+      }>(await readBody(req));
+
+      const text = (body?.text || "").trim();
+      if (!text) {
+        json(res, 400, { ok: false, reason: "text obrigatório" });
+        return;
+      }
+
+      let flow: Flow | null = null;
+      if (body?.nodes && body?.edges) {
+        flow = {
+          id: body.flowId || "sim",
+          name: body.name || "Simulação",
+          product: body.product || "gestor",
+          accountId: null,
+          status: "draft",
+          nodes: body.nodes,
+          edges: body.edges,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      } else if (body?.flowId) {
+        flow = getFlow(body.flowId);
+      }
+
+      if (!flow || !flow.nodes?.length) {
+        json(res, 400, {
+          ok: false,
+          reason: "Envie nodes/edges do canvas ou um flowId válido",
+        });
+        return;
+      }
+
+      try {
+        const { result, state: nextState } = await simulateFlowMessage({
+          flow,
+          state: body?.state,
+          text,
+        });
+        json(res, 200, {
+          ok: true,
+          replies: result.replies,
+          handoff: result.handoff,
+          handoffReason: result.handoffReason,
+          lastIntent: result.lastIntent,
+          intentSource: result.intentSource,
+          trace: result.trace,
+          state: nextState,
+          llmConfigured: Boolean(llmApiKey()),
+        });
+      } catch (e) {
+        json(res, 500, {
+          ok: false,
+          reason: e instanceof Error ? e.message : "simulate failed",
         });
       }
       return;
