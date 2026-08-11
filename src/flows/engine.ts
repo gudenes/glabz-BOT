@@ -6,6 +6,7 @@ import {
   upsertConversationState,
 } from "./store.js";
 import { classifyIntent } from "./llm.js";
+import { runAction } from "./connectors/index.js";
 
 function render(template: string, vars: Record<string, string>): string {
   return (template || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, k) => {
@@ -73,10 +74,13 @@ export async function runFlowStep(opts: {
   state: FlowSimState;
   text: string;
   pushName?: string | null;
+  /** true no simulador do admin */
+  simulate?: boolean;
 }): Promise<FlowStepResult> {
   const flow = opts.flow;
   const text = (opts.text || "").trim();
   let state = opts.state;
+  const simulate = Boolean(opts.simulate);
 
   if (state.mode === "human") {
     return {
@@ -216,6 +220,64 @@ export async function runFlowStep(opts: {
       continue;
     }
 
+    if (node.type === "action") {
+      const connector = String(node.data.connector || "calendar");
+      const operation = String(node.data.operation || "list_slots");
+      const config =
+        node.data.config && typeof node.data.config === "object"
+          ? (node.data.config as Record<string, unknown>)
+          : {};
+      // permite webhookUrl no data raiz também
+      if (node.data.webhookUrl && !config.webhookUrl) {
+        config.webhookUrl = node.data.webhookUrl;
+      }
+      if (node.data.url && !config.url) {
+        config.url = node.data.url;
+      }
+
+      // última mensagem do user disponível para connectors
+      vars.last = text;
+
+      const result = await runAction({
+        connector,
+        operation,
+        vars,
+        config,
+        ctx: {
+          product: flow.product,
+          accountId: flow.accountId,
+          simulate,
+        },
+      });
+
+      if (result.vars) {
+        Object.assign(vars, result.vars);
+      }
+      vars.last_action = `${connector}.${operation}`;
+      vars.last_action_ok = result.ok ? "1" : "0";
+      vars.last_action_source = result.source || "";
+      if (!result.ok) {
+        vars.last_action_error = result.error || "error";
+        if (result.message) vars.last_action_error_message = result.message;
+      }
+
+      const actionId = node.id;
+      trace.push({
+        nodeId: actionId,
+        type: "action",
+        detail: `${connector}.${operation} · ${result.ok ? "ok" : "erro"}${
+          result.source ? ` · ${result.source}` : ""
+        }`,
+      });
+
+      // edges: ok / erro → fallback unlabeled / default
+      const branch = result.ok ? "ok" : "erro";
+      let next = nextNode(flow, actionId, branch);
+      if (!next) next = nextNode(flow, actionId, null);
+      node = next;
+      continue;
+    }
+
     if (node.type === "handoff") {
       const msg = render(
         String(
@@ -287,6 +349,7 @@ export async function simulateFlowMessage(opts: {
       flow: opts.flow,
       state: prev,
       text: opts.text,
+      simulate: true,
     });
     return { result, state: prev };
   }
@@ -295,6 +358,7 @@ export async function simulateFlowMessage(opts: {
     flow: opts.flow,
     state: prev,
     text: opts.text,
+    simulate: true,
   });
 
   const next: FlowSimState = {

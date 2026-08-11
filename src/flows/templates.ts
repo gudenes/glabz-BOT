@@ -146,17 +146,11 @@ export function demoConsultationFlow(): Flow {
 }
 
 /**
- * Fluxo demo estúdio de pilates — 4 colunas sem cruzar:
+ * Fluxo demo pilates — agendar com calendário (action mock/HTTP):
  *
- *                    [Início]
- *                        │
- *                  [Boas-vindas]
- *                        │
- *               [Entender o pedido]
- *        ┌──────────┬──────────┬──────────┐
- *     agendar    dúvida     admin    não entendeu
- *        │          │          │          │
- *      …fila…    …fila…     …fila…      fim
+ *   ask nome → ask quando → list_slots → mostra vagas
+ *     → ask escolha → create_event → confirmado ✅
+ *     ↘ erro → handoff
  */
 export function demoPilatesFlow(): Flow {
   const now = new Date().toISOString();
@@ -166,8 +160,10 @@ export function demoPilatesFlow(): Flow {
     intent: "p_intent",
     askName: "p_ask_name",
     askWhen: "p_ask_when",
-    askLevel: "p_ask_level",
-    confirm: "p_confirm",
+    listSlots: "p_list_slots",
+    askPick: "p_ask_pick",
+    createEvent: "p_create_event",
+    booked: "p_booked",
     handoffBook: "p_handoff_book",
     askDoubt: "p_ask_doubt",
     doubtAck: "p_doubt_ack",
@@ -179,17 +175,15 @@ export function demoPilatesFlow(): Flow {
     end: "p_end",
   };
 
-  // 4 colunas com vão largo o bastante para as linhas não se sobreporem
   const COL = {
     agendar: 40,
     duvida: 340,
     admin: 640,
     outro: 940,
   };
-  // Tronco centrado entre as 4 colunas
   const CX = Math.round((COL.agendar + COL.outro) / 2);
   const y0 = 36;
-  const gap = 168; // cartão ~100 + degrau + labels sem colar
+  const gap = 155;
 
   return {
     id: randomUUID(),
@@ -245,7 +239,7 @@ export function demoPilatesFlow(): Flow {
           ],
         },
       },
-      // Coluna 1 — agendar
+      // Coluna agendar + calendário
       {
         id: ids.askName,
         type: "ask",
@@ -263,42 +257,67 @@ export function demoPilatesFlow(): Flow {
         y: y0 + gap * 4,
         data: {
           prompt:
-            "Oi, {{nome}}! Qual *dia e horário* prefere?\n(ex.: terça 18h)",
+            "Oi, {{nome}}! Qual *dia e período* prefere?\n(ex.: terça à noite)",
           varName: "quando",
         },
       },
       {
-        id: ids.askLevel,
-        type: "ask",
+        id: ids.listSlots,
+        type: "action",
         x: COL.agendar,
         y: y0 + gap * 5,
         data: {
-          prompt: "Você já pratica pilates ou é *primeira vez*?",
-          varName: "nivel",
+          label: "Listar horários livres",
+          connector: "calendar",
+          operation: "list_slots",
+          config: { forceMock: true },
         },
       },
       {
-        id: ids.confirm,
-        type: "message",
+        id: ids.askPick,
+        type: "ask",
         x: COL.agendar,
         y: y0 + gap * 6,
         data: {
+          prompt:
+            "Encontrei estes horários:\n\n{{slots_text}}\n\nQual prefere? Responda com *1*, *2* ou *3*.",
+          varName: "horario",
+        },
+      },
+      {
+        id: ids.createEvent,
+        type: "action",
+        x: COL.agendar,
+        y: y0 + gap * 7,
+        data: {
+          label: "Criar evento na agenda",
+          connector: "calendar",
+          operation: "create_event",
+          config: { forceMock: true, durationMin: 60 },
+        },
+      },
+      {
+        id: ids.booked,
+        type: "message",
+        x: COL.agendar,
+        y: y0 + gap * 8,
+        data: {
           text:
-            "Anotado ✅\n\nNome: {{nome}}\nQuando: {{quando}}\nNível: {{nivel}}\n\nVou chamar a equipe para confirmar a vaga.",
+            "Agendado ✅\n\n*{{event_summary}}*\n\nLink: {{event_link}}\n\nQualquer coisa é só chamar 💚",
         },
       },
       {
         id: ids.handoffBook,
         type: "handoff",
-        x: COL.agendar,
-        y: y0 + gap * 7,
+        x: COL.agendar + 260,
+        y: y0 + gap * 5,
         data: {
-          reason: "marcar_sessao_pilates",
+          reason: "calendario_erro",
           message:
-            "Pronto! Um atendente do estúdio vai confirmar sua sessão por aqui 💚",
+            "Não consegui consultar a agenda agora. Vou te passar para a equipe confirmar por aqui 💚",
         },
       },
-      // Coluna 2 — dúvida
+      // Coluna dúvida
       {
         id: ids.askDoubt,
         type: "ask",
@@ -329,7 +348,7 @@ export function demoPilatesFlow(): Flow {
           message: "Um atendente vai te responder em breve. Obrigada!",
         },
       },
-      // Coluna 3 — admin
+      // Coluna admin
       {
         id: ids.askAdmin,
         type: "ask",
@@ -361,7 +380,7 @@ export function demoPilatesFlow(): Flow {
           message: "Pronto! Nossa equipe administrativa continua por aqui.",
         },
       },
-      // Coluna 4 — não entendeu (sem atravessar as outras)
+      // Coluna outro
       {
         id: ids.clarify,
         type: "message",
@@ -388,14 +407,17 @@ export function demoPilatesFlow(): Flow {
       { id: "pe5", from: ids.intent, to: ids.askAdmin, label: "atendimento_admin" },
       { id: "pe5b", from: ids.intent, to: ids.clarify, label: "default" },
       { id: "pe6", from: ids.askName, to: ids.askWhen },
-      { id: "pe7", from: ids.askWhen, to: ids.askLevel },
-      { id: "pe8", from: ids.askLevel, to: ids.confirm },
-      { id: "pe9", from: ids.confirm, to: ids.handoffBook },
-      { id: "pe10", from: ids.askDoubt, to: ids.doubtAck },
-      { id: "pe11", from: ids.doubtAck, to: ids.handoffDoubt },
-      { id: "pe12", from: ids.askAdmin, to: ids.adminAck },
-      { id: "pe13", from: ids.adminAck, to: ids.handoffAdmin },
-      { id: "pe14", from: ids.clarify, to: ids.end },
+      { id: "pe7", from: ids.askWhen, to: ids.listSlots },
+      { id: "pe8", from: ids.listSlots, to: ids.askPick, label: "ok" },
+      { id: "pe8e", from: ids.listSlots, to: ids.handoffBook, label: "erro" },
+      { id: "pe10", from: ids.askPick, to: ids.createEvent },
+      { id: "pe11", from: ids.createEvent, to: ids.booked, label: "ok" },
+      { id: "pe11e", from: ids.createEvent, to: ids.handoffBook, label: "erro" },
+      { id: "pe12", from: ids.askDoubt, to: ids.doubtAck },
+      { id: "pe13", from: ids.doubtAck, to: ids.handoffDoubt },
+      { id: "pe14", from: ids.askAdmin, to: ids.adminAck },
+      { id: "pe15", from: ids.adminAck, to: ids.handoffAdmin },
+      { id: "pe16", from: ids.clarify, to: ids.end },
     ],
   };
 }

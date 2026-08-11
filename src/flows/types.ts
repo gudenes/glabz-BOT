@@ -1,7 +1,7 @@
 /**
  * Modelo de fluxo visual + runtime.
  *
- * Nós: trigger | message | ask | condition | llm_intent | handoff | end
+ * Nós: trigger | message | ask | condition | llm_intent | action | handoff | end
  */
 
 export type FlowStatus = "draft" | "live";
@@ -12,8 +12,15 @@ export type FlowNodeType =
   | "ask"
   | "condition"
   | "llm_intent"
+  | "action"
   | "handoff"
   | "end";
+
+/** Connectors suportados no nó `action`. */
+export type ActionConnector = "calendar" | "http";
+
+/** Ops do connector calendar. */
+export type CalendarOperation = "list_slots" | "create_event" | "cancel_event";
 
 export type FlowNode = {
   id: string;

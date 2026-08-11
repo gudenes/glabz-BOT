@@ -66,6 +66,13 @@ function defaultData(type) {
       };
     case "condition":
       return { field: "last", op: "contains", value: "sim" };
+    case "action":
+      return {
+        label: "Listar horários livres",
+        connector: "calendar",
+        operation: "list_slots",
+        config: { forceMock: true },
+      };
     case "handoff":
       return {
         reason: "handoff",
@@ -97,6 +104,18 @@ function nodeTitle(node) {
   if (node.type === "llm_intent") return d.label || "Entender intenção";
   if (node.type === "condition")
     return `${d.field || "texto"} ${d.op || "contém"} “${d.value || ""}”`;
+  if (node.type === "action") {
+    return (
+      d.label ||
+      (d.connector === "http"
+        ? "HTTP"
+        : d.operation === "create_event"
+          ? "Criar evento"
+          : d.operation === "list_slots"
+            ? "Listar horários"
+            : "Ação")
+    );
+  }
   if (node.type === "handoff") return "Passar para atendente";
   if (node.type === "end") return d.label || "Fim";
   if (node.type === "trigger") return d.label || "Início";
@@ -183,6 +202,8 @@ function friendlyEdgeLabel(label) {
     default: "não entendeu",
     true: "sim",
     false: "não",
+    ok: "ok",
+    erro: "erro",
   };
   return map[label] || label;
 }
@@ -195,6 +216,7 @@ function typeLabel(type) {
       ask: "Perguntar",
       llm_intent: "Entender intenção",
       condition: "Se / senão",
+      action: "Ação",
       handoff: "Atendente",
       end: "Encerrar",
     }[type] || type
@@ -512,6 +534,7 @@ const ADDABLE_TYPES = [
   { type: "message", label: "Mensagem", icon: "💬", ic: "msg" },
   { type: "ask", label: "Perguntar", icon: "❓", ic: "ask" },
   { type: "llm_intent", label: "Entender intenção", icon: "✨", ic: "llm" },
+  { type: "action", label: "Ação", icon: "⚡", ic: "act" },
   { type: "condition", label: "Se / senão", icon: "⑂", ic: "cond" },
   { type: "handoff", label: "Atendente", icon: "👤", ic: "hand" },
   { type: "end", label: "Encerrar", icon: "✓", ic: "end" },
@@ -579,6 +602,8 @@ function addChildNode(parentNode, type) {
       )?.trim() || "default";
   } else if (parentNode.type === "condition") {
     edgeLabel = siblings === 0 ? "true" : "false";
+  } else if (parentNode.type === "action") {
+    edgeLabel = siblings === 0 ? "ok" : "erro";
   }
 
   state.flow.edges.push({
@@ -729,6 +754,33 @@ function renderProps() {
       <p class="fb-hint">Ao ligar o próximo passo, use o mesmo código (ex.: marcar_consulta) ou “default”.</p>`;
   }
 
+  if (node.type === "action") {
+    const cfg = d.config && typeof d.config === "object" ? d.config : {};
+    const connector = d.connector || "calendar";
+    const operation = d.operation || "list_slots";
+    html += `<div class="field"><label>Título no cartão</label>
+      <input id="p-label" value="${escapeHtml(String(d.label || ""))}" placeholder="Listar horários" /></div>
+      <div class="field"><label>Integração</label>
+      <select id="p-connector">
+        <option value="calendar"${connector === "calendar" ? " selected" : ""}>📅 Calendário</option>
+        <option value="http"${connector === "http" ? " selected" : ""}>🔗 HTTP / webhook</option>
+      </select></div>
+      <div class="field" id="p-op-wrap"><label>Operação</label>
+      <select id="p-operation">
+        <option value="list_slots"${operation === "list_slots" ? " selected" : ""}>Listar horários livres</option>
+        <option value="create_event"${operation === "create_event" ? " selected" : ""}>Criar evento</option>
+        <option value="cancel_event"${operation === "cancel_event" ? " selected" : ""}>Cancelar evento</option>
+      </select></div>
+      <div class="field"><label>Webhook (opcional)</label>
+      <input id="p-webhook" value="${escapeHtml(String(cfg.webhookUrl || cfg.url || d.webhookUrl || ""))}" placeholder="https://… (vazio = mock)" /></div>
+      <div class="field"><label>Mock no simulador</label>
+      <select id="p-force-mock">
+        <option value="1"${cfg.forceMock !== false ? " selected" : ""}>Sim — sempre mock</option>
+        <option value="0"${cfg.forceMock === false ? " selected" : ""}>Não — usa webhook se houver</option>
+      </select></div>
+      <p class="fb-hint">Ligações: <code>ok</code> e <code>erro</code>. Vars: <code>slots_text</code>, <code>event_link</code>, <code>event_summary</code>.</p>`;
+  }
+
   html += `<div class="btn-row">
     <button type="button" class="fb-btn fb-btn-primary" id="p-apply">Aplicar</button>
     <button type="button" class="fb-btn fb-btn-secondary" id="p-link">Ligar a…</button>
@@ -737,7 +789,45 @@ function renderProps() {
 
   body.innerHTML = html;
 
-  if (node.type === "llm_intent") {
+  if (node.type === "action") {
+    const syncOp = () => {
+      const wrap = $("p-op-wrap");
+      if (!wrap) return;
+      wrap.style.display = $("p-connector").value === "calendar" ? "" : "none";
+    };
+    $("p-connector").onchange = syncOp;
+    syncOp();
+    $("p-apply").onclick = () => {
+      const connector = $("p-connector").value;
+      const webhook = $("p-webhook").value.trim();
+      const forceMock = $("p-force-mock").value === "1";
+      const config = {
+        ...(node.data.config && typeof node.data.config === "object"
+          ? node.data.config
+          : {}),
+        forceMock,
+      };
+      if (webhook) {
+        if (connector === "http") config.url = webhook;
+        else config.webhookUrl = webhook;
+      } else {
+        delete config.url;
+        delete config.webhookUrl;
+      }
+      node.data = {
+        ...node.data,
+        label: $("p-label").value.trim() || undefined,
+        connector,
+        operation:
+          connector === "calendar"
+            ? $("p-operation").value
+            : node.data.operation || "request",
+        config,
+      };
+      renderCanvas();
+      toast("Ação atualizada");
+    };
+  } else if (node.type === "llm_intent") {
     const box = $("p-intents");
     const intents = Array.isArray(d.intents) ? d.intents : [];
     const redraw = () => {

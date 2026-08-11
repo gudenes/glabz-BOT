@@ -398,7 +398,8 @@
 .pal-icon.msg { background: rgba(59, 130, 246, 0.15); }
 .pal-icon.ask { background: rgba(16, 185, 129, 0.15); }
 .pal-icon.llm { background: rgba(139, 92, 246, 0.18); }
-.pal-icon.cond { background: rgba(245, 158, 11, 0.15); }
+.pal-icon.act { background: rgba(245, 158, 11, 0.2); }
+.pal-icon.cond { background: rgba(245, 158, 11, 0.12); }
 .pal-icon.hand { background: rgba(236, 72, 153, 0.15); }
 .pal-icon.end { background: rgba(100, 116, 139, 0.2); }
 .pal-text {
@@ -549,6 +550,7 @@
 .fb-node.type-message .k { color: #93c5fd; background: rgba(59, 130, 246, 0.12); }
 .fb-node.type-ask .k { color: #6ee7b7; background: rgba(16, 185, 129, 0.12); }
 .fb-node.type-llm_intent .k { color: #c4b5fd; background: rgba(139, 92, 246, 0.14); }
+.fb-node.type-action .k { color: #fcd34d; background: rgba(245, 158, 11, 0.16); }
 .fb-node.type-condition .k { color: #fcd34d; background: rgba(245, 158, 11, 0.12); }
 .fb-node.type-handoff .k { color: #f9a8d4; background: rgba(236, 72, 153, 0.12); }
 .fb-node.type-end .k { color: #94a3b8; background: rgba(148, 163, 184, 0.12); }
@@ -557,6 +559,7 @@
 .fb-node.type-message { border-color: rgba(59, 130, 246, 0.22); }
 .fb-node.type-ask { border-color: rgba(16, 185, 129, 0.22); }
 .fb-node.type-llm_intent { border-color: rgba(139, 92, 246, 0.28); }
+.fb-node.type-action { border-color: rgba(245, 158, 11, 0.4); }
 .fb-node.type-condition { border-color: rgba(245, 158, 11, 0.25); }
 .fb-node.type-handoff { border-color: rgba(236, 72, 153, 0.28); }
 .fb-node.type-end { border-color: rgba(148, 163, 184, 0.2); }
