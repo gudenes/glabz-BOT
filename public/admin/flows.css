@@ -465,10 +465,12 @@
 .fb-node {
   position: absolute;
   width: 220px;
+  min-height: 88px;
+  box-sizing: border-box;
   background: linear-gradient(165deg, #161b26 0%, #12171f 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
-  padding: 14px 14px 18px;
+  padding: 14px 14px 20px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.04) inset,
     0 12px 32px rgba(0, 0, 0, 0.35);
@@ -485,6 +487,36 @@
   box-shadow:
     0 0 0 1px rgba(99, 102, 241, 0.35),
     0 16px 40px rgba(79, 70, 229, 0.18);
+}
+.fb-node.link-from {
+  border-color: rgba(16, 185, 129, 0.55);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.3);
+}
+/* Portos de ligação (âncoras visuais) */
+.fb-node .port-in,
+.fb-node .port-out {
+  position: absolute;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #334155;
+  border: 1.5px solid #0a0c10;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 3;
+}
+.fb-node .port-in {
+  top: -4px;
+}
+.fb-node .port-out {
+  bottom: -4px;
+}
+.fb-node.type-trigger .port-in {
+  display: none;
+}
+.fb-node.type-end .port-out {
+  display: none;
 }
 .fb-node .k {
   display: inline-flex;
@@ -613,21 +645,31 @@
   border-radius: 8px;
 }
 
-/* Edges */
+/* Edges — ortogonais, sem curvas soltas */
 .edge-path {
   fill: none;
-  stroke: rgba(148, 163, 184, 0.35);
+  stroke: rgba(148, 163, 184, 0.4);
   stroke-width: 2;
   stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.edge-path.labeled {
+  stroke: rgba(148, 163, 184, 0.55);
 }
 .edge-path.active {
-  stroke: rgba(99, 102, 241, 0.7);
+  stroke: rgba(99, 102, 241, 0.75);
+}
+.edge-label-bg {
+  fill: #0c0e14;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 1;
 }
 .edge-label {
-  fill: #94a3b8;
+  fill: #cbd5e1;
   font-size: 10.5px;
   font-weight: 600;
   font-family: Inter, system-ui, sans-serif;
+  pointer-events: none;
 }
 
 /* Props panel */

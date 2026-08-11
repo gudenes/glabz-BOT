@@ -11,6 +11,7 @@ export function demoConsultationFlow(): Flow {
     askName: "n_ask_name",
     askWhen: "n_ask_when",
     confirm: "n_confirm",
+    handoffBook: "n_handoff_book",
     handoff: "n_handoff",
     faq: "n_faq",
     end: "n_end",
@@ -24,19 +25,20 @@ export function demoConsultationFlow(): Flow {
     status: "live",
     createdAt: now,
     updatedAt: now,
+    // 3 colunas: agendar | tronco+outro | humano
     nodes: [
       {
         id: ids.trigger,
         type: "trigger",
-        x: 80,
-        y: 40,
+        x: 360,
+        y: 36,
         data: { label: "Mensagem recebida" },
       },
       {
         id: ids.welcome,
         type: "message",
-        x: 80,
-        y: 160,
+        x: 360,
+        y: 186,
         data: {
           text:
             "Olá{{name_greet}}! Sou o assistente virtual 👋\n\nPosso te ajudar a *marcar uma consulta* ou te conectar com um atendente.\n\nPode me dizer o que precisa?",
@@ -45,8 +47,8 @@ export function demoConsultationFlow(): Flow {
       {
         id: ids.intent,
         type: "llm_intent",
-        x: 80,
-        y: 320,
+        x: 360,
+        y: 336,
         data: {
           label: "Capturar intenção",
           prompt:
@@ -61,8 +63,8 @@ export function demoConsultationFlow(): Flow {
       {
         id: ids.askName,
         type: "ask",
-        x: 360,
-        y: 240,
+        x: 40,
+        y: 500,
         data: {
           prompt: "Perfeito! Para agendar, qual o *seu nome*?",
           varName: "nome",
@@ -71,8 +73,8 @@ export function demoConsultationFlow(): Flow {
       {
         id: ids.askWhen,
         type: "ask",
-        x: 360,
-        y: 400,
+        x: 40,
+        y: 650,
         data: {
           prompt: "Obrigado, {{nome}}! Qual *dia e período* prefere? (ex.: amanhã de manhã)",
           varName: "quando",
@@ -81,18 +83,18 @@ export function demoConsultationFlow(): Flow {
       {
         id: ids.confirm,
         type: "message",
-        x: 360,
-        y: 560,
+        x: 40,
+        y: 800,
         data: {
           text:
             "Anotado ✅\n\n*Nome:* {{nome}}\n*Preferência:* {{quando}}\n\nVou passar para a equipe confirmar o horário. Um momento!",
         },
       },
       {
-        id: ids.handoff,
+        id: ids.handoffBook,
         type: "handoff",
-        x: 640,
-        y: 400,
+        x: 40,
+        y: 950,
         data: {
           reason: "consulta_solicitada",
           message:
@@ -100,9 +102,20 @@ export function demoConsultationFlow(): Flow {
         },
       },
       {
+        id: ids.handoff,
+        type: "handoff",
+        x: 680,
+        y: 500,
+        data: {
+          reason: "pedido_humano",
+          message:
+            "Claro! Vou te passar para um atendente agora.",
+        },
+      },
+      {
         id: ids.faq,
         type: "message",
-        x: 80,
+        x: 360,
         y: 500,
         data: {
           text:
@@ -112,8 +125,8 @@ export function demoConsultationFlow(): Flow {
       {
         id: ids.end,
         type: "end",
-        x: 80,
-        y: 640,
+        x: 360,
+        y: 650,
         data: { label: "Fim (aguarda nova msg)" },
       },
     ],
@@ -126,18 +139,24 @@ export function demoConsultationFlow(): Flow {
       { id: "e5b", from: ids.intent, to: ids.faq, label: "default" },
       { id: "e6", from: ids.askName, to: ids.askWhen },
       { id: "e7", from: ids.askWhen, to: ids.confirm },
-      { id: "e8", from: ids.confirm, to: ids.handoff },
+      { id: "e8", from: ids.confirm, to: ids.handoffBook },
       { id: "e9", from: ids.faq, to: ids.end },
     ],
   };
 }
 
 /**
- * Fluxo demo estúdio de pilates — layout em 3 colunas claras:
+ * Fluxo demo estúdio de pilates — 4 colunas sem cruzar:
  *
- *          [Início] → [Boas-vindas] → [Entender pedido]
- *                         /              |              \
- *              marcar sessão      tirar dúvida     atendimento admin
+ *                    [Início]
+ *                        │
+ *                  [Boas-vindas]
+ *                        │
+ *               [Entender o pedido]
+ *        ┌──────────┬──────────┬──────────┐
+ *     agendar    dúvida     admin    não entendeu
+ *        │          │          │          │
+ *      …fila…    …fila…     …fila…      fim
  */
 export function demoPilatesFlow(): Flow {
   const now = new Date().toISOString();
@@ -160,12 +179,17 @@ export function demoPilatesFlow(): Flow {
     end: "p_end",
   };
 
-  // Colunas: esquerda (marcar) · centro (dúvida + tronco) · direita (admin)
-  const CX = 420;
-  const L = 80;
-  const R = 760;
-  const y0 = 40;
-  const gap = 130;
+  // 4 colunas com vão largo o bastante para as linhas não se sobreporem
+  const COL = {
+    agendar: 40,
+    duvida: 340,
+    admin: 640,
+    outro: 940,
+  };
+  // Tronco centrado entre as 4 colunas
+  const CX = Math.round((COL.agendar + COL.outro) / 2);
+  const y0 = 36;
+  const gap = 168; // cartão ~100 + degrau + labels sem colar
 
   return {
     id: randomUUID(),
@@ -221,11 +245,11 @@ export function demoPilatesFlow(): Flow {
           ],
         },
       },
-      // Coluna esquerda — marcar sessão
+      // Coluna 1 — agendar
       {
         id: ids.askName,
         type: "ask",
-        x: L,
+        x: COL.agendar,
         y: y0 + gap * 3,
         data: {
           prompt: "Perfeito! Vamos marcar uma sessão 💪\n\nQual o *seu nome*?",
@@ -235,7 +259,7 @@ export function demoPilatesFlow(): Flow {
       {
         id: ids.askWhen,
         type: "ask",
-        x: L,
+        x: COL.agendar,
         y: y0 + gap * 4,
         data: {
           prompt:
@@ -246,18 +270,17 @@ export function demoPilatesFlow(): Flow {
       {
         id: ids.askLevel,
         type: "ask",
-        x: L,
+        x: COL.agendar,
         y: y0 + gap * 5,
         data: {
-          prompt:
-            "Você já pratica pilates ou é *primeira vez*?",
+          prompt: "Você já pratica pilates ou é *primeira vez*?",
           varName: "nivel",
         },
       },
       {
         id: ids.confirm,
         type: "message",
-        x: L,
+        x: COL.agendar,
         y: y0 + gap * 6,
         data: {
           text:
@@ -267,7 +290,7 @@ export function demoPilatesFlow(): Flow {
       {
         id: ids.handoffBook,
         type: "handoff",
-        x: L,
+        x: COL.agendar,
         y: y0 + gap * 7,
         data: {
           reason: "marcar_sessao_pilates",
@@ -275,11 +298,11 @@ export function demoPilatesFlow(): Flow {
             "Pronto! Um atendente do estúdio vai confirmar sua sessão por aqui 💚",
         },
       },
-      // Coluna centro — dúvida
+      // Coluna 2 — dúvida
       {
         id: ids.askDoubt,
         type: "ask",
-        x: CX,
+        x: COL.duvida,
         y: y0 + gap * 3,
         data: {
           prompt: "Claro! Pode mandar sua *dúvida* com calma 👇",
@@ -289,7 +312,7 @@ export function demoPilatesFlow(): Flow {
       {
         id: ids.doubtAck,
         type: "message",
-        x: CX,
+        x: COL.duvida,
         y: y0 + gap * 4,
         data: {
           text:
@@ -299,18 +322,18 @@ export function demoPilatesFlow(): Flow {
       {
         id: ids.handoffDoubt,
         type: "handoff",
-        x: CX,
+        x: COL.duvida,
         y: y0 + gap * 5,
         data: {
           reason: "duvida_pilates",
           message: "Um atendente vai te responder em breve. Obrigada!",
         },
       },
-      // Coluna direita — admin
+      // Coluna 3 — admin
       {
         id: ids.askAdmin,
         type: "ask",
-        x: R,
+        x: COL.admin,
         y: y0 + gap * 3,
         data: {
           prompt:
@@ -321,7 +344,7 @@ export function demoPilatesFlow(): Flow {
       {
         id: ids.adminAck,
         type: "message",
-        x: R,
+        x: COL.admin,
         y: y0 + gap * 4,
         data: {
           text:
@@ -331,20 +354,19 @@ export function demoPilatesFlow(): Flow {
       {
         id: ids.handoffAdmin,
         type: "handoff",
-        x: R,
+        x: COL.admin,
         y: y0 + gap * 5,
         data: {
           reason: "admin_pilates",
-          message:
-            "Pronto! Nossa equipe administrativa continua por aqui.",
+          message: "Pronto! Nossa equipe administrativa continua por aqui.",
         },
       },
-      // Fallback abaixo do centro
+      // Coluna 4 — não entendeu (sem atravessar as outras)
       {
         id: ids.clarify,
         type: "message",
-        x: CX,
-        y: y0 + gap * 6.5,
+        x: COL.outro,
+        y: y0 + gap * 3,
         data: {
           text:
             "Sem problemas! Me diga se você quer:\n\n1) Marcar uma sessão\n2) Tirar uma dúvida\n3) Atendimento administrativo",
@@ -353,8 +375,8 @@ export function demoPilatesFlow(): Flow {
       {
         id: ids.end,
         type: "end",
-        x: CX,
-        y: y0 + gap * 7.5,
+        x: COL.outro,
+        y: y0 + gap * 4,
         data: { label: "Aguarda nova mensagem" },
       },
     ],

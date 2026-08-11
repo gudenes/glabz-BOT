@@ -99,58 +99,69 @@ function nodeTitle(node) {
 }
 
 const NODE_W = 220;
-const NODE_H = 96; // altura visual aprox. (conteúdo + botão +)
+const NODE_H_FALLBACK = 100; // altura se o DOM ainda não mediu
 
-/** Linha em “degrau” — vertical + horizontal, sem laços soltos. */
-function edgePath(a, b) {
-  const x1 = a.x + NODE_W / 2;
-  const y1 = a.y + NODE_H;
-  const x2 = b.x + NODE_W / 2;
-  const y2 = b.y;
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-
-  // Mesma coluna: linha reta (com leve curva se muito curto)
-  if (Math.abs(dx) < 28) {
-    return `M ${x1} ${y1} L ${x2} ${Math.max(y2, y1 + 8)}`;
-  }
-
-  // Alvo abaixo: desce, cruza, desce
-  if (dy > 20) {
-    const midY = y1 + Math.min(48, Math.max(28, dy * 0.35));
-    return `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
-  }
-
-  // Alvo ao lado / acima: desce um pouco, cruza, sobe/desce
-  const drop = y1 + 36;
-  return `M ${x1} ${y1} L ${x1} ${drop} L ${x2} ${drop} L ${x2} ${y2}`;
+/** Altura real do cartão (sem o botão +). */
+function nodeHeight(node, heightMap) {
+  if (heightMap && heightMap.has(node.id)) return heightMap.get(node.id);
+  return NODE_H_FALLBACK;
 }
 
-function edgeLabelPos(a, b) {
-  const x1 = a.x + NODE_W / 2;
-  const y1 = a.y + NODE_H;
+/**
+ * Rota ortogonal limpa (sem laços soltos).
+ * exitIndex/exitCount espalham as saídas no fundo do pai;
+ * rank escalona a altura do degrau para não empilhar labels.
+ */
+function routeEdge(a, b, opts = {}) {
+  const { exitIndex = 0, exitCount = 1, rank = 0, heightMap } = opts;
+  const aH = nodeHeight(a, heightMap);
+  const pad = 28; // margem interna para ports
+  const spread =
+    exitCount > 1 ? Math.min(NODE_W - pad * 2, (exitCount - 1) * 44) : 0;
+  const x1 =
+    a.x +
+    NODE_W / 2 -
+    spread / 2 +
+    (exitCount > 1 ? exitIndex * (spread / (exitCount - 1)) : 0);
+  const y1 = a.y + aH; // base do cartão (o + fica por cima da linha)
   const x2 = b.x + NODE_W / 2;
   const y2 = b.y;
   const dx = x2 - x1;
-  const dy = y2 - y1;
-  if (Math.abs(dx) < 28) {
-    return { x: x1 + 8, y: (y1 + y2) / 2 };
+
+  // Mesma coluna → reta vertical
+  if (Math.abs(dx) < 24) {
+    const yEnd = Math.max(y2, y1 + 6);
+    return {
+      d: `M ${x1} ${y1} L ${x2} ${yEnd}`,
+      label: { x: x1 + 10, y: (y1 + yEnd) / 2 },
+    };
   }
-  if (dy > 20) {
-    const midY = y1 + Math.min(48, Math.max(28, dy * 0.35));
-    return { x: (x1 + x2) / 2, y: midY - 6 };
+
+  // Degrau: desce → cruza → desce/sobe até o topo do alvo
+  // rank separa faixas horizontais (evita 4 linhas coladas)
+  const gapY = 22 + rank * 18;
+  let midY = y1 + gapY;
+  // Se o alvo está logo abaixo, cabe o degrau no meio do vão
+  if (y2 > y1 + 12) {
+    midY = Math.min(midY, y1 + Math.max(18, (y2 - y1) * 0.4));
+    midY = Math.max(midY, y1 + 16);
+    // não invadir o cartão destino
+    if (midY > y2 - 12) midY = Math.max(y1 + 14, y2 - 14);
   }
-  const drop = y1 + 36;
-  return { x: (x1 + x2) / 2, y: drop - 6 };
+
+  return {
+    d: `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`,
+    label: { x: (x1 + x2) / 2, y: midY - 8 },
+  };
 }
 
 function friendlyEdgeLabel(label) {
   const map = {
-    marcar_sessao: "marcar sessão",
-    tirar_duvida: "tirar dúvida",
-    atendimento_admin: "administrativo",
-    marcar_consulta: "marcar consulta",
-    falar_humano: "falar com humano",
+    marcar_sessao: "agendar",
+    tirar_duvida: "dúvida",
+    atendimento_admin: "admin",
+    marcar_consulta: "agendar",
+    falar_humano: "humano",
     outro: "outro",
     default: "não entendeu",
     true: "sim",
@@ -312,7 +323,6 @@ function renderCanvas() {
   svg.innerHTML = "";
   if (!state.flow) return;
 
-  // edges — só desenha se from/to existem (sem laços soltos)
   const ns = "http://www.w3.org/2000/svg";
   const nodeIds = new Set(state.flow.nodes.map((n) => n.id));
   // limpa edges órfãs no modelo
@@ -320,67 +330,23 @@ function renderCanvas() {
     (e) => nodeIds.has(e.from) && nodeIds.has(e.to) && e.from !== e.to
   );
 
-  for (const e of state.flow.edges) {
-    const a = state.flow.nodes.find((n) => n.id === e.from);
-    const b = state.flow.nodes.find((n) => n.id === e.to);
-    if (!a || !b) continue;
-    const path = document.createElementNS(ns, "path");
-    path.setAttribute("d", edgePath(a, b));
-    path.setAttribute("class", "edge-path");
-    path.dataset.edgeId = e.id;
-    // seta no fim
-    path.setAttribute("marker-end", "url(#arrowhead)");
-    svg.appendChild(path);
-    if (e.label) {
-      const pos = edgeLabelPos(a, b);
-      const bg = document.createElementNS(ns, "rect");
-      const label = friendlyEdgeLabel(e.label);
-      const tw = Math.max(52, label.length * 6.2 + 12);
-      bg.setAttribute("x", pos.x - tw / 2);
-      bg.setAttribute("y", pos.y - 11);
-      bg.setAttribute("width", tw);
-      bg.setAttribute("height", 18);
-      bg.setAttribute("rx", 9);
-      bg.setAttribute("fill", "#0c0e14");
-      bg.setAttribute("stroke", "rgba(255,255,255,0.08)");
-      svg.appendChild(bg);
-      const t = document.createElementNS(ns, "text");
-      t.setAttribute("x", pos.x);
-      t.setAttribute("y", pos.y + 3);
-      t.setAttribute("text-anchor", "middle");
-      t.setAttribute("class", "edge-label");
-      t.textContent = label;
-      svg.appendChild(t);
-    }
-  }
-
-  // defs seta (uma vez)
-  if (!svg.querySelector("defs")) {
-    const defs = document.createElementNS(ns, "defs");
-    defs.innerHTML = `
-      <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-        <path d="M0,0 L6,3 L0,6 Z" fill="rgba(148,163,184,0.55)" />
-      </marker>`;
-    svg.insertBefore(defs, svg.firstChild);
-  }
-
   closeAddMenu();
 
-  // nodes
+  // 1) nós primeiro — para medir altura real e ancorar bem as linhas
   for (const n of state.flow.nodes) {
     const el = document.createElement("div");
     el.className =
       "fb-node type-" +
       n.type +
-      (state.selectedNodeId === n.id ? " selected" : "");
+      (state.selectedNodeId === n.id ? " selected" : "") +
+      (state.linkFrom === n.id ? " link-from" : "");
     el.style.left = n.x + "px";
     el.style.top = n.y + "px";
     el.dataset.id = n.id;
-    el.innerHTML = `<div class="k"></div><div class="b"></div>`;
+    el.innerHTML = `<div class="k"></div><div class="b"></div><span class="port-in" aria-hidden="true"></span><span class="port-out" aria-hidden="true"></span>`;
     el.querySelector(".k").textContent = typeLabel(n.type);
     el.querySelector(".b").textContent = nodeTitle(n);
 
-    // + para adicionar próximo nó (exceto end)
     if (n.type !== "end") {
       const plus = document.createElement("button");
       plus.type = "button";
@@ -411,9 +377,88 @@ function renderCanvas() {
     canvas.appendChild(el);
   }
 
-  // size svg
-  svg.setAttribute("width", "2200");
-  svg.setAttribute("height", "1400");
+  // 2) medir alturas reais
+  const heightMap = new Map();
+  for (const n of state.flow.nodes) {
+    const el = canvas.querySelector(`.fb-node[data-id="${n.id}"]`);
+    if (el) heightMap.set(n.id, el.offsetHeight || NODE_H_FALLBACK);
+  }
+
+  // 3) agrupar saídas por origem, ordenar por X do destino (fan-out limpo)
+  const byFrom = new Map();
+  for (const e of state.flow.edges) {
+    if (!byFrom.has(e.from)) byFrom.set(e.from, []);
+    byFrom.get(e.from).push(e);
+  }
+  for (const [, list] of byFrom) {
+    list.sort((e1, e2) => {
+      const n1 = state.flow.nodes.find((n) => n.id === e1.to);
+      const n2 = state.flow.nodes.find((n) => n.id === e2.to);
+      return (n1?.x ?? 0) - (n2?.x ?? 0);
+    });
+  }
+
+  // defs seta
+  const defs = document.createElementNS(ns, "defs");
+  defs.innerHTML = `
+    <marker id="arrowhead" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+      <path d="M0,0 L7,3.5 L0,7 Z" fill="rgba(148,163,184,0.7)" />
+    </marker>`;
+  svg.appendChild(defs);
+
+  // 4) desenhar edges com ports espalhados
+  for (const e of state.flow.edges) {
+    const a = state.flow.nodes.find((n) => n.id === e.from);
+    const b = state.flow.nodes.find((n) => n.id === e.to);
+    if (!a || !b) continue;
+    const siblings = byFrom.get(e.from) || [e];
+    const exitIndex = siblings.indexOf(e);
+    const exitCount = siblings.length;
+    // rank: saídas da esquerda → rank crescente; default um pouco mais baixo
+    let rank = exitIndex;
+    if (e.label === "default" || e.label === "outro") rank = exitCount; // faixa extra
+    const routed = routeEdge(a, b, { exitIndex, exitCount, rank, heightMap });
+
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", routed.d);
+    path.setAttribute("class", "edge-path" + (e.label ? " labeled" : ""));
+    path.dataset.edgeId = e.id;
+    path.setAttribute("marker-end", "url(#arrowhead)");
+    svg.appendChild(path);
+
+    if (e.label) {
+      const pos = routed.label;
+      const label = friendlyEdgeLabel(e.label);
+      const tw = Math.max(48, label.length * 6.4 + 14);
+      const bg = document.createElementNS(ns, "rect");
+      bg.setAttribute("x", pos.x - tw / 2);
+      bg.setAttribute("y", pos.y - 11);
+      bg.setAttribute("width", tw);
+      bg.setAttribute("height", 18);
+      bg.setAttribute("rx", 9);
+      bg.setAttribute("class", "edge-label-bg");
+      svg.appendChild(bg);
+      const t = document.createElementNS(ns, "text");
+      t.setAttribute("x", pos.x);
+      t.setAttribute("y", pos.y + 3);
+      t.setAttribute("text-anchor", "middle");
+      t.setAttribute("class", "edge-label");
+      t.textContent = label;
+      svg.appendChild(t);
+    }
+  }
+
+  // tamanho do svg cobre o conteúdo
+  let maxX = 1200;
+  let maxY = 900;
+  for (const n of state.flow.nodes) {
+    maxX = Math.max(maxX, n.x + NODE_W + 80);
+    maxY = Math.max(maxY, n.y + (heightMap.get(n.id) || NODE_H_FALLBACK) + 120);
+  }
+  svg.setAttribute("width", String(maxX));
+  svg.setAttribute("height", String(maxY));
+  canvas.style.minWidth = maxX + "px";
+  canvas.style.minHeight = maxY + "px";
 }
 
 const ADDABLE_TYPES = [
