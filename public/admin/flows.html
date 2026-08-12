@@ -10,8 +10,8 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/styles.css?v=4" />
-    <link rel="stylesheet" href="/admin/flows.css?v=4" />
+    <link rel="stylesheet" href="/admin/styles.css?v=5" />
+    <link rel="stylesheet" href="/admin/flows.css?v=5" />
   </head>
   <body class="flows-body">
     <div id="login-gate" class="fb-login">
@@ -58,7 +58,10 @@
             </select>
           </div>
           <div class="fb-actions">
-            <button type="button" id="btn-sim" class="fb-btn fb-btn-secondary" title="Testar o fluxo digitando">▶ Testar</button>
+            <button type="button" id="btn-sim" class="fb-btn fb-btn-secondary" title="Testar o fluxo digitando">
+              <svg class="fb-ico" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+              Testar
+            </button>
             <button type="button" id="btn-new" class="fb-btn fb-btn-ghost">Novo</button>
             <button type="button" id="btn-save" class="fb-btn fb-btn-secondary">Salvar</button>
             <button type="button" id="btn-unpublish" class="fb-btn fb-btn-ghost">Pausar</button>
@@ -79,31 +82,45 @@
           <div class="fb-aside-head"><span>Passos</span></div>
           <p class="fb-palette-hint">Ou use o <strong>+</strong> em cada cartão</p>
           <button type="button" class="pal-item" data-type="message">
-            <span class="pal-icon msg">💬</span>
+            <span class="pal-icon msg" aria-hidden="true">
+              <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </span>
             <span class="pal-text"><strong>Mensagem</strong><small>Enviar texto</small></span>
           </button>
           <button type="button" class="pal-item" data-type="ask">
-            <span class="pal-icon ask">❓</span>
+            <span class="pal-icon ask" aria-hidden="true">
+              <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+            </span>
             <span class="pal-text"><strong>Perguntar</strong><small>Guardar resposta</small></span>
           </button>
           <button type="button" class="pal-item" data-type="llm_intent">
-            <span class="pal-icon llm">✨</span>
+            <span class="pal-icon llm" aria-hidden="true">
+              <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/><path d="m16 16-1.9-1.9"/></svg>
+            </span>
             <span class="pal-text"><strong>Entender intenção</strong><small>IA classifica o pedido</small></span>
           </button>
           <button type="button" class="pal-item" data-type="action">
-            <span class="pal-icon act">⚡</span>
+            <span class="pal-icon act" aria-hidden="true">
+              <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a6 6 0 0 1-12 0V8Z"/></svg>
+            </span>
             <span class="pal-text"><strong>Ação</strong><small>Calendário, HTTP…</small></span>
           </button>
           <button type="button" class="pal-item" data-type="condition">
-            <span class="pal-icon cond">⑂</span>
+            <span class="pal-icon cond" aria-hidden="true">
+              <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            </span>
             <span class="pal-text"><strong>Se / senão</strong><small>Caminho condicional</small></span>
           </button>
           <button type="button" class="pal-item" data-type="handoff">
-            <span class="pal-icon hand">👤</span>
+            <span class="pal-icon hand" aria-hidden="true">
+              <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>
+            </span>
             <span class="pal-text"><strong>Atendente</strong><small>Passar para humano</small></span>
           </button>
           <button type="button" class="pal-item" data-type="end">
-            <span class="pal-icon end">✓</span>
+            <span class="pal-icon end" aria-hidden="true">
+              <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+            </span>
             <span class="pal-text"><strong>Encerrar</strong><small>Fim do fluxo</small></span>
           </button>
         </aside>
@@ -118,7 +135,9 @@
         <aside class="fb-props">
           <div class="fb-aside-head"><span>Detalhes</span></div>
           <div id="props-empty" class="fb-props-empty">
-            <div class="fb-empty-icon">◇</div>
+            <div class="fb-empty-icon" aria-hidden="true">
+              <svg class="fb-ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>
+            </div>
             <p>Selecione um passo no fluxo para editar o texto e as opções.</p>
           </div>
           <div id="props-body" class="hidden"></div>
@@ -136,8 +155,12 @@
             </div>
           </div>
           <div class="sim-head-actions">
-            <button type="button" id="sim-reset" class="fb-btn fb-btn-ghost" title="Recomeçar">↺</button>
-            <button type="button" id="sim-close" class="fb-btn fb-btn-ghost" title="Fechar">✕</button>
+            <button type="button" id="sim-reset" class="fb-btn fb-btn-ghost fb-btn-square" title="Recomeçar">
+              <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            </button>
+            <button type="button" id="sim-close" class="fb-btn fb-btn-ghost fb-btn-square" title="Fechar">
+              <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
           </div>
         </div>
         <div class="sim-meta" id="sim-meta"></div>
@@ -166,6 +189,6 @@
       <div id="toast" class="fb-toast hidden"></div>
     </div>
 
-    <script src="/admin/flows.js?v=4" type="module"></script>
+    <script src="/admin/flows.js?v=5" type="module"></script>
   </body>
 </html>

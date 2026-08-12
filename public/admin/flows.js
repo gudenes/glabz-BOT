@@ -1,6 +1,8 @@
 /**
  * Glabs Bot · Workflow Builder (visual)
  */
+import { typeIcon } from "./icons.js";
+
 const STORAGE_KEY = "glabs_bot_secret";
 
 const state = {
@@ -400,7 +402,7 @@ function renderCanvas() {
     el.style.top = n.y + "px";
     el.dataset.id = n.id;
     el.innerHTML = `<div class="k"></div><div class="b"></div><span class="port-in" aria-hidden="true"></span><span class="port-out" aria-hidden="true"></span>`;
-    el.querySelector(".k").textContent = typeLabel(n.type);
+    el.querySelector(".k").innerHTML = `${typeIcon(n.type, 12)}<span>${typeLabel(n.type)}</span>`;
     el.querySelector(".b").textContent = nodeTitle(n);
 
     if (n.type !== "end") {
@@ -531,13 +533,13 @@ function renderCanvas() {
 }
 
 const ADDABLE_TYPES = [
-  { type: "message", label: "Mensagem", icon: "💬", ic: "msg" },
-  { type: "ask", label: "Perguntar", icon: "❓", ic: "ask" },
-  { type: "llm_intent", label: "Entender intenção", icon: "✨", ic: "llm" },
-  { type: "action", label: "Ação", icon: "⚡", ic: "act" },
-  { type: "condition", label: "Se / senão", icon: "⑂", ic: "cond" },
-  { type: "handoff", label: "Atendente", icon: "👤", ic: "hand" },
-  { type: "end", label: "Encerrar", icon: "✓", ic: "end" },
+  { type: "message", label: "Mensagem", ic: "msg" },
+  { type: "ask", label: "Perguntar", ic: "ask" },
+  { type: "llm_intent", label: "Entender intenção", ic: "llm" },
+  { type: "action", label: "Ação", ic: "act" },
+  { type: "condition", label: "Se / senão", ic: "cond" },
+  { type: "handoff", label: "Atendente", ic: "hand" },
+  { type: "end", label: "Encerrar", ic: "end" },
 ];
 
 function closeAddMenu() {
@@ -554,7 +556,7 @@ function openAddMenu(parentNode, anchorBtn) {
   for (const item of ADDABLE_TYPES) {
     const b = document.createElement("button");
     b.type = "button";
-    b.innerHTML = `<span class="pal-icon ${item.ic}">${item.icon}</span>${item.label}`;
+    b.innerHTML = `<span class="pal-icon ${item.ic}">${typeIcon(item.type, 14)}</span>${item.label}`;
     b.onclick = (ev) => {
       ev.stopPropagation();
       addChildNode(parentNode, item.type);
@@ -762,8 +764,8 @@ function renderProps() {
       <input id="p-label" value="${escapeHtml(String(d.label || ""))}" placeholder="Listar horários" /></div>
       <div class="field"><label>Integração</label>
       <select id="p-connector">
-        <option value="calendar"${connector === "calendar" ? " selected" : ""}>📅 Calendário</option>
-        <option value="http"${connector === "http" ? " selected" : ""}>🔗 HTTP / webhook</option>
+        <option value="calendar"${connector === "calendar" ? " selected" : ""}>Calendário</option>
+        <option value="http"${connector === "http" ? " selected" : ""}>HTTP / webhook</option>
       </select></div>
       <div class="field" id="p-op-wrap"><label>Operação</label>
       <select id="p-operation">
