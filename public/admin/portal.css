@@ -243,6 +243,11 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .phone { margin: 14px 0 0; font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
 .hero-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
 .hero-card.qr-only { grid-template-columns: 1fr 280px; }
+.hero-card.booting {
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+}
+.hero-card.booting .hero-visual { display: none; }
 .hero-visual { display: grid; place-items: center; min-height: 240px; }
 .hero-visual img {
   width: min(280px, 70vw);
@@ -254,7 +259,90 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
   box-shadow: 0 12px 40px rgba(0,0,0,0.08);
 }
 .hero-visual:empty { display: none; }
-.hero-card.qr-only:has(.hero-visual:empty) { grid-template-columns: 1fr; }
+.hero-card.qr-only:has(.hero-visual:empty):not(.booting) { grid-template-columns: 1fr; }
+
+.wa-boot {
+  background: #111;
+  color: #f4f4f0;
+  border-radius: 20px;
+  padding: 22px 22px 20px;
+  min-width: 0;
+  animation: wa-boot-in 0.55s ease;
+}
+.wa-boot-kicker {
+  margin: 0 0 14px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.wa-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 11px;
+}
+.wa-checks li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #6b6b6b;
+  opacity: 0.4;
+  transform: translateY(4px);
+  transition: opacity 0.55s ease, color 0.55s ease, transform 0.55s ease;
+}
+.wa-checks li i {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1.5px solid #3a3a3a;
+  flex-shrink: 0;
+  position: relative;
+  transition: border-color 0.4s, background 0.4s;
+}
+.wa-checks li.on {
+  opacity: 1;
+  color: #f4f4f0;
+  transform: none;
+}
+.wa-checks li.on i {
+  border-color: var(--gold);
+  border-top-color: transparent;
+  animation: wa-spin 0.75s linear infinite;
+}
+.wa-checks li.done {
+  opacity: 1;
+  color: #f4f4f0;
+  transform: none;
+}
+.wa-checks li.done i {
+  border-color: var(--gold);
+  background: var(--gold);
+  animation: none;
+}
+.wa-checks li.done i::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 5px;
+  height: 8px;
+  border: solid var(--gold-ink);
+  border-width: 0 1.6px 1.6px 0;
+  transform: rotate(45deg);
+}
+@keyframes wa-spin { to { transform: rotate(360deg); } }
+@keyframes wa-boot-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@media (max-width: 860px) {
+  .hero-card.booting { grid-template-columns: 1fr; }
+}
 
 .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
 .stat {

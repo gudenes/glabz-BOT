@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=17" />
+    <link rel="stylesheet" href="/admin/portal.css?v=18" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -88,11 +88,22 @@
               <p class="hero-lead" id="qr-hint">Clique em Gerar QR e aponte a câmera: WhatsApp → Aparelhos conectados → Conectar um aparelho.</p>
               <p class="phone" id="st-phone"></p>
               <div class="hero-actions">
+                <button class="btn-lime hidden" id="btn-go-flow" type="button">Configurar o fluxo</button>
                 <button class="btn-lime" id="btn-connect" type="button">Gerar QR</button>
                 <button class="btn-ghost" id="btn-disconnect" type="button">Desconectar</button>
               </div>
             </div>
             <div class="hero-visual" id="qr-box"></div>
+            <aside id="wa-boot" class="wa-boot hidden" aria-live="polite">
+              <p class="wa-boot-kicker" id="wa-boot-kicker">Ligando</p>
+              <ol class="wa-checks" id="wa-checks">
+                <li><i></i><span>QR reconhecido</span></li>
+                <li><i></i><span>Sessão do WhatsApp</span></li>
+                <li><i></i><span>Número do negócio</span></li>
+                <li><i></i><span>Caixa de conversas</span></li>
+                <li><i></i><span>Pronto para o fluxo</span></li>
+              </ol>
+            </aside>
           </div>
 
           <div class="stat-row">
@@ -230,6 +241,6 @@
       <button type="button" data-view="test">Testar</button>
     </nav>
 
-    <script src="/admin/portal.js?v=17" type="module"></script>
+    <script src="/admin/portal.js?v=18" type="module"></script>
   </body>
 </html>
