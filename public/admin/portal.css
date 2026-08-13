@@ -283,7 +283,7 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .toast-item.err .toast-ico::before { content: "!"; color: #fff; }
 
 .fill { height: calc(100vh - 120px); }
-#flow-frame { width: 100%; height: 100%; border: 1px solid var(--line); border-radius: 16px; background: #0a0c10; }
+#flow-frame { width: 100%; height: 100%; border: 1px solid var(--line); border-radius: 16px; background: #f7f7f4; }
 
 .test-shell {
   display: grid;
