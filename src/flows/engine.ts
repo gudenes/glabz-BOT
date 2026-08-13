@@ -211,6 +211,9 @@ export async function runFlowStep(opts: {
       intentSource = result.source;
       vars.last_intent = result.intent;
       vars.intent_source = result.source;
+      // Guarda o texto que originou essa classificação — permite reaproveitar
+      // (ex.: cliente já mandou a dúvida junto, não precisa perguntar de novo).
+      vars.pre_answer = text;
       trace.push({
         nodeId: node.id,
         type: "llm_intent",
