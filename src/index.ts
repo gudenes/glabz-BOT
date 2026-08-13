@@ -78,7 +78,13 @@ import {
 } from "./flows/store.js";
 import { simulateFlowMessage } from "./flows/engine.js";
 import { generateFlowFromPrompt } from "./flows/from-prompt.js";
-import { buildFlowFromStudio, studioTurn, wantsBuild, type StudioMsg } from "./flows/studio.js";
+import {
+  buildFlowFromStudio,
+  studioTurn,
+  wantsBuild,
+  wantsTest,
+  type StudioMsg,
+} from "./flows/studio.js";
 import { allSeedTemplates } from "./flows/templates.js";
 import type { Flow, FlowEdge, FlowNode } from "./flows/types.js";
 import type { FlowSimState } from "./flows/engine.js";
@@ -574,7 +580,8 @@ const server = createServer(async (req, res) => {
       const client = clientId ? await getClient(clientId) : null;
       const body = parseJson<{
         messages?: StudioMsg[];
-        action?: "chat" | "build";
+        action?: "chat" | "build" | "test";
+        phase?: string;
       }>(await readBody(req));
       const messages = (body?.messages || []).filter(
         (m) => (m.role === "user" || m.role === "assistant") && String(m.content || "").trim()
@@ -584,10 +591,13 @@ const server = createServer(async (req, res) => {
         return;
       }
       const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content || "";
+      const inPreview = body?.phase === "preview";
       const action =
-        body?.action === "build" || (body?.action !== "chat" && wantsBuild(lastUser))
+        body?.action === "build" || (!inPreview && body?.action !== "test" && wantsBuild(lastUser))
           ? "build"
-          : "chat";
+          : body?.action === "test" || (!inPreview && wantsTest(lastUser))
+            ? "test"
+            : "chat";
       try {
         if (action === "build") {
           const gen = await buildFlowFromStudio(messages);
@@ -610,7 +620,35 @@ const server = createServer(async (req, res) => {
           });
           return;
         }
-        const turn = await studioTurn(messages);
+        if (action === "test") {
+          const turn = await studioTurn([
+            ...messages,
+            {
+              role: "user",
+              content:
+                "Sim. Vamos testar agora. A partir daqui eu falo como o cliente. Não altere o fluxo no meio do ensaio — só interpreta o bot.",
+            },
+          ]);
+          json(res, 200, {
+            ok: true,
+            kind: "chat",
+            phase: "preview",
+            as: "bot",
+            say: turn.say,
+          });
+          return;
+        }
+        const history = inPreview
+          ? messages.map((m, i, arr) =>
+              m.role === "user" && i === arr.length - 1
+                ? {
+                    ...m,
+                    content: `[ensaio — falo como cliente, não é pedido de mudança]\n${m.content}`,
+                  }
+                : m
+            )
+          : messages;
+        const turn = await studioTurn(history);
         json(res, 200, { ok: true, kind: "chat", ...turn });
       } catch (e) {
         json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "ia" });

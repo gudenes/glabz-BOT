@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=16" />
+    <link rel="stylesheet" href="/admin/portal.css?v=17" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -122,12 +122,19 @@
               </div>
             </header>
             <div class="studio-log" id="studio-log"></div>
-            <div class="studio-ready hidden" id="studio-ready">
-              <button type="button" class="btn-lime" id="studio-build">Revisar o fluxo</button>
-              <span>já dá para desenhar — ou continua o briefing</span>
+            <div class="studio-cta hidden" id="studio-offer">
+              <button type="button" class="btn-lime" id="studio-test">Vamos testar agora</button>
+              <span>ou continua o briefing se faltar algo</span>
+            </div>
+            <div class="studio-cta hidden" id="studio-ready">
+              <button type="button" class="btn-lime" id="studio-build">Montar o fluxo</button>
+              <span>o ensaio acabou — agora o feedback vale</span>
             </div>
             <form class="studio-form" id="studio-form">
-              <input id="studio-input" type="text" placeholder="Ex.: estúdio de pilates — marcar aula e passar dúvida para a recepção" autocomplete="off" />
+              <button type="button" class="btn-mic" id="studio-mic" title="Falar" aria-label="Falar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+              </button>
+              <input id="studio-input" type="text" placeholder="Fala ou escreve o negócio…" autocomplete="off" />
               <button class="btn-lime" type="submit">Enviar</button>
             </form>
             <div class="studio-alts" id="studio-alts">
@@ -223,6 +230,6 @@
       <button type="button" data-view="test">Testar</button>
     </nav>
 
-    <script src="/admin/portal.js?v=16" type="module"></script>
+    <script src="/admin/portal.js?v=17" type="module"></script>
   </body>
 </html>

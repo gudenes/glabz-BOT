@@ -19,7 +19,7 @@ async function api(path, opts = {}) {
 }
 
 const WELCOME =
-  "Oi. Isto ainda não é o bot no ar — é só o briefing. Me conta o negócio e o que o atendimento precisa fazer. Quando já der, eu mostro um ensaio curto e monto o fluxo para a gente revisar.";
+  "Oi. Isto ainda não é o bot no ar — é só o briefing. Me conta o negócio e o que o atendimento precisa fazer. Quando já tiver o essencial, a gente testa o tom e só então monta o fluxo.";
 
 const state = {
   portal: null,
@@ -37,6 +37,8 @@ const state = {
     busy: false,
     phase: "ask",
     messages: [],
+    previewTurns: 0,
+    rec: null,
   },
 };
 
@@ -99,8 +101,9 @@ function studioLayout() {
 
   studio?.classList.toggle("hidden", !open);
   pane?.classList.toggle("studio-only", first);
+  pane?.classList.toggle("has-canvas", !first);
   pane?.classList.toggle("studio-full", open && expanded);
-  pane?.classList.toggle("studio-split", open && !expanded && !first);
+  pane?.classList.toggle("studio-split", false);
 
   if (first) {
     frame?.classList.add("hidden");
@@ -119,19 +122,39 @@ function studioLayout() {
   $("btn-studio-expand").textContent = expanded ? "Recolher" : "Expandir";
   $("studio-expand").textContent = expanded && !first ? "Recolher" : "Expandir";
   const phase = state.studio.phase;
-  $("studio-kicker").textContent =
-    phase === "ready" ? "Pronto" : phase === "preview" ? "Ensaio" : "Briefing";
-  $("studio-kicker").className =
-    "studio-kicker" + (phase === "ready" ? " ready" : phase === "preview" ? " preview" : "");
-  $("studio-title").textContent =
-    phase === "ready" ? "Vamos revisar" : phase === "preview" ? "Ensaio do tom" : "Montar o atendimento";
-  $("studio-sub").textContent =
+  const kick =
     phase === "ready"
-      ? "Já deu para desenhar. O fluxo abre ao lado para você ajustar e publicar."
-      : phase === "preview"
-        ? "Isto é só um exemplo do tom — o WhatsApp ainda não está atendendo."
-        : "Ainda não é o bot no ar. Combinamos o que ele deve fazer; um ensaio curto e depois montamos o fluxo.";
-  $("studio-ready")?.classList.toggle("hidden", phase !== "ready" || state.studio.busy);
+      ? ["Pronto", "ready"]
+      : phase === "debrief"
+        ? ["Depois do ensaio", "ready"]
+        : phase === "preview"
+          ? ["Ensaio", "preview"]
+          : phase === "offer"
+            ? ["Vamos testar?", "preview"]
+            : ["Briefing", ""];
+  $("studio-kicker").textContent = kick[0];
+  $("studio-kicker").className = "studio-kicker" + (kick[1] ? " " + kick[1] : "");
+  $("studio-title").textContent =
+    phase === "preview"
+      ? "Ensaio do tom"
+      : phase === "offer"
+        ? "Já tenho o essencial"
+        : phase === "debrief" || phase === "ready"
+          ? "Feedback do ensaio"
+          : "Montar o atendimento";
+  $("studio-sub").textContent =
+    phase === "preview"
+      ? "Fala como o cliente. Pedido de mudança no fluxo só depois — agora é só o tom."
+      : phase === "offer"
+        ? "Se estiver bom, a gente testa o tom. Se faltar algo, continua o briefing."
+        : phase === "debrief" || phase === "ready"
+          ? "O ensaio acabou. Agora sim: muda o tom ou monta o fluxo."
+          : "Ainda não é o bot no ar. Combinamos o que ele deve fazer; depois testamos o tom e montamos o fluxo.";
+  $("studio-offer")?.classList.toggle("hidden", phase !== "offer" || state.studio.busy);
+  $("studio-ready")?.classList.toggle(
+    "hidden",
+    (phase !== "debrief" && phase !== "ready") || state.studio.busy
+  );
 }
 
 function syncFlowPane() {
@@ -602,9 +625,9 @@ async function applyStudioReply(data) {
 
 async function revealBuiltFlow() {
   state.studio.phase = "ready";
-  toast("Fluxo pronto para revisar");
+  toast("Fluxo pronto — o canvas está inteiro para revisar");
   await refresh();
-  state.studio.open = true;
+  state.studio.open = false;
   state.studio.expanded = false;
   openBuilder();
   studioLayout();
@@ -612,33 +635,35 @@ async function revealBuiltFlow() {
 
 async function sendStudio(_text, action = "chat") {
   if (state.studio.busy) return;
-  let pending = studioThink(action === "build" ? "Montando o fluxo" : "Pensando");
+  const pending = studioThink(
+    action === "build" ? "Montando o fluxo" : action === "test" ? "Abrindo o ensaio" : "Pensando"
+  );
   state.studio.busy = true;
   studioLayout();
   $("studio-form")?.querySelector("button")?.setAttribute("disabled", "true");
   $("studio-build")?.setAttribute("disabled", "true");
+  $("studio-test")?.setAttribute("disabled", "true");
   try {
     const data = await api("/v1/flows/studio", {
       method: "POST",
-      body: JSON.stringify({ messages: studioHistory(), action }),
+      body: JSON.stringify({
+        messages: studioHistory(),
+        action,
+        phase: state.studio.phase,
+      }),
     });
     pending?.remove();
-    pending = null;
     await applyStudioReply(data);
     if (data.kind === "flow") {
       await revealBuiltFlow();
       return;
     }
-    if (action === "chat" && data.phase === "ready") {
-      pending = studioThink("Ótimo — montando o fluxo agora");
-      const built = await api("/v1/flows/studio", {
-        method: "POST",
-        body: JSON.stringify({ messages: studioHistory(), action: "build" }),
-      });
-      pending?.remove();
-      pending = null;
-      await applyStudioReply(built);
-      if (built.kind === "flow") await revealBuiltFlow();
+    if (data.phase === "preview") {
+      state.studio.previewTurns += 1;
+      if (state.studio.previewTurns >= 2) {
+        state.studio.phase = "debrief";
+        studioSay("Ensaio encerrado. Agora o que você falar vale como ajuste — ou a gente monta o fluxo.", "sys");
+      }
     }
     studioLayout();
   } catch (ex) {
@@ -649,6 +674,7 @@ async function sendStudio(_text, action = "chat") {
     state.studio.busy = false;
     $("studio-form")?.querySelector("button")?.removeAttribute("disabled");
     $("studio-build")?.removeAttribute("disabled");
+    $("studio-test")?.removeAttribute("disabled");
     studioLayout();
   }
 }
@@ -665,7 +691,7 @@ if (localStorage.getItem("glabs_side_collapsed") === "1") {
   if ($("btn-collapse-side")) $("btn-collapse-side").textContent = "›";
 }
 
-$("btn-wizard")?.addEventListener("click", () => openStudio({ expand: true }));
+$("btn-wizard")?.addEventListener("click", () => openStudio({ expand: false }));
 $("btn-studio-expand")?.addEventListener("click", toggleStudioExpand);
 $("studio-expand")?.addEventListener("click", toggleStudioExpand);
 $("studio-close")?.addEventListener("click", closeStudio);
@@ -699,6 +725,57 @@ $("studio-form")?.addEventListener("submit", async (e) => {
 $("studio-build")?.addEventListener("click", async () => {
   if (state.studio.busy) return;
   await sendStudio("", "build");
+});
+$("studio-test")?.addEventListener("click", async () => {
+  if (state.studio.busy) return;
+  studioSay("Vamos testar agora", "user");
+  state.studio.messages.push({ role: "user", content: "Vamos testar agora" });
+  state.studio.previewTurns = 0;
+  await sendStudio("Vamos testar agora", "test");
+});
+
+function stopStudioMic() {
+  try {
+    state.studio.rec?.stop();
+  } catch {
+    /* ignore */
+  }
+  state.studio.rec = null;
+  $("studio-mic")?.classList.remove("on");
+}
+
+$("studio-mic")?.addEventListener("click", () => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    toast("Áudio não roda neste navegador — tenta o Chrome", "err");
+    return;
+  }
+  if (state.studio.rec) {
+    stopStudioMic();
+    return;
+  }
+  const rec = new SR();
+  rec.lang = "pt-BR";
+  rec.interimResults = true;
+  rec.continuous = false;
+  rec.onresult = (ev) => {
+    let t = "";
+    for (const r of ev.results) t += r[0].transcript;
+    if ($("studio-input")) $("studio-input").value = t;
+  };
+  rec.onend = () => {
+    const wasOn = Boolean(state.studio.rec);
+    stopStudioMic();
+    const text = ($("studio-input")?.value || "").trim();
+    if (wasOn && text && !state.studio.busy) $("studio-form")?.requestSubmit();
+  };
+  rec.onerror = () => {
+    stopStudioMic();
+    toast("Não deu para ouvir — tenta de novo", "err");
+  };
+  state.studio.rec = rec;
+  $("studio-mic")?.classList.add("on");
+  rec.start();
 });
 
 window.addEventListener("message", async (ev) => {
