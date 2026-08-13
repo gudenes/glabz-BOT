@@ -1,3 +1,5 @@
+import { toast } from "./toast.js";
+
 async function api(path, opts = {}) {
   const headers = new Headers(opts.headers || {});
   headers.set("accept", "application/json");
@@ -46,7 +48,9 @@ formLogin.onsubmit = async (e) => {
     if (data.user.mustChangePassword) {
       formLogin.classList.add("hidden");
       formChange.classList.remove("hidden");
+      toast("Primeiro acesso — escolha uma senha nova");
     } else {
+      toast("Entrou");
       go(data.user);
     }
   } catch (ex) {
@@ -65,6 +69,7 @@ formChange.onsubmit = async (e) => {
       method: "POST",
       body: JSON.stringify({ password: document.getElementById("new-pass").value }),
     });
+    toast("Senha atualizada");
     const me = await api("/v1/auth/me");
     go(me.user);
   } catch (ex) {

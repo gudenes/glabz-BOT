@@ -1,3 +1,5 @@
+import { toast } from "./toast.js";
+
 const $ = (id) => document.getElementById(id);
 
 async function api(path, opts = {}) {
@@ -22,6 +24,8 @@ const state = {
   view: "status",
   simState: null,
   simBusy: false,
+  lastWa: null,
+  firstName: "",
 };
 
 const TITLES = {
@@ -39,7 +43,7 @@ function setView(view) {
   for (const id of ["status", "flow", "test", "pubs"]) {
     $(`view-${id}`)?.classList.toggle("hidden", id !== view);
   }
-  $("stage-title").textContent = TITLES[view][0];
+  $("hello").textContent = state.firstName ? `Olá, ${state.firstName}!` : TITLES[view][0];
   $("stage-sub").textContent = TITLES[view][1];
   if (view === "flow") {
     const frame = $("flow-frame");
@@ -89,7 +93,14 @@ function render() {
   const acc = p.accounts[0];
   const sess = acc?.session;
   state.accountId = acc?.account?.id || null;
-  pill(sess?.status || "disconnected");
+  const wa = sess?.status || "disconnected";
+  if (state.lastWa && state.lastWa !== wa) {
+    if (wa === "connected") toast("WhatsApp conectado");
+    if (wa === "pending_qr") toast("QR pronto — aponte a câmera do celular");
+    if (wa === "disconnected" && state.lastWa === "connected") toast("WhatsApp desconectado");
+  }
+  state.lastWa = wa;
+  pill(wa);
 
   $("st-status").textContent =
     sess?.status === "connected"
@@ -189,6 +200,7 @@ function resetChat() {
   $("chat-log").innerHTML =
     `<div class="chat-empty" id="chat-empty"><p>Digite como o cliente. Ex.: “Oi, quero marcar uma sessão”.</p></div>`;
   $("test-now").textContent = "Pronto para a primeira mensagem";
+  toast("Simulação recomeçada");
 }
 
 async function sendChat(ev) {
@@ -231,6 +243,7 @@ async function sendChat(ev) {
   } catch (e) {
     appendChat("sys", "Erro: " + e.message);
     $("test-now").textContent = "Erro";
+    toast(e.message, "err");
   } finally {
     state.simBusy = false;
   }
@@ -245,21 +258,34 @@ async function refresh() {
 
 $("btn-connect").onclick = async () => {
   if (!state.accountId) return;
-  await api(`/v1/accounts/${state.accountId}/connect`, { method: "POST", body: "{}" });
-  await refresh();
+  try {
+    await api(`/v1/accounts/${state.accountId}/connect`, { method: "POST", body: "{}" });
+    toast("Gerando QR…");
+    await refresh();
+  } catch (e) {
+    toast(e.message, "err");
+  }
 };
 $("btn-disconnect").onclick = async () => {
   if (!state.accountId) return;
   if (!confirm("Desconectar este WhatsApp?")) return;
-  await api(`/v1/accounts/${state.accountId}/disconnect`, { method: "POST", body: "{}" });
-  await refresh();
+  try {
+    await api(`/v1/accounts/${state.accountId}/disconnect`, { method: "POST", body: "{}" });
+    toast("Número desconectado");
+    await refresh();
+  } catch (e) {
+    toast(e.message, "err");
+  }
 };
 $("btn-logout").onclick = async () => {
   sessionStorage.removeItem("glabs_client_id");
   await api("/v1/auth/logout", { method: "POST", body: "{}" });
   location.replace("/admin/login.html");
 };
-$("btn-refresh").onclick = () => refresh();
+$("btn-refresh").onclick = async () => {
+  await refresh();
+  toast("Atualizado");
+};
 $("test-reset").onclick = () => resetChat();
 $("chat-form").onsubmit = sendChat;
 
@@ -269,9 +295,11 @@ document.querySelectorAll("[data-view]").forEach((el) => {
 
 try {
   const me = await api("/v1/auth/me");
+  state.firstName = (me.user.name || me.user.email.split("@")[0] || "").split(" ")[0];
   $("who-name").textContent = me.user.name || me.user.email.split("@")[0];
   $("who-av").textContent = (me.user.name || me.user.email).slice(0, 1).toUpperCase();
   $("who-role").textContent = me.user.role === "glabs" ? "Admin GLabs" : "Cliente";
+  $("hello").textContent = state.firstName ? `Olá, ${state.firstName}!` : "Olá!";
   if (me.user.mustChangePassword) {
     location.replace("/admin/login.html");
   } else if (me.user.role === "glabs" && !sessionStorage.getItem("glabs_client_id")) {
