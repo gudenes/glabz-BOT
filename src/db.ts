@@ -109,10 +109,26 @@ CREATE TABLE IF NOT EXISTS flow_states (
   PRIMARY KEY (account_id, phone_e164)
 );
 
+CREATE TABLE IF NOT EXISTS wa_messages (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL,
+  client_id TEXT,
+  phone_e164 TEXT NOT NULL,
+  direction TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'customer',
+  body TEXT NOT NULL,
+  author_name TEXT,
+  external_id TEXT,
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_client ON users(client_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_client ON accounts(client_id);
 CREATE INDEX IF NOT EXISTS idx_flows_client ON flows(client_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_wa_msg_thread ON wa_messages(account_id, phone_e164, sent_at);
+CREATE INDEX IF NOT EXISTS idx_wa_msg_client ON wa_messages(client_id, sent_at DESC);
 `;
 
 export async function migrate(): Promise<void> {

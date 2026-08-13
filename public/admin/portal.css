@@ -339,13 +339,50 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .pub h3 { margin: 0 0 4px; font-size: 16px; }
 .pub p { margin: 0; color: var(--muted); font-size: 13px; }
 
+.inbox {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  min-height: calc(100vh - 130px);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.inbox-list { border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+.inbox-search {
+  margin: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+}
+.thread-list { overflow: auto; }
+.thread {
+  width: 100%; text-align: left; border: 0; background: transparent;
+  padding: 12px 14px; cursor: pointer; border-bottom: 1px solid var(--line);
+  font: inherit;
+}
+.thread:hover { background: #f7f7f3; }
+.thread.on { background: #fff8d6; }
+.thread b { display: block; font-size: 14px; }
+.thread small { color: var(--muted); font-size: 12px; display: block; margin-top: 2px; }
+.thread .tag { font-size: 10px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--gold-ink); }
+.inbox-chat { display: flex; flex-direction: column; min-width: 0; }
+.inbox-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+}
+.inbox-head p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+.inbox-log { flex: 1; min-height: 360px; }
+
 .mobile-nav { display: none; }
 
 @media (max-width: 860px) {
   .app { grid-template-columns: 1fr; }
   .side { display: none; }
   .main { padding: 16px 16px 88px; }
-  .hero-card, .test-shell, .stat-row { grid-template-columns: 1fr; }
+  .hero-card, .test-shell, .stat-row, .inbox { grid-template-columns: 1fr; }
   .mobile-nav {
     display: grid;
     grid-template-columns: repeat(4, 1fr);

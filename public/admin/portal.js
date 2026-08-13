@@ -26,10 +26,13 @@ const state = {
   simBusy: false,
   lastWa: null,
   firstName: "",
+  threads: [],
+  selectedPhone: null,
 };
 
 const TITLES = {
   status: ["WhatsApp", "Conecte seu número e veja o status"],
+  inbox: ["Conversas", "Fale com o cliente no WhatsApp real"],
   flow: ["Fluxo", "Desenhe o atendimento e publique"],
   test: ["Testar", "Simule uma conversa como o cliente"],
   pubs: ["Publicações", "O que está no ar neste projeto"],
@@ -40,7 +43,7 @@ function setView(view) {
   document.querySelectorAll("[data-view]").forEach((b) => {
     b.classList.toggle("on", b.dataset.view === view);
   });
-  for (const id of ["status", "flow", "test", "pubs"]) {
+  for (const id of ["status", "inbox", "flow", "test", "pubs"]) {
     $(`view-${id}`)?.classList.toggle("hidden", id !== view);
   }
   $("hello").textContent = state.firstName ? `Olá, ${state.firstName}!` : TITLES[view][0];
@@ -55,6 +58,7 @@ function setView(view) {
   }
   if (view === "test") renderTestMeta();
   if (view === "pubs") renderPubs();
+  if (view === "inbox") void loadInbox();
 }
 
 function pill(status) {
@@ -286,6 +290,95 @@ $("btn-logout").onclick = async () => {
   await api("/v1/auth/logout", { method: "POST", body: "{}" });
   location.replace("/admin/login.html");
 };
+async function loadInbox() {
+  try {
+    const data = await api("/v1/inbox/threads");
+    state.threads = data.threads || [];
+    renderThreads();
+    if (state.selectedPhone) await loadInboxMessages(state.selectedPhone);
+  } catch (e) {
+    $("thread-list").innerHTML = `<p class="hint" style="padding:12px">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function renderThreads() {
+  const q = ($("inbox-q")?.value || "").toLowerCase();
+  const list = state.threads.filter(
+    (t) =>
+      !q ||
+      t.contactName.toLowerCase().includes(q) ||
+      t.phoneE164.includes(q.replace(/\D/g, ""))
+  );
+  const el = $("thread-list");
+  if (!list.length) {
+    el.innerHTML = `<p class="hint" style="padding:14px">Nenhuma conversa ainda. Elas aparecem quando alguém mandar mensagem no número conectado.</p>`;
+    return;
+  }
+  el.innerHTML = list
+    .map(
+      (t) => `<button type="button" class="thread ${t.phoneE164 === state.selectedPhone ? "on" : ""}" data-phone="${escapeHtml(t.phoneE164)}">
+        <b>${escapeHtml(t.contactName)}</b>
+        <small>${escapeHtml(t.lastPreview)}</small>
+        <span class="tag">${t.mode === "human" ? "Você atende" : "Bot"}</span>
+      </button>`
+    )
+    .join("");
+  el.querySelectorAll("[data-phone]").forEach((b) => {
+    b.onclick = () => loadInboxMessages(b.dataset.phone);
+  });
+}
+
+async function loadInboxMessages(phone) {
+  state.selectedPhone = phone;
+  renderThreads();
+  const t = state.threads.find((x) => x.phoneE164 === phone);
+  $("inbox-title").textContent = t?.contactName || phone;
+  $("inbox-sub").textContent = t?.phoneDisplay || phone;
+  $("inbox-form").classList.remove("hidden");
+  $("btn-bot-mode").classList.remove("hidden");
+  $("btn-bot-mode").textContent = t?.mode === "human" ? "Devolver ao bot" : "Atender eu";
+  const data = await api(`/v1/inbox/threads/${encodeURIComponent(phone)}/messages`);
+  const log = $("inbox-log");
+  log.innerHTML = "";
+  for (const m of data.messages || []) {
+    const kind = m.direction === "in" ? "user" : "bot";
+    const b = document.createElement("div");
+    b.className = "bub " + kind;
+    b.textContent = m.body;
+    log.appendChild(b);
+  }
+  if (!data.messages?.length) {
+    log.innerHTML = `<div class="chat-empty"><p>Sem mensagens neste contato.</p></div>`;
+  }
+  log.scrollTop = log.scrollHeight;
+}
+
+$("inbox-q")?.addEventListener("input", renderThreads);
+$("inbox-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const phone = state.selectedPhone;
+  const input = $("inbox-input");
+  const text = (input.value || "").trim();
+  if (!phone || !text) return;
+  input.value = "";
+  try {
+    await api("/v1/inbox/send", { method: "POST", body: JSON.stringify({ phone, body: text }) });
+    toast("Enviado no WhatsApp");
+    await loadInbox();
+  } catch (ex) {
+    toast(ex.message, "err");
+  }
+});
+$("btn-bot-mode")?.addEventListener("click", async () => {
+  const phone = state.selectedPhone;
+  if (!phone) return;
+  const t = state.threads.find((x) => x.phoneE164 === phone);
+  const next = t?.mode === "human" ? "bot" : "human";
+  await api("/v1/inbox/mode", { method: "POST", body: JSON.stringify({ phone, mode: next }) });
+  toast(next === "bot" ? "Bot voltou a atender" : "Você está atendendo");
+  await loadInbox();
+});
+
 $("btn-refresh").onclick = async () => {
   await refresh();
   toast("Atualizado");
@@ -320,7 +413,10 @@ try {
     $("who-av").textContent = (asAdmin ? (me.user.name || "G") : clientName || "C").slice(0, 1).toUpperCase();
     $("who-role").textContent = asAdmin ? "Admin · vendo o cliente" : "Cliente";
     $("hello").textContent = person ? `Olá, ${person}!` : "Olá!";
-    setInterval(refresh, 5000);
+    setInterval(() => {
+      void refresh();
+      if (state.view === "inbox") void loadInbox();
+    }, 4000);
   }
 } catch {
   location.replace("/admin/login.html");

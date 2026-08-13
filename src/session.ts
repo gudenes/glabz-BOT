@@ -390,6 +390,21 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
     const meta = accountMeta(accountId);
     const product = meta?.product || "gestor";
 
+    void import("./inbox.js")
+      .then(({ recordMessage }) =>
+        recordMessage({
+          accountId,
+          phone,
+          direction: "in",
+          source: "customer",
+          body: bodyText,
+          authorName: m?.pushName ?? null,
+          externalId: m?.key?.id ?? null,
+          sentAt: new Date(Number(m?.messageTimestamp || 0) * 1000 || Date.now()),
+        })
+      )
+      .catch(() => undefined);
+
     // ── Flow engine (atendimento automático) ───────────────
     try {
       const { processInboundFlow } = await import("./flows/engine.js");
@@ -736,7 +751,8 @@ export async function sendText(
   to: string,
   body: string,
   media?: SendMediaInput | null,
-  quoted?: QuotedMessageInput | null
+  quoted?: QuotedMessageInput | null,
+  meta?: { source?: "bot" | "human"; authorName?: string | null }
 ): Promise<{ ok: true; externalId: string | null } | { ok: false; reason: string }> {
   const s = getOrCreate(accountId);
   if (s.status !== "connected" || !s.sock) {
@@ -822,6 +838,20 @@ export async function sendText(
     }
 
     const externalId = result?.key?.id ?? null;
+    const preview = text || (media ? "[mídia]" : "");
+    void import("./inbox.js")
+      .then(({ recordMessage }) =>
+        recordMessage({
+          accountId,
+          phone: to,
+          direction: "out",
+          source: meta?.source || "bot",
+          body: preview,
+          authorName: meta?.authorName || (meta?.source === "human" ? "Atendente" : "Bot"),
+          externalId,
+        })
+      )
+      .catch(() => undefined);
     return { ok: true, externalId };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "falha no envio";

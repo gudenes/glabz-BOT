@@ -48,6 +48,7 @@ import {
   listClients,
   provisionClient,
 } from "./clients.js";
+import { listMessages, listThreads } from "./inbox.js";
 import {
   deleteAccount,
   ensureAccount,
@@ -73,6 +74,7 @@ import {
   resetConversationToBot,
   restoreFlowVersion,
   saveFlow,
+  setConversationHuman,
 } from "./flows/store.js";
 import { simulateFlowMessage } from "./flows/engine.js";
 import type { Flow, FlowEdge, FlowNode } from "./flows/types.js";
@@ -399,6 +401,67 @@ const server = createServer(async (req, res) => {
         llmConfigured: Boolean(llmApiKey()),
         impersonating: auth.kind === "user" && auth.user.role === "glabs",
       });
+      return;
+    }
+
+    if (path === "/v1/inbox/threads" && method === "GET") {
+      const clientId = actingClientId(req, auth);
+      const acc = clientId ? listAccounts({ clientId })[0] : null;
+      if (!acc) {
+        json(res, 400, { ok: false, reason: "sem conta WhatsApp neste projeto" });
+        return;
+      }
+      json(res, 200, { ok: true, threads: await listThreads(acc.id), accountId: acc.id });
+      return;
+    }
+
+    if (path.startsWith("/v1/inbox/threads/") && method === "GET") {
+      const phone = decodeURIComponent(path.slice("/v1/inbox/threads/".length).replace(/\/messages$/, ""));
+      const clientId = actingClientId(req, auth);
+      const acc = clientId ? listAccounts({ clientId })[0] : null;
+      if (!acc) {
+        json(res, 400, { ok: false, reason: "sem conta" });
+        return;
+      }
+      json(res, 200, { ok: true, messages: await listMessages(acc.id, phone) });
+      return;
+    }
+
+    if (path === "/v1/inbox/send" && method === "POST") {
+      const clientId = actingClientId(req, auth);
+      const acc = clientId ? listAccounts({ clientId })[0] : null;
+      if (!acc) {
+        json(res, 400, { ok: false, reason: "sem conta" });
+        return;
+      }
+      const body = parseJson<{ phone?: string; body?: string }>(await readBody(req));
+      const author =
+        auth.kind === "user" ? auth.user.name || auth.user.email : "Atendente";
+      setConversationHuman(acc.id, body?.phone || "", "inbox");
+      const result = await sendText(acc.id, body?.phone || "", body?.body || "", null, null, {
+        source: "human",
+        authorName: author,
+      });
+      if (!result.ok) {
+        json(res, 409, result);
+        return;
+      }
+      json(res, 200, result);
+      return;
+    }
+
+    if (path === "/v1/inbox/mode" && method === "POST") {
+      const clientId = actingClientId(req, auth);
+      const acc = clientId ? listAccounts({ clientId })[0] : null;
+      if (!acc) {
+        json(res, 400, { ok: false, reason: "sem conta" });
+        return;
+      }
+      const body = parseJson<{ phone?: string; mode?: string }>(await readBody(req));
+      const phone = body?.phone || "";
+      if (body?.mode === "bot") resetConversationToBot(acc.id, phone);
+      else setConversationHuman(acc.id, phone, "inbox");
+      json(res, 200, { ok: true, mode: body?.mode === "bot" ? "bot" : "human" });
       return;
     }
 

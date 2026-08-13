@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=10" />
+    <link rel="stylesheet" href="/admin/portal.css?v=11" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -37,6 +37,10 @@
           <button type="button" class="nav-link" data-view="flow">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
             Fluxo
+          </button>
+          <button type="button" class="nav-link" data-view="inbox">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Conversas
           </button>
           <button type="button" class="nav-link" data-view="test">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
@@ -128,6 +132,34 @@
           </div>
         </section>
 
+        <!-- Conversas -->
+        <section id="view-inbox" class="view hidden fill">
+          <div class="inbox">
+            <aside class="inbox-list">
+              <input id="inbox-q" class="inbox-search" type="search" placeholder="Buscar conversa…" />
+              <div id="thread-list" class="thread-list"></div>
+            </aside>
+            <div class="inbox-chat">
+              <header class="inbox-head">
+                <div>
+                  <strong id="inbox-title">Selecione uma conversa</strong>
+                  <p id="inbox-sub">As mensagens reais do WhatsApp aparecem aqui.</p>
+                </div>
+                <button type="button" class="btn-ghost hidden" id="btn-bot-mode">Devolver ao bot</button>
+              </header>
+              <div class="chat inbox-log" id="inbox-log">
+                <div class="chat-empty" id="inbox-empty">
+                  <p>Quando alguém falar no WhatsApp, a conversa entra nesta lista. Você responde daqui — o bot para nesse contato.</p>
+                </div>
+              </div>
+              <form class="chat-form hidden" id="inbox-form">
+                <input id="inbox-input" type="text" placeholder="Mensagem…" autocomplete="off" maxlength="4000" />
+                <button class="btn-lime" type="submit">Enviar</button>
+              </form>
+            </div>
+          </div>
+        </section>
+
         <!-- Publicações -->
         <section id="view-pubs" class="view hidden">
           <div id="pubs-list" class="pubs"></div>
@@ -137,11 +169,11 @@
 
     <nav class="mobile-nav" aria-label="Principal">
       <button type="button" data-view="status" class="on">WhatsApp</button>
+      <button type="button" data-view="inbox">Conversas</button>
       <button type="button" data-view="flow">Fluxo</button>
       <button type="button" data-view="test">Testar</button>
-      <button type="button" data-view="pubs">No ar</button>
     </nav>
 
-    <script src="/admin/portal.js?v=10" type="module"></script>
+    <script src="/admin/portal.js?v=11" type="module"></script>
   </body>
 </html>
