@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=11" />
+    <link rel="stylesheet" href="/admin/portal.css?v=12" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -23,6 +23,7 @@
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">GZ</span>
           <span class="brand-word">GLABZ</span>
+          <button type="button" class="side-toggle" id="btn-collapse-side" title="Recolher menu">‹</button>
         </div>
 
         <p class="side-kicker">Meu negócio</p>
@@ -32,23 +33,23 @@
         <nav class="side-nav">
           <button type="button" class="nav-link on" data-view="status">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a8 8 0 0 0-6.9 12l-1 3.8 3.9-1A8 8 0 1 0 12 3z"/></svg>
-            WhatsApp
+            <span>WhatsApp</span>
           </button>
           <button type="button" class="nav-link" data-view="flow">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
-            Fluxo
+            <span>Fluxo</span>
           </button>
           <button type="button" class="nav-link" data-view="inbox">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            Conversas
+            <span>Conversas</span>
           </button>
           <button type="button" class="nav-link" data-view="test">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
-            Testar
+            <span>Testar</span>
           </button>
           <button type="button" class="nav-link" data-view="pubs">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="m6 14 6-6 6 6"/><path d="M4 4h16"/></svg>
-            Publicações
+            <span>Publicações</span>
           </button>
         </nav>
 
@@ -71,6 +72,7 @@
             <p id="stage-sub">Conecte seu número e veja o status</p>
           </div>
           <div class="top-actions">
+            <button type="button" class="btn-ghost hidden" id="btn-wizard">Montar na conversa</button>
             <button type="button" class="btn-ghost" id="btn-refresh">Atualizar</button>
             <span id="conn-pill" class="pill off">—</span>
           </div>
@@ -108,6 +110,21 @@
         <section id="view-flow" class="view hidden fill">
           <iframe id="flow-frame" title="Editor de fluxo"></iframe>
         </section>
+
+        <aside id="wizard" class="wizard hidden" aria-label="Montar fluxo na conversa">
+          <header class="wizard-head">
+            <div>
+              <strong>Montar na conversa</strong>
+              <p>A gente pergunta, você responde, o fluxo aparece no builder.</p>
+            </div>
+            <button type="button" class="btn-text" id="wizard-close">Fechar</button>
+          </header>
+          <div class="wizard-log" id="wizard-log"></div>
+          <form class="wizard-form" id="wizard-form">
+            <input id="wizard-input" type="text" placeholder="Sua resposta…" autocomplete="off" />
+            <button class="btn-lime" type="submit">Enviar</button>
+          </form>
+        </aside>
 
         <!-- Testar -->
         <section id="view-test" class="view hidden">
@@ -174,6 +191,6 @@
       <button type="button" data-view="test">Testar</button>
     </nav>
 
-    <script src="/admin/portal.js?v=11" type="module"></script>
+    <script src="/admin/portal.js?v=12" type="module"></script>
   </body>
 </html>

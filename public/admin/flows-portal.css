@@ -183,6 +183,8 @@ body.portal-embed .fb-node .node-plus {
   box-shadow: 0 4px 12px rgba(240, 192, 20, 0.35);
 }
 
+body.portal-embed #arrowhead circle { fill: #f0c014; }
+body.portal-embed #arrowhead-hot circle { fill: #c9a00e; }
 body.portal-embed .edge-path {
   stroke: rgba(240, 192, 20, 0.75);
   stroke-width: 2.2;

@@ -56,6 +56,7 @@ function setView(view) {
       frame.dataset.loaded = "1";
     }
   }
+  $("btn-wizard")?.classList.toggle("hidden", view !== "flow");
   if (view === "test") renderTestMeta();
   if (view === "pubs") renderPubs();
   if (view === "inbox") void loadInbox();
@@ -385,6 +386,191 @@ $("btn-refresh").onclick = async () => {
 };
 $("test-reset").onclick = () => resetChat();
 $("chat-form").onsubmit = sendChat;
+
+const STEPS = [
+  { key: "greeting", ask: "Como o bot deve cumprimentar quem chega no WhatsApp?" },
+  { key: "paths", ask: "O que o cliente pode pedir? Escreva separado por vírgula. Ex.: marcar horário, dúvida, falar com atendente" },
+  { key: "ask", ask: "Para marcar, o que perguntamos primeiro? Ex.: nome e horário de preferência" },
+];
+
+function wizardSay(text, who = "bot") {
+  const log = $("wizard-log");
+  const b = document.createElement("div");
+  b.className = "bub " + who;
+  b.textContent = text;
+  log.appendChild(b);
+  log.scrollTop = log.scrollHeight;
+}
+
+function openWizard() {
+  $("wizard").classList.remove("hidden");
+  $("wizard-log").innerHTML = "";
+  state.wizard = { i: 0, answers: {} };
+  wizardSay("Vamos montar o atendimento em 3 perguntas. Depois o fluxo aparece no builder para você ajustar.");
+  wizardSay(STEPS[0].ask);
+  $("wizard-input").focus();
+}
+
+function buildFlowFromAnswers(a) {
+  const greet = a.greeting || "Olá! Como posso ajudar?";
+  const paths = (a.paths || "marcar horário, dúvida, atendente")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  const ask = a.ask || "Qual o seu nome?";
+  const id = (n) => "n_" + n;
+  const nodes = [
+    { id: id("t"), type: "trigger", x: 360, y: 40, data: { label: "Mensagem recebida" } },
+    { id: id("hi"), type: "message", x: 360, y: 160, data: { text: greet } },
+    {
+      id: id("int"),
+      type: "llm_intent",
+      x: 360,
+      y: 300,
+      data: {
+        label: "Entender o pedido",
+        prompt: "Classifique a intenção. Responda só o slug.",
+        intents: paths.map((p, i) => ({
+          slug: "p" + (i + 1),
+          description: p,
+        })),
+      },
+    },
+  ];
+  const edges = [
+    { id: "e_t", from: id("t"), to: id("hi") },
+    { id: "e_hi", from: id("hi"), to: id("int") },
+  ];
+  paths.forEach((p, i) => {
+    const slug = "p" + (i + 1);
+    const x = 80 + i * 240;
+    if (/atend|humano|pessoa/i.test(p)) {
+      nodes.push({
+        id: id("h" + i),
+        type: "handoff",
+        x,
+        y: 460,
+        data: { message: "Vou te passar para um atendente." },
+      });
+      edges.push({ id: "e_" + slug, from: id("int"), to: id("h" + i), label: slug });
+    } else if (/d[uú]vida|pergunta/i.test(p)) {
+      nodes.push({
+        id: id("q" + i),
+        type: "ask",
+        x,
+        y: 460,
+        data: { prompt: "Pode mandar sua dúvida?", varName: "duvida" },
+      });
+      nodes.push({
+        id: id("qm" + i),
+        type: "message",
+        x,
+        y: 600,
+        data: { text: "Anotei. Um atendente responde em seguida." },
+      });
+      nodes.push({
+        id: id("qh" + i),
+        type: "handoff",
+        x,
+        y: 730,
+        data: { message: "Passando para a equipe." },
+      });
+      edges.push({ id: "e_" + slug, from: id("int"), to: id("q" + i), label: slug });
+      edges.push({ id: "e_q" + i, from: id("q" + i), to: id("qm" + i) });
+      edges.push({ id: "e_qh" + i, from: id("qm" + i), to: id("qh" + i) });
+    } else {
+      nodes.push({
+        id: id("a" + i),
+        type: "ask",
+        x,
+        y: 460,
+        data: { prompt: ask, varName: "nome" },
+      });
+      nodes.push({
+        id: id("w" + i),
+        type: "ask",
+        x,
+        y: 600,
+        data: { prompt: "Qual dia e horário prefere?", varName: "quando" },
+      });
+      nodes.push({
+        id: id("c" + i),
+        type: "message",
+        x,
+        y: 730,
+        data: { text: "Perfeito, {{nome}}. Vou encaminhar sua preferência ({{quando}}) para confirmar." },
+      });
+      nodes.push({
+        id: id("ah" + i),
+        type: "handoff",
+        x,
+        y: 860,
+        data: { message: "Equipe confirma o horário." },
+      });
+      edges.push({ id: "e_" + slug, from: id("int"), to: id("a" + i), label: slug });
+      edges.push({ id: "e_w" + i, from: id("a" + i), to: id("w" + i) });
+      edges.push({ id: "e_c" + i, from: id("w" + i), to: id("c" + i) });
+      edges.push({ id: "e_ah" + i, from: id("c" + i), to: id("ah" + i) });
+    }
+  });
+  return {
+    name: "Atendimento · " + (state.portal?.client?.name || "WhatsApp"),
+    nodes,
+    edges,
+  };
+}
+
+$("btn-collapse-side")?.addEventListener("click", () => {
+  const app = document.querySelector(".app");
+  const on = app.classList.toggle("side-collapsed");
+  localStorage.setItem("glabs_side_collapsed", on ? "1" : "0");
+  $("btn-collapse-side").textContent = on ? "›" : "‹";
+  $("btn-collapse-side").title = on ? "Abrir menu" : "Recolher menu";
+});
+if (localStorage.getItem("glabs_side_collapsed") === "1") {
+  document.querySelector(".app")?.classList.add("side-collapsed");
+  if ($("btn-collapse-side")) $("btn-collapse-side").textContent = "›";
+}
+
+$("btn-wizard")?.addEventListener("click", openWizard);
+$("wizard-close")?.addEventListener("click", () => $("wizard").classList.add("hidden"));
+$("wizard-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const w = state.wizard;
+  if (!w) return;
+  const input = $("wizard-input");
+  const text = (input.value || "").trim();
+  if (!text) return;
+  input.value = "";
+  wizardSay(text, "user");
+  w.answers[STEPS[w.i].key] = text;
+  w.i += 1;
+  if (w.i < STEPS.length) {
+    wizardSay(STEPS[w.i].ask);
+    return;
+  }
+  wizardSay("Montando o fluxo…");
+  try {
+    const draft = buildFlowFromAnswers(w.answers);
+    await api("/v1/flows", {
+      method: "POST",
+      body: JSON.stringify(draft),
+    });
+    wizardSay("Pronto. O fluxo está no builder — ajuste o texto e publique quando quiser.");
+    toast("Fluxo montado");
+    const frame = $("flow-frame");
+    if (frame) {
+      const cid = sessionStorage.getItem("glabs_client_id") || state.portal?.client?.id || "";
+      frame.dataset.loaded = "1";
+      frame.src = `/admin/flows.html?embed=1&client=${encodeURIComponent(cid)}&v=12`;
+    }
+    await refresh();
+  } catch (ex) {
+    wizardSay("Não deu para salvar: " + ex.message);
+    toast(ex.message, "err");
+  }
+});
 
 document.querySelectorAll("[data-view]").forEach((el) => {
   el.addEventListener("click", () => setView(el.dataset.view));

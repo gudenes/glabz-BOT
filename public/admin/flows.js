@@ -612,11 +612,11 @@ function renderCanvas() {
 
   const defs = document.createElementNS(ns, "defs");
   defs.innerHTML = `
-    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L8,4 L0,8 Z" fill="rgba(165,180,252,0.95)" />
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <circle cx="5" cy="5" r="3.2" fill="rgba(165,180,252,0.95)" />
     </marker>
-    <marker id="arrowhead-hot" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L8,4 L0,8 Z" fill="rgba(99,102,241,1)" />
+    <marker id="arrowhead-hot" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <circle cx="5" cy="5" r="3.4" fill="rgba(99,102,241,1)" />
     </marker>`;
   svg.appendChild(defs);
 
