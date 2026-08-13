@@ -599,8 +599,9 @@ const server = createServer(async (req, res) => {
             ? "test"
             : "chat";
       try {
+        const ctx = client ? { name: client.name } : null;
         if (action === "build") {
-          const gen = await buildFlowFromStudio(messages);
+          const gen = await buildFlowFromStudio(messages, ctx);
           const flow = saveFlow({
             name: gen.name,
             product: client?.slug || "gestor",
@@ -621,14 +622,17 @@ const server = createServer(async (req, res) => {
           return;
         }
         if (action === "test") {
-          const turn = await studioTurn([
-            ...messages,
-            {
-              role: "user",
-              content:
-                "Sim. Vamos testar agora. A partir daqui eu falo como o cliente. Não altere o fluxo no meio do ensaio — só interpreta o bot.",
-            },
-          ]);
+          const turn = await studioTurn(
+            [
+              ...messages,
+              {
+                role: "user",
+                content:
+                  "Sim. Vamos testar agora. A partir daqui eu falo como o cliente. Não altere o fluxo no meio do ensaio — só interpreta o bot.",
+              },
+            ],
+            ctx
+          );
           json(res, 200, {
             ok: true,
             kind: "chat",
@@ -648,7 +652,7 @@ const server = createServer(async (req, res) => {
                 : m
             )
           : messages;
-        const turn = await studioTurn(history);
+        const turn = await studioTurn(history, ctx);
         json(res, 200, { ok: true, kind: "chat", ...turn });
       } catch (e) {
         json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "ia" });

@@ -8,6 +8,25 @@ export type StudioTurn = {
   as: "coach" | "bot";
   say: string;
 };
+export type ClientContext = {
+  name?: string | null;
+  about?: string | null;
+};
+
+export function clientContextBlock(ctx?: ClientContext | null): string {
+  const name = ctx?.name?.trim();
+  const about = ctx?.about?.trim();
+  if (!name && !about) {
+    return "Contexto do cliente: ainda não há nome cadastrado. Só pergunte o nome do negócio se o dono não deixar claro.";
+  }
+  const lines = ["Contexto JÁ cadastrado neste projeto — trate como fato, não pergunte de novo:"];
+  if (name) lines.push(`- Nome do negócio: ${name}`);
+  if (about) lines.push(`- Sobre: ${about}`);
+  lines.push(
+    "Se o nome já descreve o ramo (consultoria, pilates, clínica, escritório…), NÃO pergunte qual o serviço principal. Siga para o que falta: o que o cliente pede no WhatsApp, o que coletar, quando passar para humano."
+  );
+  return lines.join("\n");
+}
 
 const SYSTEM = `Você é o coach da GLABZ. Ajuda o dono a DEFINIR o atendimento. Isto NÃO é o bot no ar.
 
@@ -19,7 +38,7 @@ Responda APENAS um JSON:
 }
 
 Fases — siga esta ordem, sem pular:
-1. ask — as=coach. Briefing. UMA pergunta por vez: negócio, o que o cliente pede, o que coletar, quando passar para humano.
+1. ask — as=coach. Briefing. UMA pergunta por vez, SÓ do que ainda falta. Nunca pergunte nome do negócio ou serviço principal se o contexto do cliente já trouxer isso. Foque no que o cliente pede no WhatsApp, o que coletar e quando passar para humano.
 2. offer — as=coach. Quando já souber o essencial, NÃO comece o ensaio. Diga no espírito: "Acho que já tenho tudo. Vamos testar agora?" e pare. Espere o dono confirmar.
 3. preview — as=bot. Só depois do dono aceitar o teste. Você interpreta o BOT. O dono fala como CLIENTE. Mensagens dele NÃO são pedido de mudança no fluxo — continue o ensaio. Máximo 2 respostas do bot. Não feche pedido de verdade. Não invente integração real.
 4. debrief — as=coach. Depois do ensaio (ou se o dono disser "para", "chega", "muda"). Volte a ser coach: "Isso era só o ensaio. Quer ajustar o tom ou monto o fluxo?" NÃO continue o papel de bot.
@@ -40,7 +59,10 @@ function extractJson(raw: string): string {
   return trimmed;
 }
 
-export async function studioTurn(messages: StudioMsg[]): Promise<StudioTurn> {
+export async function studioTurn(
+  messages: StudioMsg[],
+  ctx?: ClientContext | null
+): Promise<StudioTurn> {
   const key = llmApiKey();
   if (!key) throw new Error("LLM não configurada (XAI_API_KEY).");
 
@@ -60,7 +82,11 @@ export async function studioTurn(messages: StudioMsg[]): Promise<StudioTurn> {
       temperature: 0.4,
       max_tokens: 400,
       response_format: { type: "json_object" },
-      messages: [{ role: "system", content: SYSTEM }, ...history],
+      messages: [
+        { role: "system", content: SYSTEM },
+        { role: "system", content: clientContextBlock(ctx) },
+        ...history,
+      ],
     }),
   });
   if (!res.ok) throw new Error(`Grok HTTP ${res.status}`);
@@ -106,13 +132,16 @@ export function wantsBuild(text: string): boolean {
   );
 }
 
-export function briefFromMessages(messages: StudioMsg[]): string {
+export function briefFromMessages(messages: StudioMsg[], ctx?: ClientContext | null): string {
   const lines = messages
     .map((m) => (m.role === "user" ? `Dono: ${m.content}` : `Assistente: ${m.content}`))
     .join("\n");
-  return `Com base neste BRIEFING (ignore falas de ensaio em que o dono fingiu ser cliente), monte o fluxo de WhatsApp.\nArquitetura: tronco trigger→boas-vindas→intent, depois um ramo vertical por pedido, sem cruzar linhas.\n\n${lines}`;
+  return `${clientContextBlock(ctx)}\n\nCom base neste BRIEFING (ignore falas de ensaio em que o dono fingiu ser cliente), monte o fluxo de WhatsApp.\nArquitetura: tronco trigger→boas-vindas→intent, depois um ramo vertical por pedido, sem cruzar linhas.\nUse o nome do negócio nas boas-vindas se já estiver no contexto.\n\n${lines}`;
 }
 
-export async function buildFlowFromStudio(messages: StudioMsg[]): Promise<GeneratedFlow> {
-  return generateFlowFromPrompt(briefFromMessages(messages).slice(0, 6000));
+export async function buildFlowFromStudio(
+  messages: StudioMsg[],
+  ctx?: ClientContext | null
+): Promise<GeneratedFlow> {
+  return generateFlowFromPrompt(briefFromMessages(messages, ctx).slice(0, 6000));
 }

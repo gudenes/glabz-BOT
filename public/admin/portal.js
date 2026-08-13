@@ -18,8 +18,13 @@ async function api(path, opts = {}) {
   return data;
 }
 
-const WELCOME =
-  "Oi. Isto ainda não é o bot no ar — é só o briefing. Me conta o negócio e o que o atendimento precisa fazer. Pode falar no microfone. Quando já tiver o essencial, a gente testa o tom e só então monta o fluxo.";
+function welcomeText() {
+  const name = state.portal?.client?.name?.trim();
+  if (name) {
+    return `Oi. Vocês são a ${name} — isso já está no cadastro, não preciso do nome de novo. Me conta o que o atendimento no WhatsApp precisa fazer. Pode falar no microfone.`;
+  }
+  return "Oi. Isto ainda não é o bot no ar — é só o briefing. Me conta o negócio e o que o atendimento precisa fazer. Pode falar no microfone.";
+}
 
 const state = {
   portal: null,
@@ -182,8 +187,9 @@ function syncFlowPane() {
 function ensureStudioWelcome() {
   if (state.studio.welcomed) return;
   state.studio.welcomed = true;
-  studioSay(WELCOME, "coach");
-  state.studio.messages.push({ role: "assistant", content: WELCOME });
+  const text = welcomeText();
+  studioSay(text, "coach");
+  state.studio.messages.push({ role: "assistant", content: text });
 }
 
 function waHtml(text) {
