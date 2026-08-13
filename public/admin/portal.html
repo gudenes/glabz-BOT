@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=14" />
+    <link rel="stylesheet" href="/admin/portal.css?v=15" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -73,6 +73,7 @@
           </div>
           <div class="top-actions">
             <button type="button" class="btn-ghost hidden" id="btn-wizard">Montar na conversa</button>
+            <button type="button" class="btn-ghost hidden" id="btn-studio-expand" title="Expandir conversa">Expandir</button>
             <button type="button" class="btn-ghost" id="btn-refresh">Atualizar</button>
             <span id="conn-pill" class="pill off">—</span>
           </div>
@@ -108,43 +109,39 @@
 
         <!-- Fluxo -->
         <section id="view-flow" class="view hidden fill">
-          <div id="flow-empty" class="start-grid hidden">
-            <button type="button" class="start-card featured" id="start-ai">
-              <span class="nudge">Mais escolhida</span>
-              <h3>Me ajude a criar</h3>
-              <p>Conte com suas palavras o atendimento que você quer. A IA monta o fluxo e você ajusta no builder.</p>
-            </button>
-            <button type="button" class="start-card" id="start-tpl">
-              <h3>Usar um template</h3>
-              <p>Comece com um fluxo já validado (marcar sessão, consulta) e personalize o texto.</p>
-            </button>
-            <button type="button" class="start-card" id="start-blank">
-              <h3>Começar do zero</h3>
-              <p>Canvas em branco. Você adiciona cada passo.</p>
-            </button>
-            <div id="tpl-pick" class="tpl-pick hidden">
-              <button type="button" data-tpl="pilates">Marcar sessão</button>
-              <button type="button" data-tpl="consulta">Marcar consulta</button>
-              <button type="button" data-tpl="blank">Em branco mesmo</button>
+          <div id="flow-studio" class="studio hidden" aria-label="Montar fluxo na conversa">
+            <header class="studio-head">
+              <div>
+                <strong id="studio-title">Atendimento</strong>
+                <p id="studio-sub">Fala como se estivesse no WhatsApp. A gente esclarece e simula antes de desenhar o fluxo.</p>
+              </div>
+              <div class="studio-head-actions">
+                <button type="button" class="btn-text" id="studio-expand">Expandir</button>
+                <button type="button" class="btn-text hidden" id="studio-close">Ver fluxo</button>
+              </div>
+            </header>
+            <div class="studio-log" id="studio-log"></div>
+            <div class="studio-ready hidden" id="studio-ready">
+              <button type="button" class="btn-lime" id="studio-build">Montar o fluxo</button>
+              <span>ou continua falando para ajustar o tom</span>
+            </div>
+            <form class="studio-form" id="studio-form">
+              <input id="studio-input" type="text" placeholder="Ex.: sou um estúdio de pilates, quero marcar aula e tirar dúvida…" autocomplete="off" />
+              <button class="btn-lime" type="submit">Enviar</button>
+            </form>
+            <div class="studio-alts" id="studio-alts">
+              <button type="button" class="btn-text" id="start-tpl">usar um template</button>
+              <span>·</span>
+              <button type="button" class="btn-text" id="start-blank">começar do zero</button>
+              <div id="tpl-pick" class="tpl-pick hidden">
+                <button type="button" data-tpl="pilates">Marcar sessão</button>
+                <button type="button" data-tpl="consulta">Marcar consulta</button>
+                <button type="button" data-tpl="blank">Em branco mesmo</button>
+              </div>
             </div>
           </div>
           <iframe id="flow-frame" class="hidden" title="Editor de fluxo"></iframe>
         </section>
-
-        <aside id="wizard" class="wizard hidden" aria-label="Montar fluxo na conversa">
-          <header class="wizard-head">
-            <div>
-              <strong>Montar na conversa</strong>
-              <p>Escreve livremente o que o atendimento deve fazer. A IA monta o fluxo.</p>
-            </div>
-            <button type="button" class="btn-text" id="wizard-close">Fechar</button>
-          </header>
-          <div class="wizard-log" id="wizard-log"></div>
-          <form class="wizard-form" id="wizard-form">
-            <input id="wizard-input" type="text" placeholder="Ex.: estúdio de pilates, marcar aula e tirar dúvida…" autocomplete="off" />
-            <button class="btn-lime" type="submit">Enviar</button>
-          </form>
-        </aside>
 
         <!-- Testar -->
         <section id="view-test" class="view hidden">
@@ -225,6 +222,6 @@
       <button type="button" data-view="test">Testar</button>
     </nav>
 
-    <script src="/admin/portal.js?v=14" type="module"></script>
+    <script src="/admin/portal.js?v=15" type="module"></script>
   </body>
 </html>

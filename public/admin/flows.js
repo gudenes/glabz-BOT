@@ -319,6 +319,10 @@ async function loadAll() {
   if (!state.flow && state.flows.length) {
     selectFlow(state.flows[0].id);
   } else if (!state.flow) {
+    if (EMBED) {
+      window.parent.postMessage({ type: "glabs-flows-changed" }, "*");
+      return;
+    }
     newBlankFlow();
   } else {
     const fresh = state.flows.find((f) => f.id === state.flow.id);
@@ -1246,6 +1250,30 @@ $("btn-unpublish").onclick = async () => {
     });
     state.flow = data.flow;
     toast("Pausado — rascunho");
+    await loadAll();
+  } catch (e) {
+    toast(e.message, "err");
+  }
+};
+
+$("btn-delete").onclick = async () => {
+  if (!state.flow?.id) {
+    toast("Este fluxo ainda não foi salvo", "err");
+    return;
+  }
+  const live = state.flow.status === "live";
+  const ok = confirm(
+    live
+      ? `Excluir “${state.flow.name}”? Ele está no ar e o WhatsApp para de seguir este fluxo.`
+      : `Excluir “${state.flow.name}”? Não dá para desfazer.`
+  );
+  if (!ok) return;
+  try {
+    await api(`/v1/flows/${state.flow.id}`, { method: "DELETE" });
+    toast("Fluxo excluído");
+    state.flow = null;
+    state.selectedNodeId = null;
+    if (EMBED) window.parent.postMessage({ type: "glabs-flows-changed" }, "*");
     await loadAll();
   } catch (e) {
     toast(e.message, "err");

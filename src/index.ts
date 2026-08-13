@@ -78,6 +78,7 @@ import {
 } from "./flows/store.js";
 import { simulateFlowMessage } from "./flows/engine.js";
 import { generateFlowFromPrompt } from "./flows/from-prompt.js";
+import { buildFlowFromStudio, studioTurn, wantsBuild, type StudioMsg } from "./flows/studio.js";
 import { allSeedTemplates } from "./flows/templates.js";
 import type { Flow, FlowEdge, FlowNode } from "./flows/types.js";
 import type { FlowSimState } from "./flows/engine.js";
@@ -568,6 +569,55 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (method === "POST" && path === "/v1/flows/studio") {
+      const clientId = actingClientId(req, auth);
+      const client = clientId ? await getClient(clientId) : null;
+      const body = parseJson<{
+        messages?: StudioMsg[];
+        action?: "chat" | "build";
+      }>(await readBody(req));
+      const messages = (body?.messages || []).filter(
+        (m) => (m.role === "user" || m.role === "assistant") && String(m.content || "").trim()
+      );
+      if (!messages.length) {
+        json(res, 400, { ok: false, reason: "escreve uma mensagem" });
+        return;
+      }
+      const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content || "";
+      const action =
+        body?.action === "build" || (body?.action !== "chat" && wantsBuild(lastUser))
+          ? "build"
+          : "chat";
+      try {
+        if (action === "build") {
+          const gen = await buildFlowFromStudio(messages);
+          const flow = saveFlow({
+            name: gen.name,
+            product: client?.slug || "gestor",
+            accountId: clientId ? listAccounts({ clientId })[0]?.id ?? null : null,
+            clientId,
+            status: "draft",
+            nodes: gen.nodes,
+            edges: gen.edges,
+          });
+          json(res, 200, {
+            ok: true,
+            kind: "flow",
+            phase: "ready",
+            as: "coach",
+            say: "Pronto. Abri o fluxo no builder — ajusta o que quiser e publica.",
+            flow,
+          });
+          return;
+        }
+        const turn = await studioTurn(messages);
+        json(res, 200, { ok: true, kind: "chat", ...turn });
+      } catch (e) {
+        json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "ia" });
+      }
+      return;
+    }
+
     if (method === "POST" && path === "/v1/flows/from-prompt") {
       const clientId = actingClientId(req, auth);
       const client = clientId ? await getClient(clientId) : null;
@@ -785,6 +835,16 @@ const server = createServer(async (req, res) => {
       }
 
       if (method === "DELETE" && !action) {
+        const existing = getFlow(flowId);
+        if (!existing) {
+          json(res, 404, { ok: false, reason: "flowNotFound" });
+          return;
+        }
+        const clientId = actingClientId(req, auth);
+        if (clientId && existing.clientId && existing.clientId !== clientId) {
+          json(res, 403, { ok: false, reason: "forbidden" });
+          return;
+        }
         const ok = deleteFlow(flowId);
         json(res, ok ? 200 : 404, {
           ok,

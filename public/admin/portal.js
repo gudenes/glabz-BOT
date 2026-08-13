@@ -18,6 +18,9 @@ async function api(path, opts = {}) {
   return data;
 }
 
+const WELCOME =
+  "Oi. Me conta o negócio e o que o atendimento no WhatsApp precisa fazer — do jeito que você falaria com um colega. Depois eu simulo a conversa aqui, como o bot, e só então a gente monta o fluxo.";
+
 const state = {
   portal: null,
   accountId: null,
@@ -28,6 +31,13 @@ const state = {
   firstName: "",
   threads: [],
   selectedPhone: null,
+  studio: {
+    open: false,
+    expanded: true,
+    busy: false,
+    phase: "ask",
+    messages: [],
+  },
 };
 
 const TITLES = {
@@ -48,8 +58,13 @@ function setView(view) {
   }
   $("hello").textContent = state.firstName ? `Olá, ${state.firstName}!` : TITLES[view][0];
   $("stage-sub").textContent = TITLES[view][1];
-  if (view === "flow") syncFlowPane();
-  $("btn-wizard")?.classList.toggle("hidden", view !== "flow");
+  if (view === "flow") {
+    syncFlowPane();
+    if (!hasOwnFlows()) {
+      $("stage-sub").textContent = "Conversa com o bot — depois a gente desenha o fluxo";
+    }
+  }
+  else hideStudioChrome();
   if (view === "test") renderTestMeta();
   if (view === "pubs") renderPubs();
   if (view === "inbox") void loadInbox();
@@ -61,27 +76,70 @@ function hasOwnFlows() {
 
 function openBuilder() {
   const frame = $("flow-frame");
-  const empty = $("flow-empty");
-  empty?.classList.add("hidden");
   frame?.classList.remove("hidden");
   const cid = sessionStorage.getItem("glabs_client_id") || state.portal?.client?.id || "";
   if (frame) {
     frame.dataset.loaded = "1";
-    frame.src = `/admin/flows.html?embed=1&client=${encodeURIComponent(cid)}&v=13`;
+    frame.src = `/admin/flows.html?embed=1&client=${encodeURIComponent(cid)}&v=15`;
   }
+}
+
+function hideStudioChrome() {
+  $("btn-wizard")?.classList.add("hidden");
+  $("btn-studio-expand")?.classList.add("hidden");
+}
+
+function studioLayout() {
+  const pane = $("view-flow");
+  const studio = $("flow-studio");
+  const frame = $("flow-frame");
+  const first = !hasOwnFlows();
+  const open = first || state.studio.open;
+  const expanded = first || state.studio.expanded;
+
+  studio?.classList.toggle("hidden", !open);
+  pane?.classList.toggle("studio-only", first);
+  pane?.classList.toggle("studio-full", open && expanded);
+  pane?.classList.toggle("studio-split", open && !expanded && !first);
+
+  if (first) {
+    frame?.classList.add("hidden");
+  } else if (open && expanded) {
+    frame?.classList.add("hidden");
+  } else {
+    if (frame?.dataset.loaded !== "1") openBuilder();
+    else frame?.classList.remove("hidden");
+  }
+
+  $("studio-close")?.classList.toggle("hidden", first || !open);
+  $("studio-expand")?.classList.toggle("hidden", first);
+  $("studio-alts")?.classList.toggle("hidden", hasOwnFlows());
+  $("btn-wizard")?.classList.toggle("hidden", state.view !== "flow" || first || open);
+  $("btn-studio-expand")?.classList.toggle("hidden", state.view !== "flow" || !open || first);
+  $("btn-studio-expand").textContent = expanded ? "Recolher" : "Expandir";
+  $("studio-expand").textContent = expanded && !first ? "Recolher" : "Expandir";
+  $("studio-title").textContent = state.studio.phase === "simulate" || state.studio.phase === "ready"
+    ? "Simulação"
+    : "Atendimento";
+  $("studio-sub").textContent =
+    state.studio.phase === "simulate" || state.studio.phase === "ready"
+      ? "Agora eu sou o bot. Fala como o cliente — a gente ajusta o tom antes de montar o fluxo."
+      : "Fala como se estivesse no WhatsApp. A gente esclarece e simula antes de desenhar o fluxo.";
+  $("studio-ready")?.classList.toggle("hidden", state.studio.phase !== "ready");
 }
 
 function syncFlowPane() {
   if (!hasOwnFlows()) {
-    $("flow-empty")?.classList.remove("hidden");
-    $("flow-frame")?.classList.add("hidden");
-    $("btn-wizard")?.classList.add("hidden");
-  } else {
-    $("flow-empty")?.classList.add("hidden");
-    $("btn-wizard")?.classList.remove("hidden");
-    if ($("flow-frame")?.dataset.loaded !== "1") openBuilder();
-    else $("flow-frame")?.classList.remove("hidden");
+    state.studio.open = true;
+    state.studio.expanded = true;
+    ensureStudioWelcome();
   }
+  studioLayout();
+}
+
+function ensureStudioWelcome() {
+  if (state.studio.messages.length) return;
+  studioSay(WELCOME, "coach");
 }
 
 function waHtml(text) {
@@ -481,20 +539,78 @@ $("btn-refresh").onclick = async () => {
 $("test-reset").onclick = () => resetChat();
 $("chat-form").onsubmit = sendChat;
 
-function wizardSay(text, who = "bot") {
-  const log = $("wizard-log");
+function studioSay(text, who = "coach") {
+  const log = $("studio-log");
+  if (!log) return;
   const b = document.createElement("div");
   b.className = "bub " + who;
-  b.textContent = text;
+  b.innerHTML = waHtml(text);
   log.appendChild(b);
   log.scrollTop = log.scrollHeight;
+  return b;
 }
 
-function openWizard() {
-  $("wizard").classList.remove("hidden");
-  $("wizard-log").innerHTML = "";
-  wizardSay("Escreve à vontade o atendimento que você quer. Ex.: “sou um estúdio de pilates, quero receber, marcar aula e passar dúvida para a recepção”.");
-  $("wizard-input").focus();
+function openStudio({ expand = true } = {}) {
+  state.studio.open = true;
+  state.studio.expanded = expand || !hasOwnFlows();
+  ensureStudioWelcome();
+  studioLayout();
+  $("studio-input")?.focus();
+}
+
+function closeStudio() {
+  if (!hasOwnFlows()) return;
+  state.studio.open = false;
+  studioLayout();
+}
+
+function toggleStudioExpand() {
+  if (!hasOwnFlows()) return;
+  state.studio.expanded = !state.studio.expanded;
+  studioLayout();
+}
+
+function studioHistory() {
+  return state.studio.messages.map((m) => ({ role: m.role, content: m.content }));
+}
+
+async function sendStudio(text, action = "chat") {
+  if (state.studio.busy) return;
+  const pending = studioSay(action === "build" ? "Montando o fluxo…" : "…", "sys");
+  pending?.classList.add("pending");
+  state.studio.busy = true;
+  $("studio-form")?.querySelector("button")?.setAttribute("disabled", "true");
+  $("studio-build")?.setAttribute("disabled", "true");
+  try {
+    const data = await api("/v1/flows/studio", {
+      method: "POST",
+      body: JSON.stringify({ messages: studioHistory(), action }),
+    });
+    pending?.remove();
+    if (data.say) {
+      const who = data.as === "bot" ? "bot" : "coach";
+      studioSay(data.say, who);
+      state.studio.messages.push({ role: "assistant", content: data.say, as: who });
+    }
+    if (data.phase) state.studio.phase = data.phase;
+    if (data.kind === "flow") {
+      state.studio.phase = "ready";
+      toast("Fluxo montado");
+      await refresh();
+      state.studio.open = true;
+      state.studio.expanded = false;
+      openBuilder();
+    }
+    studioLayout();
+  } catch (ex) {
+    pending?.remove();
+    studioSay("Não deu: " + ex.message, "sys");
+    toast(ex.message, "err");
+  } finally {
+    state.studio.busy = false;
+    $("studio-form")?.querySelector("button")?.removeAttribute("disabled");
+    $("studio-build")?.removeAttribute("disabled");
+  }
 }
 
 $("btn-collapse-side")?.addEventListener("click", () => {
@@ -509,8 +625,10 @@ if (localStorage.getItem("glabs_side_collapsed") === "1") {
   if ($("btn-collapse-side")) $("btn-collapse-side").textContent = "›";
 }
 
-$("btn-wizard")?.addEventListener("click", openWizard);
-$("start-ai")?.addEventListener("click", openWizard);
+$("btn-wizard")?.addEventListener("click", () => openStudio({ expand: true }));
+$("btn-studio-expand")?.addEventListener("click", toggleStudioExpand);
+$("studio-expand")?.addEventListener("click", toggleStudioExpand);
+$("studio-close")?.addEventListener("click", closeStudio);
 $("start-tpl")?.addEventListener("click", () => $("tpl-pick")?.classList.toggle("hidden"));
 $("start-blank")?.addEventListener("click", () => useTemplate("blank"));
 $("tpl-pick")?.querySelectorAll("[data-tpl]").forEach((b) => {
@@ -521,31 +639,43 @@ async function useTemplate(kind) {
     await api("/v1/flows/from-template", { method: "POST", body: JSON.stringify({ template: kind }) });
     toast("Template pronto");
     await refresh();
+    state.studio.open = false;
     openBuilder();
+    studioLayout();
   } catch (e) {
     toast(e.message, "err");
   }
 }
-$("wizard-close")?.addEventListener("click", () => $("wizard").classList.add("hidden"));
-$("wizard-form")?.addEventListener("submit", async (e) => {
+$("studio-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const input = $("wizard-input");
+  const input = $("studio-input");
   const text = (input.value || "").trim();
-  if (!text) return;
+  if (!text || state.studio.busy) return;
   input.value = "";
-  wizardSay(text, "user");
-  wizardSay("Montando com a IA…");
-  try {
-    await api("/v1/flows/from-prompt", { method: "POST", body: JSON.stringify({ prompt: text }) });
-    wizardSay("Pronto. Abri o builder com o fluxo — ajuste e publique.");
-    toast("Fluxo montado pela IA");
-    $("wizard").classList.add("hidden");
-    await refresh();
-    openBuilder();
-  } catch (ex) {
-    wizardSay("Não deu: " + ex.message);
-    toast(ex.message, "err");
+  studioSay(text, "user");
+  state.studio.messages.push({ role: "user", content: text });
+  await sendStudio(text, "chat");
+});
+$("studio-build")?.addEventListener("click", async () => {
+  if (state.studio.busy) return;
+  await sendStudio("", "build");
+});
+
+window.addEventListener("message", async (ev) => {
+  if (ev.data?.type !== "glabs-flows-changed") return;
+  await refresh();
+  if (!hasOwnFlows()) {
+    state.studio.open = true;
+    state.studio.expanded = true;
+    const frame = $("flow-frame");
+    if (frame) {
+      frame.dataset.loaded = "";
+      frame.src = "about:blank";
+      frame.classList.add("hidden");
+    }
+    ensureStudioWelcome();
   }
+  studioLayout();
 });
 
 document.querySelectorAll("[data-view]").forEach((el) => {
