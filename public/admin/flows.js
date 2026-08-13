@@ -4,6 +4,10 @@
 import { typeIcon } from "./icons.js";
 
 const STORAGE_KEY = "glabs_bot_secret";
+const qs = new URLSearchParams(location.search);
+const EMBED = qs.has("embed");
+const URL_CLIENT = qs.get("client") || "";
+if (EMBED) document.body.classList.add("portal-embed");
 
 const state = {
   secret: localStorage.getItem(STORAGE_KEY) || "",
@@ -41,7 +45,7 @@ async function api(path, opts = {}) {
   const headers = new Headers(opts.headers || {});
   headers.set("accept", "application/json");
   if (state.secret) headers.set("authorization", `Bearer ${state.secret}`);
-  const clientId = sessionStorage.getItem("glabs_client_id");
+  const clientId = URL_CLIENT || sessionStorage.getItem("glabs_client_id");
   if (clientId) headers.set("x-client-id", clientId);
   if (opts.body && !headers.has("content-type")) {
     headers.set("content-type", "application/json");
@@ -292,6 +296,10 @@ async function loadAll() {
   ]);
   state.flows = flowsData.flows || [];
   state.products = productsData.products || [];
+  if (URL_CLIENT || sessionStorage.getItem("glabs_client_id")) {
+    const cid = URL_CLIENT || sessionStorage.getItem("glabs_client_id");
+    state.flows = state.flows.filter((f) => f.clientId === cid);
+  }
   state.llmConfigured = Boolean(flowsData.llmConfigured);
   $("llm-badge").textContent = state.llmConfigured
     ? "IA ligada"
@@ -302,6 +310,11 @@ async function loadAll() {
 
   renderProductSelect();
   loadVersionBadge();
+  if (EMBED) {
+    document.querySelector(".fb-icon-btn")?.classList.add("hidden");
+    $("build-badge")?.classList.add("hidden");
+    $("flow-product")?.closest(".fb-select-wrap")?.classList.add("hidden");
+  }
 
   if (!state.flow && state.flows.length) {
     selectFlow(state.flows[0].id);
@@ -385,8 +398,9 @@ function newBlankFlow() {
   state.flow = {
     id: "",
     name: "Novo fluxo",
-    product: $("flow-product")?.value || "gestor",
-    accountId: null,
+    product: state.flows[0]?.product || $("flow-product")?.value || "gestor",
+    accountId: state.flows[0]?.accountId || null,
+    clientId: URL_CLIENT || sessionStorage.getItem("glabs_client_id") || state.flows[0]?.clientId || null,
     status: "draft",
     nodes: [
       {

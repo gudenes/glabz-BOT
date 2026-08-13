@@ -48,7 +48,8 @@ function setView(view) {
   if (view === "flow") {
     const frame = $("flow-frame");
     if (frame && frame.dataset.loaded !== "1") {
-      frame.src = "/admin/flows.html?embed=1";
+      const cid = sessionStorage.getItem("glabs_client_id") || state.portal?.client?.id || "";
+      frame.src = `/admin/flows.html?embed=1&client=${encodeURIComponent(cid)}&v=10`;
       frame.dataset.loaded = "1";
     }
   }

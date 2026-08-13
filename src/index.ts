@@ -458,7 +458,12 @@ const server = createServer(async (req, res) => {
 
     // ── Flows (workflow builder) ──────────────────────────
     if (method === "GET" && path === "/v1/flows") {
-      const clientId = actingClientId(req, auth);
+      const scoped =
+        (auth.kind === "user" && auth.user.role === "client" && auth.user.clientId) ||
+        (auth.kind === "user" && auth.user.role === "glabs"
+          ? String(req.headers["x-client-id"] || url.searchParams.get("clientId") || "").trim()
+          : "");
+      const clientId = scoped || actingClientId(req, auth);
       const product =
         (clientId && (await getClient(clientId))?.slug) ||
         url.searchParams.get("product") ||

@@ -1,0 +1,139 @@
+/* Builder dentro do portal do cliente — mesma cara GLABZ */
+body.portal-embed {
+  --gold: #f0c014;
+  --gold-ink: #1a1500;
+  --ink: #161616;
+  --muted: #6b6b6b;
+  --paper: #f6f6f3;
+  --card: #ffffff;
+  --line: #ecece8;
+  font-family: Figtree, system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+}
+body.portal-embed .fb-login { display: none !important; }
+body.portal-embed .builder-app {
+  background: var(--paper);
+  color: var(--ink);
+}
+body.portal-embed .fb-top {
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+body.portal-embed .fb-name,
+body.portal-embed .fb-brand-chip,
+body.portal-embed .fb-meta-chip,
+body.portal-embed .fb-save-state {
+  color: var(--ink);
+  background: #f3f3ef;
+  border-color: var(--line);
+}
+body.portal-embed .fb-status.live {
+  background: var(--gold);
+  color: var(--gold-ink);
+  border: 0;
+}
+body.portal-embed .fb-status.draft {
+  background: #ecece8;
+  color: var(--muted);
+}
+body.portal-embed .fb-btn-primary {
+  background: var(--gold);
+  color: var(--gold-ink);
+  box-shadow: none;
+}
+body.portal-embed .fb-btn-secondary {
+  background: #111;
+  color: #fff;
+  border: 0;
+}
+body.portal-embed .fb-btn-ghost {
+  color: var(--muted);
+}
+body.portal-embed .fb-btn-ghost:hover {
+  color: var(--ink);
+  background: #f0f0ea;
+}
+body.portal-embed .fb-list,
+body.portal-embed .fb-palette,
+body.portal-embed .fb-props {
+  background: #fff;
+  border-color: var(--line);
+  color: var(--ink);
+}
+body.portal-embed .fb-aside-head,
+body.portal-embed .fb-palette-hint {
+  color: var(--muted);
+}
+body.portal-embed .flow-card {
+  background: #f7f7f3;
+  border-color: var(--line);
+  color: var(--ink);
+}
+body.portal-embed .flow-card.active {
+  border-color: var(--gold);
+  background: #fff8d6;
+}
+body.portal-embed .flow-card .m { color: var(--muted); }
+body.portal-embed .pal-item {
+  background: #f7f7f3;
+  border-color: var(--line);
+  color: var(--ink);
+}
+body.portal-embed .pal-item:hover {
+  border-color: var(--gold);
+  background: #fff;
+}
+body.portal-embed .fb-canvas-wrap {
+  background:
+    radial-gradient(circle at 1px 1px, rgba(0,0,0,0.06) 1px, transparent 0) 0 0 / 24px 24px,
+    var(--paper);
+}
+body.portal-embed .fb-canvas-label {
+  color: var(--muted);
+  background: rgba(255,255,255,0.9);
+  border-color: var(--line);
+}
+body.portal-embed .fb-node {
+  background: #fff;
+  border-color: var(--line);
+  color: var(--ink);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+}
+body.portal-embed .fb-node .b { color: var(--ink); }
+body.portal-embed .fb-node.selected {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(240, 192, 20, 0.35);
+}
+body.portal-embed .fb-node.sim-active {
+  border-color: var(--gold) !important;
+  box-shadow: 0 0 0 3px rgba(240, 192, 20, 0.4);
+}
+body.portal-embed .fb-node.sim-active::after {
+  background: var(--gold);
+  color: var(--gold-ink);
+}
+body.portal-embed .fb-props label,
+body.portal-embed .fb-hint { color: var(--muted); }
+body.portal-embed .fb-props input,
+body.portal-embed .fb-props textarea,
+body.portal-embed .fb-props select {
+  background: #fff;
+  color: var(--ink);
+  border-color: var(--line);
+}
+body.portal-embed .sim-panel {
+  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+body.portal-embed .sim-head { background: #111; color: #fff; }
+body.portal-embed .sim-chat { background: #ece5dd; }
+body.portal-embed .sim-bubble.user { background: #d9fdd3; color: #111; }
+body.portal-embed .sim-bubble.bot { background: #fff; color: #111; }
+body.portal-embed .node-add-menu {
+  background: #fff;
+  border-color: var(--line);
+  color: var(--ink);
+}
+body.portal-embed .fb-toast { color: #fff; }

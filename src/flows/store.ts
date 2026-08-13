@@ -163,13 +163,14 @@ export function listFlows(filter?: {
   clientId?: string | null;
 }): Flow[] {
   let flows = loadFlows().flows.slice();
-  if (filter?.product) {
-    flows = flows.filter((f) => f.product === filter.product);
-  }
   if (filter?.clientId) {
     flows = flows.filter(
-      (f) => f.clientId === filter.clientId || (filter.product && f.product === filter.product)
+      (f) =>
+        f.clientId === filter.clientId ||
+        (filter.product && f.product === filter.product && Boolean(f.clientId))
     );
+  } else if (filter?.product) {
+    flows = flows.filter((f) => f.product === filter.product);
   }
   if (filter?.accountId) {
     flows = flows.filter(
