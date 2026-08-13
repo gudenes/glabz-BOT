@@ -10,10 +10,13 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=8" />
+    <link rel="stylesheet" href="/admin/portal.css?v=9" />
   </head>
   <body class="portal-body">
-    <div id="impersonate" class="impersonate hidden">Você está no projeto do cliente como admin GLabs</div>
+    <div id="impersonate" class="impersonate hidden">
+      <span>Você está no projeto do cliente como <b>admin GLabs</b> — não é o login dele.</span>
+      <a href="/admin/" id="back-admin">← Voltar ao admin</a>
+    </div>
 
     <div class="app">
       <aside class="side">
@@ -143,6 +146,6 @@
       <button type="button" data-view="pubs">No ar</button>
     </nav>
 
-    <script src="/admin/portal.js?v=8" type="module"></script>
+    <script src="/admin/portal.js?v=9" type="module"></script>
   </body>
 </html>

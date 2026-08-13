@@ -47,7 +47,10 @@ function setView(view) {
   $("stage-sub").textContent = TITLES[view][1];
   if (view === "flow") {
     const frame = $("flow-frame");
-    if (frame && !frame.src) frame.src = "/admin/flows.html?embed=1";
+    if (frame && frame.dataset.loaded !== "1") {
+      frame.src = "/admin/flows.html?embed=1";
+      frame.dataset.loaded = "1";
+    }
   }
   if (view === "test") renderTestMeta();
   if (view === "pubs") renderPubs();
@@ -292,20 +295,30 @@ $("chat-form").onsubmit = sendChat;
 document.querySelectorAll("[data-view]").forEach((el) => {
   el.addEventListener("click", () => setView(el.dataset.view));
 });
+$("back-admin")?.addEventListener("click", () => {
+  sessionStorage.removeItem("glabs_client_id");
+});
 
 try {
   const me = await api("/v1/auth/me");
-  state.firstName = (me.user.name || me.user.email.split("@")[0] || "").split(" ")[0];
-  $("who-name").textContent = me.user.name || me.user.email.split("@")[0];
-  $("who-av").textContent = (me.user.name || me.user.email).slice(0, 1).toUpperCase();
-  $("who-role").textContent = me.user.role === "glabs" ? "Admin GLabs" : "Cliente";
-  $("hello").textContent = state.firstName ? `Olá, ${state.firstName}!` : "Olá!";
+  const asAdmin = me.user.role === "glabs";
   if (me.user.mustChangePassword) {
     location.replace("/admin/login.html");
-  } else if (me.user.role === "glabs" && !sessionStorage.getItem("glabs_client_id")) {
+  } else if (asAdmin && !sessionStorage.getItem("glabs_client_id")) {
     location.replace("/admin/");
   } else {
     await refresh();
+    const clientName = state.portal?.client?.name || "";
+    const person = asAdmin
+      ? (me.user.name || me.user.email.split("@")[0] || "GLabs").split(" ")[0]
+      : me.user.name && me.user.name !== clientName
+        ? me.user.name.split(" ")[0]
+        : "";
+    state.firstName = person;
+    $("who-name").textContent = asAdmin ? (me.user.name || "GLabs") : clientName || me.user.email;
+    $("who-av").textContent = (asAdmin ? (me.user.name || "G") : clientName || "C").slice(0, 1).toUpperCase();
+    $("who-role").textContent = asAdmin ? "Admin · vendo o cliente" : "Cliente";
+    $("hello").textContent = person ? `Olá, ${person}!` : "Olá!";
     setInterval(refresh, 5000);
   }
 } catch {

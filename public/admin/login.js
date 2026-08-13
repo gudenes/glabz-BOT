@@ -11,6 +11,7 @@ async function api(path, opts = {}) {
 }
 
 function go(user) {
+  if (window !== window.top) return;
   if (user.role === "client") location.replace("/admin/portal.html");
   else location.replace("/admin/");
 }

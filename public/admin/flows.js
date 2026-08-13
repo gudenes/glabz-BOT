@@ -274,9 +274,10 @@ if (state.secret) {
   fetch("/v1/auth/me", { credentials: "include", cache: "no-store" })
     .then((r) => (r.ok ? r.json() : Promise.reject()))
     .then(() => loadAll().then(showBuilder))
-    .catch(() => {
+    .catch((e) => {
       if (new URLSearchParams(location.search).has("embed")) {
-        location.replace("/admin/login.html");
+        showBuilder();
+        toast(e.message || "Não deu para abrir o fluxo", "err");
       } else {
         showLogin();
       }
