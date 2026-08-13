@@ -19,7 +19,7 @@ async function api(path, opts = {}) {
 }
 
 const WELCOME =
-  "Oi. Isto ainda não é o bot no ar — é só o briefing. Me conta o negócio e o que o atendimento precisa fazer. Quando já tiver o essencial, a gente testa o tom e só então monta o fluxo.";
+  "Oi. Isto ainda não é o bot no ar — é só o briefing. Me conta o negócio e o que o atendimento precisa fazer. Pode falar no microfone. Quando já tiver o essencial, a gente testa o tom e só então monta o fluxo.";
 
 const state = {
   portal: null,
@@ -39,6 +39,8 @@ const state = {
     messages: [],
     previewTurns: 0,
     rec: null,
+    heard: "",
+    welcomed: false,
   },
   waBoot: { running: false, done: false },
 };
@@ -168,8 +170,10 @@ function syncFlowPane() {
 }
 
 function ensureStudioWelcome() {
-  if (state.studio.messages.length) return;
+  if (state.studio.welcomed) return;
+  state.studio.welcomed = true;
   studioSay(WELCOME, "coach");
+  state.studio.messages.push({ role: "assistant", content: WELCOME });
 }
 
 function waHtml(text) {
@@ -804,48 +808,82 @@ $("studio-test")?.addEventListener("click", async () => {
   await sendStudio("Vamos testar agora", "test");
 });
 
-function stopStudioMic() {
+function setMicUi(on) {
+  $("studio-mic")?.classList.toggle("on", on);
+  $("studio-listen")?.classList.toggle("hidden", !on);
+  if ($("studio-mic-label")) $("studio-mic-label").textContent = on ? "Parar" : "Falar";
+}
+
+function stopStudioMic({ send = false } = {}) {
+  const rec = state.studio.rec;
+  state.studio.rec = null;
   try {
-    state.studio.rec?.stop();
+    rec?.stop();
   } catch {
     /* ignore */
   }
-  state.studio.rec = null;
-  $("studio-mic")?.classList.remove("on");
+  setMicUi(false);
+  const text = ($("studio-input")?.value || "").trim();
+  state.studio.heard = "";
+  if (send && text && !state.studio.busy) $("studio-form")?.requestSubmit();
 }
 
-$("studio-mic")?.addEventListener("click", () => {
+$("studio-mic")?.addEventListener("click", async () => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
-    toast("Áudio não roda neste navegador — tenta o Chrome", "err");
+    toast("Áudio neste browser não roda — usa o Chrome", "err");
     return;
   }
   if (state.studio.rec) {
-    stopStudioMic();
+    stopStudioMic({ send: true });
+    return;
+  }
+  if (!window.isSecureContext) {
+    toast("Microfone só funciona em HTTPS", "err");
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((t) => t.stop());
+  } catch {
+    toast("Autoriza o microfone no navegador para construir por áudio", "err");
     return;
   }
   const rec = new SR();
   rec.lang = "pt-BR";
   rec.interimResults = true;
-  rec.continuous = false;
+  rec.continuous = true;
+  state.studio.heard = ($("studio-input")?.value || "").trim();
+  if (state.studio.heard) state.studio.heard += " ";
   rec.onresult = (ev) => {
-    let t = "";
-    for (const r of ev.results) t += r[0].transcript;
-    if ($("studio-input")) $("studio-input").value = t;
+    let final = "";
+    let interim = "";
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const piece = ev.results[i][0].transcript;
+      if (ev.results[i].isFinal) final += piece + " ";
+      else interim += piece;
+    }
+    if (final) state.studio.heard += final;
+    if ($("studio-input")) $("studio-input").value = (state.studio.heard + interim).trim();
   };
   rec.onend = () => {
-    const wasOn = Boolean(state.studio.rec);
-    stopStudioMic();
-    const text = ($("studio-input")?.value || "").trim();
-    if (wasOn && text && !state.studio.busy) $("studio-form")?.requestSubmit();
+    if (state.studio.rec === rec) {
+      try {
+        rec.start();
+      } catch {
+        stopStudioMic({ send: false });
+      }
+    }
   };
-  rec.onerror = () => {
-    stopStudioMic();
-    toast("Não deu para ouvir — tenta de novo", "err");
+  rec.onerror = (ev) => {
+    if (ev.error === "no-speech" || ev.error === "aborted") return;
+    stopStudioMic({ send: false });
+    toast(ev.error === "not-allowed" ? "Autoriza o microfone no Chrome" : "Não deu para ouvir", "err");
   };
   state.studio.rec = rec;
-  $("studio-mic")?.classList.add("on");
+  setMicUi(true);
   rec.start();
+  toast("Pode falar o atendimento");
 });
 
 window.addEventListener("message", async (ev) => {

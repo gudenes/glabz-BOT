@@ -581,13 +581,23 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
   background: #111;
   border-top: 1px solid rgba(255,255,255,0.08);
 }
+.studio-listen {
+  margin: 0;
+  padding: 8px 14px 0;
+  background: #111;
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 700;
+}
 .btn-mic {
-  width: 42px; height: 42px; flex-shrink: 0;
+  height: 42px; flex-shrink: 0;
   border: 1px solid rgba(255,255,255,0.1);
   background: #1c1c1c;
   color: #f4f4f0;
   border-radius: 12px;
-  display: grid; place-items: center;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 0 12px;
+  font: inherit; font-weight: 700; font-size: 13px;
   cursor: pointer;
 }
 .btn-mic:hover { color: var(--gold); border-color: var(--gold); }

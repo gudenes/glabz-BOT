@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=18" />
+    <link rel="stylesheet" href="/admin/portal.css?v=19" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -141,11 +141,13 @@
               <button type="button" class="btn-lime" id="studio-build">Montar o fluxo</button>
               <span>o ensaio acabou — agora o feedback vale</span>
             </div>
+            <p class="studio-listen hidden" id="studio-listen">Ouvindo… toca em Falar de novo para enviar</p>
             <form class="studio-form" id="studio-form">
-              <button type="button" class="btn-mic" id="studio-mic" title="Falar" aria-label="Falar">
+              <button type="button" class="btn-mic" id="studio-mic" title="Construir por áudio">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                <span id="studio-mic-label">Falar</span>
               </button>
-              <input id="studio-input" type="text" placeholder="Fala ou escreve o negócio…" autocomplete="off" />
+              <input id="studio-input" type="text" placeholder="Fala o atendimento ou escreve…" autocomplete="off" />
               <button class="btn-lime" type="submit">Enviar</button>
             </form>
             <div class="studio-alts" id="studio-alts">
@@ -241,6 +243,6 @@
       <button type="button" data-view="test">Testar</button>
     </nav>
 
-    <script src="/admin/portal.js?v=18" type="module"></script>
+    <script src="/admin/portal.js?v=19" type="module"></script>
   </body>
 </html>
