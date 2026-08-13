@@ -44,11 +44,14 @@ export type Flow = {
   product: string;
   /** null = todas as accounts do product */
   accountId: string | null;
+  /** cliente do portal (postgres); opcional nos seeds */
+  clientId?: string | null;
   status: FlowStatus;
   nodes: FlowNode[];
   edges: FlowEdge[];
   createdAt: string;
   updatedAt: string;
+  publishedAt?: string | null;
 };
 
 /** Estado por conversa (account + telefone). */

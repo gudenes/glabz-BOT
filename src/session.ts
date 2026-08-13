@@ -333,8 +333,7 @@ export async function disconnect(accountId: string): Promise<SessionSnapshot> {
 
 async function postWebhook(accountId: string, payload: Record<string, unknown>): Promise<void> {
   const acc = getAccount(accountId);
-  if (!acc?.webhookUrl) {
-    console.warn(`[wa:${accountId}] sem webhookUrl — evento descartado`);
+  if (!acc?.webhookUrl || acc.webhookUrl.includes("glabs.internal")) {
     return;
   }
   const secret = botSecret();

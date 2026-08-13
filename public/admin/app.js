@@ -35,7 +35,7 @@ async function api(path, opts = {}) {
   if (opts.body && !headers.has("content-type")) {
     headers.set("content-type", "application/json");
   }
-  const res = await fetch(path, { ...opts, headers, cache: "no-store" });
+  const res = await fetch(path, { ...opts, headers, cache: "no-store", credentials: "include" });
   let data = null;
   try {
     data = await res.json();
@@ -219,13 +219,14 @@ function render() {
   document.querySelectorAll(".nav-item").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tab === state.tab);
   });
-  ["overview", "accounts", "products"].forEach((t) => {
-    $(`tab-${t}`).classList.toggle("hidden", t !== state.tab);
+  ["overview", "accounts", "products", "clients"].forEach((t) => {
+    $(`tab-${t}`)?.classList.toggle("hidden", t !== state.tab);
   });
   const titles = {
     overview: ["Overview", "Sessões e saúde do canal"],
     accounts: ["Contas", "Uma conta = um número WhatsApp"],
     products: ["Products", "Apps GLabs que consomem o bot"],
+    clients: ["Clientes", "Onboarding e acesso ao portal"],
   };
   $("page-title").textContent = titles[state.tab][0];
   $("page-sub").textContent = titles[state.tab][1];
@@ -479,10 +480,16 @@ loginSecret.addEventListener("keydown", (e) => {
   if (e.key === "Enter") $("login-btn").click();
 });
 
-$("logout-btn").addEventListener("click", () => {
+$("logout-btn").addEventListener("click", async () => {
   state.secret = "";
   localStorage.removeItem(STORAGE_KEY);
-  showLogin();
+  sessionStorage.removeItem("glabs_client_id");
+  try {
+    await fetch("/v1/auth/logout", { method: "POST", credentials: "include", body: "{}" });
+  } catch {
+    /* ignore */
+  }
+  location.replace("/admin/login.html");
 });
 
 $("refresh-btn").addEventListener("click", () => void loadDashboard());
@@ -575,10 +582,94 @@ $("form-product").addEventListener("submit", async (e) => {
   }
 });
 
+async function loadClients() {
+  const list = $("clients-list");
+  if (!list) return;
+  try {
+    const data = await api("/v1/clients");
+    const clients = data.clients || [];
+    if (!clients.length) {
+      list.innerHTML = `<p class="muted">Nenhum cliente ainda. Crie o primeiro para mandar o acesso.</p>`;
+      return;
+    }
+    list.innerHTML = clients
+      .map(
+        (c) => `<div class="account-card">
+          <div>
+            <strong>${escapeHtml(c.name)}</strong>
+            <div class="muted sm mono">${escapeHtml(c.slug)}</div>
+          </div>
+          <button type="button" class="btn secondary sm" data-open-portal="${escapeAttr(c.id)}">Abrir projeto</button>
+        </div>`
+      )
+      .join("");
+  } catch (e) {
+    list.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest?.("[data-open-portal]");
+  if (!btn) return;
+  sessionStorage.setItem("glabs_client_id", btn.dataset.openPortal);
+  location.href = "/admin/portal.html";
+});
+
+$("new-client-btn")?.addEventListener("click", () => $("modal-client")?.showModal());
+
+$("form-client")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = $("client-form-err");
+  err?.classList.add("hidden");
+  try {
+    const data = await api("/v1/clients", {
+      method: "POST",
+      body: JSON.stringify({
+        name: $("cli-name").value.trim(),
+        email: $("cli-email").value.trim(),
+        template: $("cli-template").value,
+      }),
+    });
+    $("modal-client").close();
+    const pass = data.tempPassword;
+    toast(`Cliente criado. Senha temporária: ${pass}`);
+    alert(
+      `Cliente: ${data.client.name}\nE-mail: ${data.user.email}\nSenha temporária: ${pass}\n\nMande isso para o cliente. Ele troca no primeiro acesso.`
+    );
+    $("cli-name").value = "";
+    $("cli-email").value = "";
+    await loadClients();
+  } catch (ex) {
+    if (err) {
+      err.textContent = ex.message;
+      err.classList.remove("hidden");
+    } else toast(ex.message, "err");
+  }
+});
+
 // ── Boot ─────────────────────────────────────────────────
 async function boot() {
+  try {
+    const me = await fetch("/v1/auth/me", { credentials: "include", cache: "no-store" }).then((r) =>
+      r.ok ? r.json() : null
+    );
+    if (me?.user?.role === "client") {
+      location.replace("/admin/portal.html");
+      return;
+    }
+    if (me?.user?.role === "glabs") {
+      showApp();
+      await loadDashboard();
+      await loadClients();
+      startPoll();
+      return;
+    }
+  } catch {
+    /* cai no secret/login */
+  }
+
   if (!state.secret) {
-    showLogin();
+    location.replace("/admin/login.html");
     return;
   }
   try {
@@ -589,7 +680,7 @@ async function boot() {
   } catch {
     state.secret = "";
     localStorage.removeItem(STORAGE_KEY);
-    showLogin();
+    location.replace("/admin/login.html");
   }
 }
 

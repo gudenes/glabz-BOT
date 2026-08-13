@@ -26,6 +26,7 @@ export type AccountRecord = {
   /** URL do webhook no app cliente (inbound + status). */
   webhookUrl: string;
   label: string | null;
+  clientId?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -133,6 +134,7 @@ export function upsertProduct(input: {
 export function listAccounts(filter?: {
   product?: string;
   externalTenantId?: string;
+  clientId?: string;
 }): AccountRecord[] {
   let list = load().accounts;
   if (filter?.product) {
@@ -141,6 +143,11 @@ export function listAccounts(filter?: {
   }
   if (filter?.externalTenantId) {
     list = list.filter((a) => a.externalTenantId === filter.externalTenantId);
+  }
+  if (filter?.clientId) {
+    list = list.filter(
+      (a) => a.clientId === filter.clientId || a.externalTenantId === filter.clientId
+    );
   }
   return list;
 }
@@ -170,6 +177,8 @@ export function ensureAccount(input: {
   externalTenantId: string;
   webhookUrl?: string | null;
   label?: string | null;
+  allowEmptyWebhook?: boolean;
+  clientId?: string | null;
 }): AccountRecord {
   const productSlug = normalizeProductSlug(input.product);
   if (!productSlug) throw new Error("product inválido");
@@ -195,16 +204,17 @@ export function ensureAccount(input: {
     (a) => a.product === productSlug && a.externalTenantId === tenantId
   );
 
-  const webhook =
+  let webhook =
     normalizeUrl(input.webhookUrl) ||
     existing?.webhookUrl ||
     product.defaultWebhookUrl;
 
-  if (!webhook) {
+  if (!webhook && !input.allowEmptyWebhook) {
     throw new Error(
       "webhookUrl obrigatório (informe na account ou defaultWebhookUrl no product)"
     );
   }
+  if (!webhook) webhook = "https://glabs.internal/noop";
 
   if (existing) {
     // Não deixa dev local (localhost) sobrescrever webhook de produção
@@ -217,6 +227,7 @@ export function ensureAccount(input: {
       existing.webhookUrl = webhook;
     }
     if (input.label !== undefined) existing.label = input.label?.trim() || null;
+    if (input.clientId) existing.clientId = input.clientId;
     existing.updatedAt = now;
     save(reg);
     return existing;
@@ -228,6 +239,7 @@ export function ensureAccount(input: {
     externalTenantId: tenantId,
     webhookUrl: webhook,
     label: input.label?.trim() || null,
+    clientId: input.clientId ?? null,
     createdAt: now,
     updatedAt: now,
   };

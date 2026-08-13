@@ -29,6 +29,25 @@ import {
   listenPort,
   llmApiKey,
 } from "./config.js";
+import { hasDatabase, migrate } from "./db.js";
+import {
+  SESSION_COOKIE,
+  clearSessionCookieHeader,
+  getSessionUser,
+  login as loginUser,
+  logout as logoutUser,
+  parseCookie,
+  sessionCookieHeader,
+  seedAdmin,
+  updatePassword,
+  type UserRecord,
+} from "./auth.js";
+import {
+  getClient,
+  listClientUsers,
+  listClients,
+  provisionClient,
+} from "./clients.js";
 import {
   deleteAccount,
   ensureAccount,
@@ -101,6 +120,51 @@ function json(res: ServerResponse, status: number, body: unknown) {
 
 function unauthorized(res: ServerResponse) {
   json(res, 401, { ok: false, reason: "unauthorized" });
+}
+
+function isSecureReq(req: IncomingMessage): boolean {
+  const proto = String(req.headers["x-forwarded-proto"] || "");
+  return proto === "https" || isProduction();
+}
+
+function setCookie(res: ServerResponse, header: string) {
+  const prev = res.getHeader("set-cookie");
+  if (!prev) res.setHeader("set-cookie", header);
+  else if (Array.isArray(prev)) res.setHeader("set-cookie", [...prev, header]);
+  else res.setHeader("set-cookie", [String(prev), header]);
+}
+
+type AuthCtx =
+  | { kind: "secret" }
+  | { kind: "user"; user: UserRecord };
+
+async function resolveAuth(req: IncomingMessage): Promise<AuthCtx | null> {
+  const header = req.headers.authorization ?? "";
+  if (SECRET && (header === `Bearer ${SECRET}` || req.headers["x-bot-secret"] === SECRET || req.headers["x-worker-secret"] === SECRET)) {
+    return { kind: "secret" };
+  }
+  const sid = parseCookie(req.headers.cookie, SESSION_COOKIE);
+  if (sid) {
+    const user = await getSessionUser(sid);
+    if (user) return { kind: "user", user };
+  }
+  if (!SECRET && !hasDatabase()) return { kind: "secret" };
+  return null;
+}
+
+function actingClientId(req: IncomingMessage, auth: AuthCtx): string | null {
+  if (auth.kind === "user" && auth.user.role === "client") return auth.user.clientId;
+  if (auth.kind === "user" && auth.user.role === "glabs") {
+    const raw = String(req.headers["x-client-id"] || "").trim();
+    return raw || null;
+  }
+  return null;
+}
+
+function requireGlabs(auth: AuthCtx | null): auth is AuthCtx {
+  if (!auth) return false;
+  if (auth.kind === "secret") return true;
+  return auth.kind === "user" && auth.user.role === "glabs";
 }
 
 function authorized(req: IncomingMessage): boolean {
@@ -198,7 +262,44 @@ const server = createServer(async (req, res) => {
       if (serveStatic(res, path === "/admin" ? "/admin" : path)) return;
     }
 
-    if (!authorized(req)) {
+    // ── Auth (público) ────────────────────────────────────
+    if (method === "POST" && path === "/v1/auth/login") {
+      if (!hasDatabase()) {
+        json(res, 503, { ok: false, reason: "Postgres não configurado" });
+        return;
+      }
+      const body = parseJson<{ email?: string; password?: string }>(await readBody(req));
+      const result = await loginUser(body?.email || "", body?.password || "");
+      if (!result) {
+        json(res, 401, { ok: false, reason: "e-mail ou senha inválidos" });
+        return;
+      }
+      setCookie(res, sessionCookieHeader(result.sessionId, isSecureReq(req)));
+      json(res, 200, { ok: true, user: result.user });
+      return;
+    }
+
+    if (method === "POST" && path === "/v1/auth/logout") {
+      const sid = parseCookie(req.headers.cookie, SESSION_COOKIE);
+      if (sid) await logoutUser(sid);
+      setCookie(res, clearSessionCookieHeader(isSecureReq(req)));
+      json(res, 200, { ok: true });
+      return;
+    }
+
+    if (method === "GET" && path === "/v1/auth/me") {
+      const sid = parseCookie(req.headers.cookie, SESSION_COOKIE);
+      const user = sid ? await getSessionUser(sid) : null;
+      if (!user) {
+        unauthorized(res);
+        return;
+      }
+      json(res, 200, { ok: true, user, db: hasDatabase() });
+      return;
+    }
+
+    const auth = await resolveAuth(req);
+    if (!auth) {
       unauthorized(res);
       return;
     }
@@ -218,10 +319,94 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (method === "POST" && path === "/v1/auth/change-password") {
+      if (auth.kind !== "user") {
+        json(res, 400, { ok: false, reason: "só usuários com senha" });
+        return;
+      }
+      const body = parseJson<{ password?: string }>(await readBody(req));
+      try {
+        await updatePassword(auth.user.id, body?.password || "");
+        json(res, 200, { ok: true });
+      } catch (e) {
+        json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "invalid" });
+      }
+      return;
+    }
+
+    // ── Clients (GLabs cria; portal lê o próprio) ─────────
+    if (method === "GET" && path === "/v1/clients") {
+      if (!requireGlabs(auth)) {
+        unauthorized(res);
+        return;
+      }
+      const clients = await listClients();
+      json(res, 200, { ok: true, clients });
+      return;
+    }
+
+    if (method === "POST" && path === "/v1/clients") {
+      if (!requireGlabs(auth)) {
+        unauthorized(res);
+        return;
+      }
+      const body = parseJson<{ name?: string; email?: string; template?: string }>(
+        await readBody(req)
+      );
+      try {
+        const created = await provisionClient({
+          name: body?.name || "",
+          email: body?.email || "",
+          template: body?.template,
+        });
+        json(res, 200, { ok: true, ...created });
+      } catch (e) {
+        json(res, 400, {
+          ok: false,
+          reason: e instanceof Error ? e.message : "invalid",
+        });
+      }
+      return;
+    }
+
+    if (method === "GET" && path === "/v1/portal") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const client = await getClient(clientId);
+      if (!client) {
+        json(res, 404, { ok: false, reason: "cliente não encontrado" });
+        return;
+      }
+      const accounts = listAccounts({ clientId }).map((account) => ({
+        account,
+        session: snapshot(account.id),
+      }));
+      const flows = listFlows({ product: client.slug, clientId });
+      const live = flows.find((f) => f.status === "live") || null;
+      const users = await listClientUsers(client.id);
+      json(res, 200, {
+        ok: true,
+        client,
+        accounts,
+        flows,
+        liveFlow: live
+          ? { id: live.id, name: live.name, status: live.status, publishedAt: live.publishedAt, updatedAt: live.updatedAt }
+          : null,
+        users: users.map((u) => ({ id: u.id, email: u.email, name: u.name })),
+        llmConfigured: Boolean(llmApiKey()),
+        impersonating: auth.kind === "user" && auth.user.role === "glabs",
+      });
+      return;
+    }
+
     // ── Dashboard (accounts + live session) ───────────────
     if (method === "GET" && path === "/v1/dashboard") {
+      const clientId = actingClientId(req, auth);
       const products = listProducts();
-      const accounts = listAccounts().map((account) => ({
+      const accounts = listAccounts(clientId ? { clientId } : undefined).map((account) => ({
         account,
         session: snapshot(account.id),
       }));
@@ -273,12 +458,17 @@ const server = createServer(async (req, res) => {
 
     // ── Flows (workflow builder) ──────────────────────────
     if (method === "GET" && path === "/v1/flows") {
-      const product = url.searchParams.get("product") ?? undefined;
+      const clientId = actingClientId(req, auth);
+      const product =
+        (clientId && (await getClient(clientId))?.slug) ||
+        url.searchParams.get("product") ||
+        undefined;
       const accountId = url.searchParams.get("accountId");
       json(res, 200, {
         ok: true,
         flows: listFlows({
           product,
+          clientId,
           accountId: accountId === "" ? null : accountId ?? undefined,
         }),
         llmConfigured: Boolean(llmApiKey()),
@@ -297,11 +487,14 @@ const server = createServer(async (req, res) => {
         edges?: FlowEdge[];
       }>(await readBody(req));
       try {
+        const clientId = actingClientId(req, auth);
+        const client = clientId ? await getClient(clientId) : null;
         const flow = saveFlow({
           id: body?.id,
           name: body?.name || "Novo fluxo",
-          product: body?.product || "gestor",
+          product: client?.slug || body?.product || "gestor",
           accountId: body?.accountId ?? null,
+          clientId,
           status: body?.status,
           nodes: body?.nodes || [],
           edges: body?.edges || [],
@@ -741,10 +934,18 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    `[glabs-bot] :${PORT} data=${dataDir()} auth=${authDir()} public=${PUBLIC_DIR} production=${isProduction()}`
-  );
-  console.log(`[glabs-bot] admin UI → http://0.0.0.0:${PORT}/admin`);
-  void restoreSessionsFromDisk();
-});
+void (async () => {
+  try {
+    await migrate();
+    await seedAdmin();
+  } catch (e) {
+    console.error("[glabs-bot] migrate/seed:", e);
+  }
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(
+      `[glabs-bot] :${PORT} data=${dataDir()} auth=${authDir()} public=${PUBLIC_DIR} production=${isProduction()} db=${hasDatabase()}`
+    );
+    console.log(`[glabs-bot] admin UI → http://0.0.0.0:${PORT}/admin`);
+    void restoreSessionsFromDisk();
+  });
+})();

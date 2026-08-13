@@ -160,10 +160,16 @@ export function restoreFlowVersion(flowId: string, versionId: string): Flow | nu
 export function listFlows(filter?: {
   product?: string;
   accountId?: string | null;
+  clientId?: string | null;
 }): Flow[] {
   let flows = loadFlows().flows.slice();
   if (filter?.product) {
     flows = flows.filter((f) => f.product === filter.product);
+  }
+  if (filter?.clientId) {
+    flows = flows.filter(
+      (f) => f.clientId === filter.clientId || (filter.product && f.product === filter.product)
+    );
   }
   if (filter?.accountId) {
     flows = flows.filter(
@@ -193,6 +199,7 @@ export function saveFlow(input: {
   name: string;
   product: string;
   accountId?: string | null;
+  clientId?: string | null;
   status?: "draft" | "live";
   nodes: FlowNode[];
   edges: FlowEdge[];
@@ -218,16 +225,20 @@ export function saveFlow(input: {
     }
   }
 
+  const status = input.status ?? existing?.status ?? "draft";
   const flow: Flow = {
     id,
     name: input.name.trim() || "Sem nome",
     product: input.product.trim() || "gestor",
-    accountId: input.accountId ?? null,
-    status: input.status ?? existing?.status ?? "draft",
+    accountId: input.accountId ?? existing?.accountId ?? null,
+    clientId: input.clientId ?? existing?.clientId ?? null,
+    status,
     nodes: input.nodes ?? [],
     edges: input.edges ?? [],
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
+    publishedAt:
+      status === "live" ? now : status === "draft" ? existing?.publishedAt ?? null : existing?.publishedAt ?? null,
   };
 
   if (existing) {

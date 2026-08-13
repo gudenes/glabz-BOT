@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Meu WhatsApp · Glabs Bot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/admin/portal.css?v=6" />
+  </head>
+  <body>
+    <div id="impersonate" class="impersonate hidden">Você está no projeto do cliente como admin GLabs</div>
+    <div class="portal">
+      <aside class="rail">
+        <button class="rail-btn on" data-view="status" title="WhatsApp" id="tab-status">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a8 8 0 0 0-6.9 12l-1 3.8 3.9-1A8 8 0 1 0 12 3z"/></svg>
+        </button>
+        <button class="rail-btn" data-view="flow" title="Fluxo" id="tab-flow">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+        </button>
+        <div class="rail-spacer"></div>
+        <button class="rail-btn" id="btn-logout" title="Sair">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+        </button>
+      </aside>
+
+      <aside class="plist">
+        <div class="plist-head">
+          <h2 id="client-name">Projeto</h2>
+        </div>
+        <p class="plist-sub" id="client-sub">Carregando…</p>
+        <div class="row-card on" data-view="status">
+          <strong>WhatsApp</strong>
+          <small id="row-wa">conexão</small>
+        </div>
+        <div class="row-card" data-view="flow">
+          <strong>Fluxo</strong>
+          <small id="row-flow">montar atendimento</small>
+        </div>
+      </aside>
+
+      <section class="stage">
+        <header class="stage-head">
+          <div>
+            <h3 id="stage-title">WhatsApp</h3>
+            <p id="stage-sub">Conecte o número e publique o fluxo</p>
+          </div>
+          <span id="conn-pill" class="pill off">—</span>
+        </header>
+        <div class="stage-body" id="view-status">
+          <div class="status-wrap">
+            <div class="qr-card">
+              <h4 id="qr-title">Conectar WhatsApp</h4>
+              <p class="hint" id="qr-hint">Abra o WhatsApp no celular → Aparelhos conectados → Conectar.</p>
+              <div id="qr-box" style="margin:16px 0"></div>
+              <div class="stat-grid">
+                <div class="stat"><span>Número</span><b id="st-phone">—</b></div>
+                <div class="stat"><span>Status</span><b id="st-status">—</b></div>
+                <div class="stat"><span>Fluxo no ar</span><b id="st-live">Nenhum publicado</b></div>
+                <div class="stat"><span>Atualizado</span><b id="st-updated">—</b></div>
+              </div>
+              <div style="display:flex;gap:8px;justify-content:center;margin-top:16px">
+                <button class="btn-wa" id="btn-connect" type="button">Gerar QR</button>
+                <button class="btn-ghost" id="btn-disconnect" type="button">Desconectar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <iframe id="view-flow" class="hidden" title="Editor de fluxo" style="border:0;width:100%;height:100%;background:#0a0c10"></iframe>
+      </section>
+    </div>
+    <script src="/admin/portal.js?v=6" type="module"></script>
+  </body>
+</html>

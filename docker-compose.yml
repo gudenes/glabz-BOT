@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: glabs
+      POSTGRES_PASSWORD: glabs
+      POSTGRES_DB: glabs_bot
+    ports:
+      - "5433:5432"
+    volumes:
+      - glabs_bot_pg:/var/lib/postgresql/data
+
+volumes:
+  glabs_bot_pg:

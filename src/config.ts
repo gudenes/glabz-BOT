@@ -97,3 +97,12 @@ export function llmBaseUrl(): string {
 export function llmModel(): string {
   return process.env.GLABS_LLM_MODEL?.trim() || "grok-4-1-fast-non-reasoning";
 }
+
+export function databaseUrl(): string {
+  return (
+    process.env.DATABASE_URL?.trim() ||
+    process.env.DATABASE_PRIVATE_URL?.trim() ||
+    process.env.POSTGRES_URL?.trim() ||
+    ""
+  );
+}

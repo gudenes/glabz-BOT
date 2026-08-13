@@ -57,13 +57,23 @@ curl -s -X POST "$BOT_URL/v1/accounts" \
 
 `type: "status"` para ticks de entrega.
 
-## Painel admin
+## Painel e portal
 
-UI embutida (sem app extra):
+- **Login:** `https://glabs-bot-production.up.railway.app/admin/login.html`
+- GLabs (`role=glabs`) → admin: clientes, contas, fluxos
+- Cliente (`role=client`) → portal (QR + fluxo + status)
+- Admin → **Novo cliente** gera e-mail + senha temporária
+- **Abrir projeto** entra no portal daquele cliente (sem usar a senha dele)
 
-- **URL:** `https://glabs-bot-production.up.railway.app/admin`
-- Login com o mesmo `GLABS_BOT_SECRET`
-- Overview, products, contas, QR, envio teste, perfil, remover conta
+Local com Postgres:
+
+```bash
+docker compose up -d
+export DATABASE_URL=postgres://glabs:glabs@127.0.0.1:5433/glabs_bot
+export GLABS_ADMIN_EMAIL=admin@glabs.local
+export GLABS_ADMIN_PASSWORD=glabs-admin
+npm run dev
+```
 
 ## Local
 
@@ -93,6 +103,9 @@ Admin visual: **`/admin/flows.html`**
 
 | Var | Descrição |
 |-----|-----------|
+| `DATABASE_URL` | Postgres (clientes, usuários, sessões). Sem isso, login/portal não sobe. |
+| `GLABS_ADMIN_EMAIL` | Primeiro usuário GLabs (seed) |
+| `GLABS_ADMIN_PASSWORD` | Senha do admin seed |
 | `GLABS_BOT_SECRET` | Bearer entre bot e apps |
 | `AUTH_DIR` / `DATA_DIR` | Root de dados (default `/data` no Railway) |
 | `PORT` | Default 3099 |

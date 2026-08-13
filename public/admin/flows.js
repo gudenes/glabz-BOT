@@ -20,6 +20,7 @@ const state = {
   simOpen: false,
   simState: null, // { nodeId, waitingFor, vars, mode, finished }
   simActiveNodeId: null,
+  simVisitedIds: [],
   simBusy: false,
   /** Histórico de versões */
   historyOpen: false,
@@ -40,10 +41,12 @@ async function api(path, opts = {}) {
   const headers = new Headers(opts.headers || {});
   headers.set("accept", "application/json");
   if (state.secret) headers.set("authorization", `Bearer ${state.secret}`);
+  const clientId = sessionStorage.getItem("glabs_client_id");
+  if (clientId) headers.set("x-client-id", clientId);
   if (opts.body && !headers.has("content-type")) {
     headers.set("content-type", "application/json");
   }
-  const res = await fetch(path, { ...opts, headers, cache: "no-store" });
+  const res = await fetch(path, { ...opts, headers, cache: "no-store", credentials: "include" });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) throw Object.assign(new Error("unauthorized"), { status: 401 });
   if (!res.ok) throw new Error(data.reason || `HTTP ${res.status}`);
@@ -267,6 +270,17 @@ if (state.secret) {
   loadAll()
     .then(showBuilder)
     .catch(() => showLogin());
+} else {
+  fetch("/v1/auth/me", { credentials: "include", cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : Promise.reject()))
+    .then(() => loadAll().then(showBuilder))
+    .catch(() => {
+      if (new URLSearchParams(location.search).has("embed")) {
+        location.replace("/admin/login.html");
+      } else {
+        showLogin();
+      }
+    });
 }
 
 // ── Data ─────────────────────────────────────────────────
@@ -521,7 +535,8 @@ function renderCanvas() {
       n.type +
       (state.selectedNodeId === n.id ? " selected" : "") +
       (state.linkFrom === n.id ? " link-from" : "") +
-      (state.simActiveNodeId === n.id ? " sim-active" : "");
+      (state.simActiveNodeId === n.id ? " sim-active" : "") +
+      (state.simVisitedIds?.includes(n.id) && state.simActiveNodeId !== n.id ? " sim-visited" : "");
     el.style.left = n.x + "px";
     el.style.top = n.y + "px";
     el.dataset.id = n.id;
@@ -1266,6 +1281,7 @@ function closeSim() {
 function resetSim() {
   state.simState = null;
   state.simActiveNodeId = null;
+  state.simVisitedIds = [];
   const chat = $("sim-chat");
   chat.innerHTML = "";
   const empty = document.createElement("div");
@@ -1312,15 +1328,57 @@ function updateSimStatus(extra) {
   el.textContent = extra || "Digite como o cliente";
 }
 
-function appendSimBubble(kind, text) {
+function appendSimBubble(kind, text, nodeId) {
   const chat = $("sim-chat");
   const empty = $("sim-empty");
   if (empty) empty.remove();
   const b = document.createElement("div");
   b.className = "sim-bubble " + kind;
   b.textContent = text;
+  if (nodeId) {
+    b.dataset.nodeId = nodeId;
+    b.addEventListener("mouseenter", () => {
+      state.simActiveNodeId = nodeId;
+      renderCanvas();
+    });
+  }
   chat.appendChild(b);
   chat.scrollTop = chat.scrollHeight;
+  return b;
+}
+
+function typeLabelPt(type) {
+  return (
+    {
+      trigger: "Início",
+      message: "Mensagem",
+      ask: "Pergunta",
+      llm_intent: "Intenção",
+      action: "Ação",
+      condition: "Condição",
+      handoff: "Atendente",
+      end: "Fim",
+    }[type] || type
+  );
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function playTrace(trace) {
+  for (const step of trace) {
+    if (!state.simVisitedIds.includes(step.nodeId)) state.simVisitedIds.push(step.nodeId);
+    state.simActiveNodeId = step.nodeId;
+    renderCanvas();
+    const nodeEl = document.querySelector(`.fb-node[data-id="${step.nodeId}"]`);
+    nodeEl?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    const label = typeLabelPt(step.type);
+    const detail = step.detail ? ` · ${step.detail}` : "";
+    appendSimBubble("sys", `${label}${detail}`, step.nodeId);
+    updateSimStatus(`Agora: ${label}`);
+    await sleep(420);
+  }
 }
 
 function renderSimMeta(data) {
@@ -1385,48 +1443,34 @@ async function sendSimMessage() {
 
     state.simState = data.state || null;
 
-    // último nó do trace = onde o fluxo parou
     const trace = data.trace || [];
     if (trace.length) {
-      state.simActiveNodeId = trace[trace.length - 1].nodeId;
+      await playTrace(trace);
     } else if (data.state?.nodeId) {
       state.simActiveNodeId = data.state.nodeId;
+      if (!state.simVisitedIds.includes(data.state.nodeId)) {
+        state.simVisitedIds.push(data.state.nodeId);
+      }
     }
 
     for (const reply of data.replies || []) {
-      appendSimBubble("bot", reply);
+      appendSimBubble("bot", reply, state.simActiveNodeId);
     }
 
     if (data.handoff) {
       appendSimBubble(
         "handoff",
         "→ Passou para atendente humano" +
-          (data.handoffReason ? ` (${data.handoffReason})` : "")
+          (data.handoffReason ? ` (${data.handoffReason})` : ""),
+        state.simActiveNodeId
       );
     } else if (!data.replies?.length && !trace.length) {
       appendSimBubble("sys", "Sem resposta do fluxo");
     }
 
-    // mini-trace
-    if (trace.length > 1) {
-      const path = trace
-        .map((t) => t.detail || t.type)
-        .filter(Boolean)
-        .join(" → ");
-      if (path) appendSimBubble("sys", path);
-    }
-
     renderSimMeta(data);
     updateSimStatus();
     renderCanvas();
-
-    // scroll canvas para o nó ativo
-    if (state.simActiveNodeId) {
-      const nodeEl = document.querySelector(
-        `.fb-node[data-id="${state.simActiveNodeId}"]`
-      );
-      nodeEl?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-    }
   } catch (e) {
     appendSimBubble("sys", "Erro: " + e.message);
     toast(e.message, "err");

@@ -55,6 +55,7 @@
             <button type="button" class="nav-item active" data-tab="overview">Overview</button>
             <button type="button" class="nav-item" data-tab="accounts">Contas</button>
             <button type="button" class="nav-item" data-tab="products">Products</button>
+            <button type="button" class="nav-item" data-tab="clients">Clientes</button>
             <a class="nav-item" href="/admin/flows.html" style="text-decoration:none">Fluxos</a>
           </nav>
           <div class="sidebar-foot">
@@ -101,6 +102,17 @@
               </select>
             </div>
             <div id="accounts-list" class="account-list"></div>
+          </div>
+
+          <!-- Clients -->
+          <div id="tab-clients" class="tab hidden">
+            <div class="panel">
+              <div class="panel-head">
+                <h3>Clientes (portal)</h3>
+                <button type="button" id="new-client-btn" class="btn primary sm">Novo cliente</button>
+              </div>
+              <div id="clients-list" class="account-list"></div>
+            </div>
           </div>
 
           <!-- Products -->
@@ -184,6 +196,34 @@
         <div class="modal-actions">
           <button type="button" class="btn secondary" data-close>Cancelar</button>
           <button type="submit" class="btn primary">Salvar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="modal-client" class="modal">
+      <form method="dialog" id="form-client" class="modal-card">
+        <h3>Novo cliente</h3>
+        <p class="muted">Cria o projeto, um fluxo e o usuário com senha temporária.</p>
+        <label class="field">
+          <span>Nome do negócio</span>
+          <input id="cli-name" class="input" required placeholder="Estúdio Ana" />
+        </label>
+        <label class="field">
+          <span>E-mail de quem vai entrar</span>
+          <input id="cli-email" class="input" type="email" required placeholder="ana@estudio.com" />
+        </label>
+        <label class="field">
+          <span>Template do fluxo</span>
+          <select id="cli-template" class="input">
+            <option value="pilates">Marcar sessão</option>
+            <option value="consulta">Marcar consulta</option>
+            <option value="blank">Em branco</option>
+          </select>
+        </label>
+        <p id="client-form-err" class="err hidden"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn secondary" data-close>Cancelar</button>
+          <button type="submit" class="btn primary">Criar e gerar senha</button>
         </div>
       </form>
     </dialog>

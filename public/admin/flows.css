@@ -817,11 +817,16 @@
 }
 
 /* Nó ativo no simulador */
+.fb-node.sim-visited {
+  border-color: rgba(0, 168, 132, 0.35) !important;
+  box-shadow: 0 0 0 1px rgba(0, 168, 132, 0.2);
+}
 .fb-node.sim-active {
-  border-color: rgba(99, 102, 241, 0.75) !important;
+  border-color: rgba(0, 168, 132, 0.9) !important;
   box-shadow:
-    0 0 0 2px rgba(99, 102, 241, 0.35),
-    0 16px 40px rgba(79, 70, 229, 0.28);
+    0 0 0 3px rgba(0, 168, 132, 0.35),
+    0 16px 40px rgba(0, 168, 132, 0.22);
+  transform: translateY(-1px);
 }
 .fb-node.sim-active::after {
   content: "agora";
@@ -832,8 +837,8 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #c7d2fe;
-  background: #4338ca;
+  color: #04261f;
+  background: #00a884;
   padding: 2px 8px;
   border-radius: 999px;
 }
