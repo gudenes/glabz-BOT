@@ -48,18 +48,59 @@ function setView(view) {
   }
   $("hello").textContent = state.firstName ? `Olá, ${state.firstName}!` : TITLES[view][0];
   $("stage-sub").textContent = TITLES[view][1];
-  if (view === "flow") {
-    const frame = $("flow-frame");
-    if (frame && frame.dataset.loaded !== "1") {
-      const cid = sessionStorage.getItem("glabs_client_id") || state.portal?.client?.id || "";
-      frame.src = `/admin/flows.html?embed=1&client=${encodeURIComponent(cid)}&v=11`;
-      frame.dataset.loaded = "1";
-    }
-  }
+  if (view === "flow") syncFlowPane();
   $("btn-wizard")?.classList.toggle("hidden", view !== "flow");
   if (view === "test") renderTestMeta();
   if (view === "pubs") renderPubs();
   if (view === "inbox") void loadInbox();
+}
+
+function hasOwnFlows() {
+  return (state.portal?.flows || []).length > 0;
+}
+
+function openBuilder() {
+  const frame = $("flow-frame");
+  const empty = $("flow-empty");
+  empty?.classList.add("hidden");
+  frame?.classList.remove("hidden");
+  const cid = sessionStorage.getItem("glabs_client_id") || state.portal?.client?.id || "";
+  if (frame) {
+    frame.dataset.loaded = "1";
+    frame.src = `/admin/flows.html?embed=1&client=${encodeURIComponent(cid)}&v=13`;
+  }
+}
+
+function syncFlowPane() {
+  if (!hasOwnFlows()) {
+    $("flow-empty")?.classList.remove("hidden");
+    $("flow-frame")?.classList.add("hidden");
+    $("btn-wizard")?.classList.add("hidden");
+  } else {
+    $("flow-empty")?.classList.add("hidden");
+    $("btn-wizard")?.classList.remove("hidden");
+    if ($("flow-frame")?.dataset.loaded !== "1") openBuilder();
+    else $("flow-frame")?.classList.remove("hidden");
+  }
+}
+
+function waHtml(text) {
+  const esc = escapeHtml(text);
+  return esc
+    .replace(/\*([^*\n]+)\*/g, "<b>$1</b>")
+    .replace(/_([^_\n]+)_/g, "<i>$1</i>")
+    .replace(/~([^~\n]+)~/g, "<s>$1</s>");
+}
+
+function wrapFmt(kind) {
+  const el = $("inbox-input");
+  if (!el) return;
+  const s = el.selectionStart ?? 0;
+  const e = el.selectionEnd ?? 0;
+  const t = el.value;
+  const mark = kind === "bold" ? "*" : "_";
+  el.value = t.slice(0, s) + mark + t.slice(s, e) + mark + t.slice(e);
+  el.focus();
 }
 
 function pill(status) {
@@ -345,7 +386,7 @@ async function loadInboxMessages(phone) {
     const kind = m.direction === "in" ? "user" : "bot";
     const b = document.createElement("div");
     b.className = "bub " + kind;
-    b.textContent = m.body;
+    b.innerHTML = waHtml(m.body);
     log.appendChild(b);
   }
   if (!data.messages?.length) {
@@ -354,46 +395,60 @@ async function loadInboxMessages(phone) {
   log.scrollTop = log.scrollHeight;
 }
 
-$("btn-new-chat")?.addEventListener("click", () => {
-  $("new-chat").classList.remove("hidden");
-  $("new-phone").focus();
-});
-$("new-chat-cancel")?.addEventListener("click", () => {
-  $("new-chat").classList.add("hidden");
-});
 $("new-chat")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const phone = $("new-phone").value.trim();
-  const body = $("new-body").value.trim();
   if (!phone) return;
+  const digits = phone.replace(/\D/g, "");
+  $("new-phone").value = "";
+  if (!state.threads.some((t) => t.phoneE164 === digits)) {
+    state.threads.unshift({
+      phoneE164: digits || phone,
+      phoneDisplay: phone,
+      contactName: phone,
+      lastPreview: "Nova conversa",
+      lastMessageAt: new Date().toISOString(),
+      mode: "human",
+    });
+  }
+  await loadInboxMessages(digits || phone);
+  $("inbox-input")?.focus();
+  toast("Escreva a mensagem e envie");
+});
+$("inbox-q")?.addEventListener("input", renderThreads);
+document.querySelectorAll("[data-fmt]").forEach((b) => {
+  b.addEventListener("click", () => wrapFmt(b.dataset.fmt));
+});
+$("inbox-file")?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  const phone = state.selectedPhone;
+  if (!file || !phone) return;
+  if (file.size > 7_500_000) {
+    toast("Arquivo grande demais (máx. 7 MB)", "err");
+    return;
+  }
+  const buf = await file.arrayBuffer();
+  let bin = "";
+  const bytes = new Uint8Array(buf);
+  for (const x of bytes) bin += String.fromCharCode(x);
+  const base64 = btoa(bin);
+  const kind = file.type.startsWith("image/") ? "image" : "document";
   try {
-    if (body) {
-      await api("/v1/inbox/send", { method: "POST", body: JSON.stringify({ phone, body }) });
-      toast("Conversa iniciada no WhatsApp");
-    } else {
-      toast("Pode escrever a primeira mensagem");
-    }
-    $("new-chat").classList.add("hidden");
-    $("new-phone").value = "";
-    $("new-body").value = "";
-    const digits = phone.replace(/\D/g, "");
+    await api("/v1/inbox/send", {
+      method: "POST",
+      body: JSON.stringify({
+        phone,
+        body: file.name,
+        media: { base64, mimetype: file.type || "application/octet-stream", fileName: file.name, kind },
+      }),
+    });
+    toast("Arquivo enviado");
     await loadInbox();
-    if (!state.threads.some((t) => t.phoneE164 === digits)) {
-      state.threads.unshift({
-        phoneE164: digits || phone,
-        phoneDisplay: phone,
-        contactName: phone,
-        lastPreview: body || "Nova conversa",
-        lastMessageAt: new Date().toISOString(),
-        mode: "human",
-      });
-    }
-    await loadInboxMessages(digits || phone);
   } catch (ex) {
     toast(ex.message, "err");
   }
 });
-$("inbox-q")?.addEventListener("input", renderThreads);
 $("inbox-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const phone = state.selectedPhone;
@@ -426,12 +481,6 @@ $("btn-refresh").onclick = async () => {
 $("test-reset").onclick = () => resetChat();
 $("chat-form").onsubmit = sendChat;
 
-const STEPS = [
-  { key: "greeting", ask: "Como o bot deve cumprimentar quem chega no WhatsApp?" },
-  { key: "paths", ask: "O que o cliente pode pedir? Escreva separado por vírgula. Ex.: marcar horário, dúvida, falar com atendente" },
-  { key: "ask", ask: "Para marcar, o que perguntamos primeiro? Ex.: nome e horário de preferência" },
-];
-
 function wizardSay(text, who = "bot") {
   const log = $("wizard-log");
   const b = document.createElement("div");
@@ -444,120 +493,8 @@ function wizardSay(text, who = "bot") {
 function openWizard() {
   $("wizard").classList.remove("hidden");
   $("wizard-log").innerHTML = "";
-  state.wizard = { i: 0, answers: {} };
-  wizardSay("Vamos montar o atendimento em 3 perguntas. Depois o fluxo aparece no builder para você ajustar.");
-  wizardSay(STEPS[0].ask);
+  wizardSay("Escreve à vontade o atendimento que você quer. Ex.: “sou um estúdio de pilates, quero receber, marcar aula e passar dúvida para a recepção”.");
   $("wizard-input").focus();
-}
-
-function buildFlowFromAnswers(a) {
-  const greet = a.greeting || "Olá! Como posso ajudar?";
-  const paths = (a.paths || "marcar horário, dúvida, atendente")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 4);
-  const ask = a.ask || "Qual o seu nome?";
-  const id = (n) => "n_" + n;
-  const nodes = [
-    { id: id("t"), type: "trigger", x: 360, y: 40, data: { label: "Mensagem recebida" } },
-    { id: id("hi"), type: "message", x: 360, y: 160, data: { text: greet } },
-    {
-      id: id("int"),
-      type: "llm_intent",
-      x: 360,
-      y: 300,
-      data: {
-        label: "Entender o pedido",
-        prompt: "Classifique a intenção. Responda só o slug.",
-        intents: paths.map((p, i) => ({
-          slug: "p" + (i + 1),
-          description: p,
-        })),
-      },
-    },
-  ];
-  const edges = [
-    { id: "e_t", from: id("t"), to: id("hi") },
-    { id: "e_hi", from: id("hi"), to: id("int") },
-  ];
-  paths.forEach((p, i) => {
-    const slug = "p" + (i + 1);
-    const x = 80 + i * 240;
-    if (/atend|humano|pessoa/i.test(p)) {
-      nodes.push({
-        id: id("h" + i),
-        type: "handoff",
-        x,
-        y: 460,
-        data: { message: "Vou te passar para um atendente." },
-      });
-      edges.push({ id: "e_" + slug, from: id("int"), to: id("h" + i), label: slug });
-    } else if (/d[uú]vida|pergunta/i.test(p)) {
-      nodes.push({
-        id: id("q" + i),
-        type: "ask",
-        x,
-        y: 460,
-        data: { prompt: "Pode mandar sua dúvida?", varName: "duvida" },
-      });
-      nodes.push({
-        id: id("qm" + i),
-        type: "message",
-        x,
-        y: 600,
-        data: { text: "Anotei. Um atendente responde em seguida." },
-      });
-      nodes.push({
-        id: id("qh" + i),
-        type: "handoff",
-        x,
-        y: 730,
-        data: { message: "Passando para a equipe." },
-      });
-      edges.push({ id: "e_" + slug, from: id("int"), to: id("q" + i), label: slug });
-      edges.push({ id: "e_q" + i, from: id("q" + i), to: id("qm" + i) });
-      edges.push({ id: "e_qh" + i, from: id("qm" + i), to: id("qh" + i) });
-    } else {
-      nodes.push({
-        id: id("a" + i),
-        type: "ask",
-        x,
-        y: 460,
-        data: { prompt: ask, varName: "nome" },
-      });
-      nodes.push({
-        id: id("w" + i),
-        type: "ask",
-        x,
-        y: 600,
-        data: { prompt: "Qual dia e horário prefere?", varName: "quando" },
-      });
-      nodes.push({
-        id: id("c" + i),
-        type: "message",
-        x,
-        y: 730,
-        data: { text: "Perfeito, {{nome}}. Vou encaminhar sua preferência ({{quando}}) para confirmar." },
-      });
-      nodes.push({
-        id: id("ah" + i),
-        type: "handoff",
-        x,
-        y: 860,
-        data: { message: "Equipe confirma o horário." },
-      });
-      edges.push({ id: "e_" + slug, from: id("int"), to: id("a" + i), label: slug });
-      edges.push({ id: "e_w" + i, from: id("a" + i), to: id("w" + i) });
-      edges.push({ id: "e_c" + i, from: id("w" + i), to: id("c" + i) });
-      edges.push({ id: "e_ah" + i, from: id("c" + i), to: id("ah" + i) });
-    }
-  });
-  return {
-    name: "Atendimento · " + (state.portal?.client?.name || "WhatsApp"),
-    nodes,
-    edges,
-  };
 }
 
 $("btn-collapse-side")?.addEventListener("click", () => {
@@ -573,40 +510,40 @@ if (localStorage.getItem("glabs_side_collapsed") === "1") {
 }
 
 $("btn-wizard")?.addEventListener("click", openWizard);
+$("start-ai")?.addEventListener("click", openWizard);
+$("start-tpl")?.addEventListener("click", () => $("tpl-pick")?.classList.toggle("hidden"));
+$("start-blank")?.addEventListener("click", () => useTemplate("blank"));
+$("tpl-pick")?.querySelectorAll("[data-tpl]").forEach((b) => {
+  b.addEventListener("click", () => useTemplate(b.dataset.tpl));
+});
+async function useTemplate(kind) {
+  try {
+    await api("/v1/flows/from-template", { method: "POST", body: JSON.stringify({ template: kind }) });
+    toast("Template pronto");
+    await refresh();
+    openBuilder();
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
 $("wizard-close")?.addEventListener("click", () => $("wizard").classList.add("hidden"));
 $("wizard-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const w = state.wizard;
-  if (!w) return;
   const input = $("wizard-input");
   const text = (input.value || "").trim();
   if (!text) return;
   input.value = "";
   wizardSay(text, "user");
-  w.answers[STEPS[w.i].key] = text;
-  w.i += 1;
-  if (w.i < STEPS.length) {
-    wizardSay(STEPS[w.i].ask);
-    return;
-  }
-  wizardSay("Montando o fluxo…");
+  wizardSay("Montando com a IA…");
   try {
-    const draft = buildFlowFromAnswers(w.answers);
-    await api("/v1/flows", {
-      method: "POST",
-      body: JSON.stringify(draft),
-    });
-    wizardSay("Pronto. O fluxo está no builder — ajuste o texto e publique quando quiser.");
-    toast("Fluxo montado");
-    const frame = $("flow-frame");
-    if (frame) {
-      const cid = sessionStorage.getItem("glabs_client_id") || state.portal?.client?.id || "";
-      frame.dataset.loaded = "1";
-      frame.src = `/admin/flows.html?embed=1&client=${encodeURIComponent(cid)}&v=12`;
-    }
+    await api("/v1/flows/from-prompt", { method: "POST", body: JSON.stringify({ prompt: text }) });
+    wizardSay("Pronto. Abri o builder com o fluxo — ajuste e publique.");
+    toast("Fluxo montado pela IA");
+    $("wizard").classList.add("hidden");
     await refresh();
+    openBuilder();
   } catch (ex) {
-    wizardSay("Não deu para salvar: " + ex.message);
+    wizardSay("Não deu: " + ex.message);
     toast(ex.message, "err");
   }
 });

@@ -77,6 +77,8 @@ import {
   setConversationHuman,
 } from "./flows/store.js";
 import { simulateFlowMessage } from "./flows/engine.js";
+import { generateFlowFromPrompt } from "./flows/from-prompt.js";
+import { allSeedTemplates } from "./flows/templates.js";
 import type { Flow, FlowEdge, FlowNode } from "./flows/types.js";
 import type { FlowSimState } from "./flows/engine.js";
 
@@ -434,14 +436,36 @@ const server = createServer(async (req, res) => {
         json(res, 400, { ok: false, reason: "sem conta" });
         return;
       }
-      const body = parseJson<{ phone?: string; body?: string }>(await readBody(req));
+      const body = parseJson<{
+        phone?: string;
+        body?: string;
+        media?: {
+          base64?: string;
+          mimetype?: string;
+          fileName?: string;
+          kind?: "image" | "document";
+        } | null;
+      }>(await readBody(req));
       const author =
         auth.kind === "user" ? auth.user.name || auth.user.email : "Atendente";
+      const media =
+        body?.media?.base64 && body.media.mimetype
+          ? {
+              base64: body.media.base64,
+              mimetype: body.media.mimetype,
+              fileName: body.media.fileName,
+              kind: body.media.kind,
+            }
+          : null;
       setConversationHuman(acc.id, body?.phone || "", "inbox");
-      const result = await sendText(acc.id, body?.phone || "", body?.body || "", null, null, {
-        source: "human",
-        authorName: author,
-      });
+      const result = await sendText(
+        acc.id,
+        body?.phone || "",
+        body?.body || "",
+        media,
+        null,
+        { source: "human", authorName: author }
+      );
       if (!result.ok) {
         json(res, 409, result);
         return;
@@ -541,6 +565,68 @@ const server = createServer(async (req, res) => {
         }),
         llmConfigured: Boolean(llmApiKey()),
       });
+      return;
+    }
+
+    if (method === "POST" && path === "/v1/flows/from-prompt") {
+      const clientId = actingClientId(req, auth);
+      const client = clientId ? await getClient(clientId) : null;
+      const body = parseJson<{ prompt?: string }>(await readBody(req));
+      const prompt = body?.prompt?.trim() || "";
+      if (prompt.length < 8) {
+        json(res, 400, { ok: false, reason: "conte o que o atendimento deve fazer" });
+        return;
+      }
+      try {
+        const gen = await generateFlowFromPrompt(prompt);
+        const flow = saveFlow({
+          name: gen.name,
+          product: client?.slug || "gestor",
+          accountId: clientId ? listAccounts({ clientId })[0]?.id ?? null : null,
+          clientId,
+          status: "draft",
+          nodes: gen.nodes,
+          edges: gen.edges,
+        });
+        json(res, 200, { ok: true, flow });
+      } catch (e) {
+        json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "ia" });
+      }
+      return;
+    }
+
+    if (method === "POST" && path === "/v1/flows/from-template") {
+      const clientId = actingClientId(req, auth);
+      const client = clientId ? await getClient(clientId) : null;
+      const body = parseJson<{ template?: string }>(await readBody(req));
+      const kind = body?.template || "pilates";
+      const seeds = allSeedTemplates();
+      const seed =
+        kind === "consulta"
+          ? seeds.find((f) => /consulta/i.test(f.name)) || seeds[0]
+          : kind === "blank"
+            ? null
+            : seeds.find((f) => /pilates|sess/i.test(f.name)) || seeds[0];
+      const blank = {
+        name: "Novo fluxo",
+        nodes: [{ id: "n_trigger", type: "trigger" as const, x: 80, y: 60, data: { label: "Mensagem recebida" } }],
+        edges: [] as Flow["edges"],
+      };
+      const src = seed || blank;
+      try {
+        const flow = saveFlow({
+          name: seed ? seed.name.replace(/^Demo ·\s*/i, "") : "Novo fluxo",
+          product: client?.slug || "gestor",
+          accountId: clientId ? listAccounts({ clientId })[0]?.id ?? null : null,
+          clientId,
+          status: "draft",
+          nodes: src.nodes,
+          edges: src.edges,
+        });
+        json(res, 200, { ok: true, flow });
+      } catch (e) {
+        json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "invalid" });
+      }
       return;
     }
 

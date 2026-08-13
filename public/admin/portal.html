@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=13" />
+    <link rel="stylesheet" href="/admin/portal.css?v=14" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -108,20 +108,40 @@
 
         <!-- Fluxo -->
         <section id="view-flow" class="view hidden fill">
-          <iframe id="flow-frame" title="Editor de fluxo"></iframe>
+          <div id="flow-empty" class="start-grid hidden">
+            <button type="button" class="start-card featured" id="start-ai">
+              <span class="nudge">Mais escolhida</span>
+              <h3>Me ajude a criar</h3>
+              <p>Conte com suas palavras o atendimento que você quer. A IA monta o fluxo e você ajusta no builder.</p>
+            </button>
+            <button type="button" class="start-card" id="start-tpl">
+              <h3>Usar um template</h3>
+              <p>Comece com um fluxo já validado (marcar sessão, consulta) e personalize o texto.</p>
+            </button>
+            <button type="button" class="start-card" id="start-blank">
+              <h3>Começar do zero</h3>
+              <p>Canvas em branco. Você adiciona cada passo.</p>
+            </button>
+            <div id="tpl-pick" class="tpl-pick hidden">
+              <button type="button" data-tpl="pilates">Marcar sessão</button>
+              <button type="button" data-tpl="consulta">Marcar consulta</button>
+              <button type="button" data-tpl="blank">Em branco mesmo</button>
+            </div>
+          </div>
+          <iframe id="flow-frame" class="hidden" title="Editor de fluxo"></iframe>
         </section>
 
         <aside id="wizard" class="wizard hidden" aria-label="Montar fluxo na conversa">
           <header class="wizard-head">
             <div>
               <strong>Montar na conversa</strong>
-              <p>A gente pergunta, você responde, o fluxo aparece no builder.</p>
+              <p>Escreve livremente o que o atendimento deve fazer. A IA monta o fluxo.</p>
             </div>
             <button type="button" class="btn-text" id="wizard-close">Fechar</button>
           </header>
           <div class="wizard-log" id="wizard-log"></div>
           <form class="wizard-form" id="wizard-form">
-            <input id="wizard-input" type="text" placeholder="Sua resposta…" autocomplete="off" />
+            <input id="wizard-input" type="text" placeholder="Ex.: estúdio de pilates, marcar aula e tirar dúvida…" autocomplete="off" />
             <button class="btn-lime" type="submit">Enviar</button>
           </form>
         </aside>
@@ -154,23 +174,12 @@
           <div class="inbox">
             <aside class="inbox-list">
               <div class="inbox-tools">
-                <button type="button" class="btn-lime inbox-new" id="btn-new-chat">Nova conversa</button>
-                <input id="inbox-q" class="inbox-search" type="search" placeholder="Buscar conversa…" />
+                <form id="new-chat" class="new-chat-slim">
+                  <input id="new-phone" type="tel" required placeholder="+55 51 9…" />
+                  <button class="btn-lime" type="submit">Nova</button>
+                </form>
+                <input id="inbox-q" class="inbox-search" type="search" placeholder="Buscar…" />
               </div>
-              <form id="new-chat" class="new-chat hidden">
-                <label>
-                  <span>WhatsApp (com DDI)</span>
-                  <input id="new-phone" type="tel" required placeholder="+55 51 99999-9999" />
-                </label>
-                <label>
-                  <span>Primeira mensagem (opcional)</span>
-                  <input id="new-body" type="text" placeholder="Olá! Aqui é o estúdio." maxlength="4000" />
-                </label>
-                <div class="hero-actions">
-                  <button class="btn-lime" type="submit">Começar</button>
-                  <button class="btn-ghost" type="button" id="new-chat-cancel">Cancelar</button>
-                </div>
-              </form>
               <div id="thread-list" class="thread-list"></div>
             </aside>
             <div class="inbox-chat">
@@ -187,7 +196,15 @@
                 </div>
               </div>
               <form class="chat-form hidden" id="inbox-form">
-                <input id="inbox-input" type="text" placeholder="Mensagem…" autocomplete="off" maxlength="4000" />
+                <div class="fmt">
+                  <button type="button" data-fmt="bold" title="Negrito">B</button>
+                  <button type="button" data-fmt="italic" title="Itálico"><i>I</i></button>
+                  <label class="fmt-file" title="Arquivo">
+                    +
+                    <input id="inbox-file" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.ogg,.mp4" hidden />
+                  </label>
+                </div>
+                <input id="inbox-input" type="text" placeholder="Mensagem…  *negrito*  _itálico_" autocomplete="off" maxlength="4000" />
                 <button class="btn-lime" type="submit">Enviar</button>
               </form>
             </div>
@@ -208,6 +225,6 @@
       <button type="button" data-view="test">Testar</button>
     </nav>
 
-    <script src="/admin/portal.js?v=13" type="module"></script>
+    <script src="/admin/portal.js?v=14" type="module"></script>
   </body>
 </html>
