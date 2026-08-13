@@ -9,15 +9,21 @@ const state = {
   secret: localStorage.getItem(STORAGE_KEY) || "",
   flows: [],
   flow: null,
+  products: [], // [{slug, name, ...}] — carregado do servidor
   selectedNodeId: null,
   linkFrom: null,
   drag: null,
   llmConfigured: false,
+  /** JSON do fluxo como veio do servidor — compara com o atual p/ saber se há edição pendente. */
+  savedSnapshot: null,
   /** Simulador */
   simOpen: false,
   simState: null, // { nodeId, waitingFor, vars, mode, finished }
   simActiveNodeId: null,
   simBusy: false,
+  /** Histórico de versões */
+  historyOpen: false,
+  historyVersions: [],
 };
 
 const $ = (id) => document.getElementById(id);
@@ -265,9 +271,13 @@ if (state.secret) {
 
 // ── Data ─────────────────────────────────────────────────
 async function loadAll() {
-  const data = await api("/v1/flows");
-  state.flows = data.flows || [];
-  state.llmConfigured = Boolean(data.llmConfigured);
+  const [flowsData, productsData] = await Promise.all([
+    api("/v1/flows"),
+    api("/v1/products").catch(() => ({ products: [] })),
+  ]);
+  state.flows = flowsData.flows || [];
+  state.products = productsData.products || [];
+  state.llmConfigured = Boolean(flowsData.llmConfigured);
   $("llm-badge").textContent = state.llmConfigured
     ? "IA ligada"
     : "IA · palavras-chave";
@@ -275,15 +285,71 @@ async function loadAll() {
     ? "fb-meta-chip on"
     : "fb-meta-chip";
 
+  renderProductSelect();
+  loadVersionBadge();
+
   if (!state.flow && state.flows.length) {
     selectFlow(state.flows[0].id);
   } else if (!state.flow) {
     newBlankFlow();
   } else {
     const fresh = state.flows.find((f) => f.id === state.flow.id);
-    if (fresh) state.flow = structuredClone(fresh);
+    if (fresh) {
+      state.flow = structuredClone(fresh);
+      markSaved();
+    }
     renderAll();
   }
+}
+
+/** Popula o <select> de produto com o que existe hoje no servidor (sem hardcode). */
+function renderProductSelect() {
+  const sel = $("flow-product");
+  const current = state.flow?.product || sel.value;
+  sel.innerHTML = state.products
+    .map((p) => `<option value="${escapeHtml(p.slug)}">${escapeHtml(p.name || p.slug)}</option>`)
+    .join("");
+  // se o fluxo atual usa um product que não está (mais) na lista, adiciona mesmo assim
+  if (current && !state.products.some((p) => p.slug === current)) {
+    const opt = document.createElement("option");
+    opt.value = current;
+    opt.textContent = `${current} (não cadastrado)`;
+    sel.appendChild(opt);
+  }
+  if (current) sel.value = current;
+}
+
+function productLabel(slug) {
+  const p = state.products.find((x) => x.slug === slug);
+  return p?.name || slug;
+}
+
+/** Busca o commit/branch do backend rodando e mostra no cabeçalho. */
+async function loadVersionBadge() {
+  const badge = $("build-badge");
+  try {
+    const v = await api("/v1/version");
+    const when = v.bootAt ? timeAgo(v.bootAt) : null;
+    if (v.commitShort) {
+      badge.textContent = `${v.branch || "?"} · ${v.commitShort}${when ? ` · há ${when}` : ""}`;
+      badge.title = v.message || "";
+    } else {
+      badge.textContent = `build · ${v.env || "local"}${when ? ` · há ${when}` : ""}`;
+      badge.title = "Sem info de git (dev local)";
+    }
+  } catch {
+    badge.textContent = "build · —";
+  }
+}
+
+function timeAgo(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.round(ms / 60000);
+  if (min < 1) return "instantes";
+  if (min < 60) return `${min}min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.round(h / 24)}d`;
 }
 
 function selectFlow(id) {
@@ -296,6 +362,7 @@ function selectFlow(id) {
   state.simState = null;
   state.simActiveNodeId = null;
   if (state.simOpen) resetSim();
+  markSaved();
   renderAll();
 }
 
@@ -321,7 +388,71 @@ function newBlankFlow() {
   state.simState = null;
   state.simActiveNodeId = null;
   if (state.simOpen) resetSim();
+  state.savedSnapshot = null; // novo — nada salvo ainda
   renderAll();
+}
+
+// ── Estado salvo/não salvo ──────────────────────────────
+function flowFingerprint(flow) {
+  if (!flow) return null;
+  return JSON.stringify({
+    name: flow.name,
+    product: flow.product,
+    status: flow.status,
+    nodes: flow.nodes,
+    edges: flow.edges,
+  });
+}
+
+/** Chamar depois de carregar/salvar do servidor: fixa o "ponto salvo" atual. */
+function markSaved() {
+  state.savedSnapshot = flowFingerprint(state.flow);
+  updateSaveBadge();
+}
+
+function isDirty() {
+  if (!state.flow) return false;
+  if (state.savedSnapshot == null) return false; // fluxo novo, ainda sem save — não assusta o usuário
+  return flowFingerprint(state.flow) !== state.savedSnapshot;
+}
+
+function updateSaveBadge() {
+  const el = $("save-state");
+  const text = $("save-text");
+  if (!el || !text) return;
+  if (!state.flow) {
+    el.className = "fb-save-state";
+    text.textContent = "—";
+    return;
+  }
+  if (!state.flow.id) {
+    el.className = "fb-save-state";
+    text.textContent = "Novo · ainda não salvo";
+    return;
+  }
+  if (isDirty()) {
+    el.className = "fb-save-state dirty";
+    text.textContent = "Alterações não salvas";
+  } else {
+    el.className = "fb-save-state saved";
+    const when = state.flow.updatedAt ? formatDateTime(state.flow.updatedAt) : "";
+    text.textContent = when ? `Salvo às ${when}` : "Salvo";
+  }
+}
+
+function formatDateTime(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      day: "2-digit",
+      month: "2-digit",
+    });
+  } catch {
+    return "";
+  }
 }
 
 function renderAll() {
@@ -330,11 +461,12 @@ function renderAll() {
   renderProps();
   if (state.flow) {
     $("flow-name").value = state.flow.name;
-    $("flow-product").value = state.flow.product || "gestor";
+    renderProductSelect();
     $("flow-status").textContent = statusLabel(state.flow.status || "draft");
     $("flow-status").className =
       "fb-status " + (state.flow.status === "live" ? "live" : "draft");
   }
+  updateSaveBadge();
 }
 
 function renderList() {
@@ -347,15 +479,7 @@ function renderList() {
       "flow-card" + (state.flow?.id === f.id ? " active" : "");
     b.innerHTML = `<div class="n"></div><div class="m"></div>`;
     b.querySelector(".n").textContent = f.name;
-    const productLabel =
-      f.product === "prontuario"
-        ? "Prontuário"
-        : f.product === "gestor"
-          ? "Gestor"
-          : f.product === "pilates"
-            ? "Pilates"
-            : f.product;
-    b.querySelector(".m").textContent = `${productLabel} · ${statusLabel(f.status)}`;
+    b.querySelector(".m").textContent = `${productLabel(f.product)} · ${statusLabel(f.status)}`;
     b.onclick = () => selectFlow(f.id);
     el.appendChild(b);
   }
@@ -530,6 +654,7 @@ function renderCanvas() {
   svg.style.height = maxY + "px";
   canvas.style.width = maxX + "px";
   canvas.style.height = maxY + "px";
+  updateSaveBadge();
 }
 
 const ADDABLE_TYPES = [
@@ -701,10 +826,37 @@ function onNodeClick(ev, node) {
   renderProps();
 }
 
+/** Remove um nó (e as ligações dele) — usado pelo botão "Remover" e pelo atalho Delete/Backspace. */
+function deleteNode(node) {
+  if (!node || !state.flow) return;
+  if (node.type === "trigger") {
+    toast("O início do fluxo não pode ser removido", "err");
+    return;
+  }
+  state.flow.nodes = state.flow.nodes.filter((n) => n.id !== node.id);
+  state.flow.edges = state.flow.edges.filter(
+    (e) => e.from !== node.id && e.to !== node.id
+  );
+  state.selectedNodeId = null;
+  renderAll();
+  toast("Passo removido");
+}
+
+/** Último nó cujo conteúdo já foi mostrado no painel Detalhes (evita pulsar de novo à toa). */
+let lastSeenPropsNodeId = null;
+
 function renderProps() {
   const empty = $("props-empty");
   const body = $("props-body");
   const node = state.flow?.nodes.find((n) => n.id === state.selectedNodeId);
+
+  // Painel recolhido + conteúdo mudou (nó diferente selecionado) → pisca o botão de expandir
+  const propsPanel = $("panel-props");
+  if (node && node.id !== lastSeenPropsNodeId && propsPanel?.classList.contains("collapsed")) {
+    document.querySelector('[data-toggle="panel-props"]')?.classList.add("pulse");
+  }
+  lastSeenPropsNodeId = node?.id ?? null;
+
   if (!node) {
     empty.classList.remove("hidden");
     body.classList.add("hidden");
@@ -910,18 +1062,7 @@ function renderProps() {
     state.linkFrom = node.id;
     toast("Clique no próximo cartão para ligar");
   };
-  $("p-del").onclick = () => {
-    if (node.type === "trigger") {
-      toast("O início do fluxo não pode ser removido", "err");
-      return;
-    }
-    state.flow.nodes = state.flow.nodes.filter((n) => n.id !== node.id);
-    state.flow.edges = state.flow.edges.filter(
-      (e) => e.from !== node.id && e.to !== node.id
-    );
-    state.selectedNodeId = null;
-    renderAll();
-  };
+  $("p-del").onclick = () => deleteNode(node);
 }
 
 function escapeHtml(s) {
@@ -954,6 +1095,70 @@ document.querySelectorAll(".pal-item").forEach((btn) => {
     renderCanvas();
     renderProps();
   };
+});
+
+// ── Painéis colapsáveis (Seus fluxos / Passos / Detalhes) ─
+const PANEL_STATE_KEY = "glabs_bot_panels";
+
+function loadPanelState() {
+  try {
+    return JSON.parse(localStorage.getItem(PANEL_STATE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function chevronSvg(dir) {
+  const d = dir === "left" ? "M15 18l-6-6 6-6" : "M9 18l6-6-6-6";
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+}
+
+/** Seta do botão aponta pra direção em que o painel vai (recolher) ou volta (expandir). */
+function syncToggleIcon(btn, panel) {
+  const collapsed = panel.classList.contains("collapsed");
+  const side = btn.dataset.side;
+  const dir = side === "left" ? (collapsed ? "right" : "left") : collapsed ? "left" : "right";
+  btn.innerHTML = chevronSvg(dir);
+  btn.title = collapsed ? "Expandir painel" : "Recolher painel";
+}
+
+function initPanels() {
+  const saved = loadPanelState();
+  document.querySelectorAll(".fb-aside-toggle").forEach((btn) => {
+    const panel = document.getElementById(btn.dataset.toggle);
+    if (!panel) return;
+    if (saved[btn.dataset.toggle]) panel.classList.add("collapsed");
+    syncToggleIcon(btn, panel);
+    btn.onclick = () => {
+      panel.classList.toggle("collapsed");
+      btn.classList.remove("pulse"); // usuário interagiu — não precisa mais chamar atenção
+      const s = loadPanelState();
+      s[btn.dataset.toggle] = panel.classList.contains("collapsed");
+      localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(s));
+      syncToggleIcon(btn, panel);
+      if (state.flow) setTimeout(renderCanvas, 190); // depois da transição de largura
+    };
+  });
+}
+initPanels();
+
+// ── Atalhos de teclado ───────────────────────────────────
+document.addEventListener("keydown", (e) => {
+  // Delete (Windows/Linux) e Backspace (tecla "Delete" do Mac mandam "Backspace")
+  if (e.key !== "Delete" && e.key !== "Backspace") return;
+
+  // não intercepta enquanto o usuário está digitando em algum campo
+  const el = document.activeElement;
+  const isEditing =
+    el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+  if (isEditing) return;
+
+  if (!state.flow || !state.selectedNodeId) return;
+  const node = state.flow.nodes.find((n) => n.id === state.selectedNodeId);
+  if (!node) return;
+
+  e.preventDefault();
+  deleteNode(node);
 });
 
 // ── Actions ──────────────────────────────────────────────
@@ -1017,8 +1222,28 @@ $("btn-unpublish").onclick = async () => {
   }
 };
 
-$("flow-name").onchange = () => {
-  if (state.flow) state.flow.name = $("flow-name").value;
+$("flow-name").oninput = () => {
+  if (!state.flow) return;
+  state.flow.name = $("flow-name").value;
+  updateSaveBadge();
+};
+
+$("flow-product").onchange = () => {
+  if (!state.flow) return;
+  state.flow.product = $("flow-product").value;
+  updateSaveBadge();
+};
+
+$("btn-revert").onclick = () => {
+  if (!state.flow?.id) {
+    toast("Fluxo novo — não há versão salva pra reverter", "err");
+    return;
+  }
+  if (isDirty() && !confirm("Descartar as edições não salvas e voltar pra última versão salva?")) {
+    return;
+  }
+  selectFlow(state.flow.id);
+  toast("Revertido para a última versão salva");
 };
 
 // ── Simulador ────────────────────────────────────────────
@@ -1224,3 +1449,92 @@ $("sim-form").onsubmit = (e) => {
   sendSimMessage();
 };
 bindSimChips();
+
+// ── Histórico de versões ────────────────────────────────
+function openHistory() {
+  if (!state.flow?.id) {
+    toast("Salve o fluxo antes de ver o histórico", "err");
+    return;
+  }
+  state.historyOpen = true;
+  $("history-panel").classList.remove("hidden");
+  loadHistory();
+}
+
+function closeHistory() {
+  state.historyOpen = false;
+  $("history-panel").classList.add("hidden");
+}
+
+async function loadHistory() {
+  const list = $("history-list");
+  $("history-sub").textContent = state.flow?.name || "";
+  list.innerHTML = `<div class="history-empty">Carregando…</div>`;
+  try {
+    const data = await api(`/v1/flows/${state.flow.id}/versions`);
+    state.historyVersions = data.versions || [];
+    renderHistoryList();
+  } catch (e) {
+    list.innerHTML = `<div class="history-empty">Erro ao carregar: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderHistoryList() {
+  const list = $("history-list");
+  list.innerHTML = "";
+
+  // linha "atual" no topo, pra deixar claro o que está no ar agora
+  const current = document.createElement("div");
+  current.className = "history-item current";
+  current.innerHTML = `
+    <div class="history-item-top">
+      <span class="history-item-when">Versão atual</span>
+      <span class="history-badge">agora</span>
+    </div>
+    <div class="history-item-meta">${escapeHtml(state.flow.name)} · ${state.flow.nodes.length} passos${
+      isDirty() ? " · com edições não salvas" : ""
+    }</div>`;
+  list.appendChild(current);
+
+  if (!state.historyVersions.length) {
+    const empty = document.createElement("div");
+    empty.className = "history-empty";
+    empty.textContent = "Ainda não há versões anteriores salvas deste fluxo.";
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const v of state.historyVersions) {
+    const el = document.createElement("div");
+    el.className = "history-item";
+    el.innerHTML = `
+      <div class="history-item-top">
+        <span class="history-item-when">${escapeHtml(formatDateTime(v.savedAt))}</span>
+      </div>
+      <div class="history-item-meta">${escapeHtml(v.name)} · ${escapeHtml(productLabel(v.product))} · ${v.nodeCount} passos</div>
+      <button type="button" class="fb-btn fb-btn-secondary" data-restore="${v.id}">Restaurar esta versão</button>`;
+    list.appendChild(el);
+  }
+
+  list.querySelectorAll("[data-restore]").forEach((btn) => {
+    btn.onclick = async () => {
+      if (!confirm("Restaurar esta versão? O estado atual também fica guardado no histórico.")) return;
+      try {
+        const data = await api(`/v1/flows/${state.flow.id}/versions/${btn.dataset.restore}/restore`, {
+          method: "POST",
+        });
+        toast("Versão restaurada");
+        await loadAll();
+        closeHistory();
+      } catch (e) {
+        toast(e.message, "err");
+      }
+    };
+  });
+}
+
+$("btn-history").onclick = () => {
+  if (state.historyOpen) closeHistory();
+  else openHistory();
+};
+$("history-close").onclick = () => closeHistory();

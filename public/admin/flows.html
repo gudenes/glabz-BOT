@@ -10,8 +10,8 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/styles.css?v=5" />
-    <link rel="stylesheet" href="/admin/flows.css?v=5" />
+    <link rel="stylesheet" href="/admin/styles.css?v=9" />
+    <link rel="stylesheet" href="/admin/flows.css?v=9" />
   </head>
   <body class="flows-body">
     <div id="login-gate" class="fb-login">
@@ -47,21 +47,24 @@
             <input id="flow-name" class="fb-name" value="Novo fluxo" spellcheck="false" />
             <span id="flow-status" class="fb-status draft">Rascunho</span>
           </div>
+          <button type="button" id="save-state" class="fb-save-state" title="Estado do rascunho">
+            <span id="save-dot" class="save-dot"></span>
+            <span id="save-text">—</span>
+          </button>
         </div>
         <div class="fb-top-right">
           <span id="llm-badge" class="fb-meta-chip">IA · —</span>
+          <span id="build-badge" class="fb-meta-chip" title="Versão do backend rodando">build · —</span>
           <div class="fb-select-wrap">
-            <select id="flow-product" class="fb-select" title="Produto">
-              <option value="gestor">Gestor de Seguros</option>
-              <option value="prontuario">Prontuário Contábil</option>
-              <option value="pilates">Estúdio · Pilates</option>
-            </select>
+            <select id="flow-product" class="fb-select" title="Produto"></select>
           </div>
           <div class="fb-actions">
             <button type="button" id="btn-sim" class="fb-btn fb-btn-secondary" title="Testar o fluxo digitando">
               <svg class="fb-ico" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>
               Testar
             </button>
+            <button type="button" id="btn-history" class="fb-btn fb-btn-ghost" title="Ver versões salvas anteriormente">Histórico</button>
+            <button type="button" id="btn-revert" class="fb-btn fb-btn-ghost" title="Descartar edições não salvas">Reverter</button>
             <button type="button" id="btn-new" class="fb-btn fb-btn-ghost">Novo</button>
             <button type="button" id="btn-save" class="fb-btn fb-btn-secondary">Salvar</button>
             <button type="button" id="btn-unpublish" class="fb-btn fb-btn-ghost">Pausar</button>
@@ -71,15 +74,19 @@
       </header>
 
       <div class="fb-body">
-        <aside class="fb-list">
+        <aside class="fb-list" id="panel-list">
           <div class="fb-aside-head">
             <span>Seus fluxos</span>
+            <button type="button" class="fb-aside-toggle" data-toggle="panel-list" data-side="left" title="Recolher/expandir"></button>
           </div>
           <div id="flow-list" class="fb-list-items"></div>
         </aside>
 
-        <aside class="fb-palette">
-          <div class="fb-aside-head"><span>Passos</span></div>
+        <aside class="fb-palette" id="panel-palette">
+          <div class="fb-aside-head">
+            <span>Passos</span>
+            <button type="button" class="fb-aside-toggle" data-toggle="panel-palette" data-side="left" title="Recolher/expandir"></button>
+          </div>
           <p class="fb-palette-hint">Ou use o <strong>+</strong> em cada cartão</p>
           <button type="button" class="pal-item" data-type="message">
             <span class="pal-icon msg" aria-hidden="true">
@@ -132,8 +139,11 @@
           </div>
         </main>
 
-        <aside class="fb-props">
-          <div class="fb-aside-head"><span>Detalhes</span></div>
+        <aside class="fb-props" id="panel-props">
+          <div class="fb-aside-head">
+            <span>Detalhes</span>
+            <button type="button" class="fb-aside-toggle" data-toggle="panel-props" data-side="right" title="Recolher/expandir"></button>
+          </div>
           <div id="props-empty" class="fb-props-empty">
             <div class="fb-empty-icon" aria-hidden="true">
               <svg class="fb-ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>
@@ -186,9 +196,23 @@
         </form>
       </div>
 
+      <!-- Histórico: versões anteriores salvas deste fluxo -->
+      <div id="history-panel" class="history-panel hidden" aria-label="Histórico de versões">
+        <div class="history-head">
+          <div class="history-head-left">
+            <strong>Histórico de versões</strong>
+            <small id="history-sub">—</small>
+          </div>
+          <button type="button" id="history-close" class="fb-btn fb-btn-ghost fb-btn-square" title="Fechar">
+            <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div id="history-list" class="history-list"></div>
+      </div>
+
       <div id="toast" class="fb-toast hidden"></div>
     </div>
 
-    <script src="/admin/flows.js?v=5" type="module"></script>
+    <script src="/admin/flows.js?v=9" type="module"></script>
   </body>
 </html>
