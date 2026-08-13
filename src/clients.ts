@@ -1,8 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { db, hasDatabase } from "./db.js";
 import { createUser, generateTempPassword, newId, type UserRecord } from "./auth.js";
-import { ensureAccount, upsertProduct, type AccountRecord } from "./registry.js";
-import { saveFlow } from "./flows/store.js";
+import {
+  deleteAccount,
+  ensureAccount,
+  listAccounts,
+  upsertProduct,
+  type AccountRecord,
+} from "./registry.js";
+import { deleteFlowsForClient, saveFlow } from "./flows/store.js";
 import { allSeedTemplates } from "./flows/templates.js";
 import type { Flow } from "./flows/types.js";
 
@@ -182,4 +188,36 @@ export async function provisionClient(input: {
   });
 
   return { client, account, user, tempPassword, flow };
+}
+
+export async function deleteClient(id: string): Promise<boolean> {
+  const existing = await getClient(id);
+  if (!existing) return false;
+  const accounts = listAccounts({ clientId: id });
+  for (const acc of accounts) {
+    try {
+      const { disconnect } = await import("./session.js");
+      await disconnect(acc.id);
+    } catch {
+      /* sessão pode não estar no ar */
+    }
+    deleteAccount(acc.id);
+  }
+  deleteFlowsForClient(id);
+  if (hasDatabase()) {
+    await db()`DELETE FROM wa_messages WHERE client_id = ${id}`;
+    await db()`DELETE FROM users WHERE client_id = ${id}`;
+    await db()`DELETE FROM accounts WHERE client_id = ${id}`;
+    await db()`DELETE FROM clients WHERE id = ${id}`;
+  }
+  return true;
+}
+
+export async function wipeAllClients(): Promise<{ deleted: string[] }> {
+  const all = await listClients();
+  const deleted: string[] = [];
+  for (const c of all) {
+    if (await deleteClient(c.id)) deleted.push(c.name);
+  }
+  return { deleted };
 }

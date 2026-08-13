@@ -47,6 +47,8 @@ import {
   listClientUsers,
   listClients,
   provisionClient,
+  wipeAllClients,
+  deleteClient,
 } from "./clients.js";
 import { listMessages, listThreads } from "./inbox.js";
 import {
@@ -356,6 +358,20 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (method === "POST" && path === "/v1/clients/wipe") {
+      if (!requireGlabs(auth)) {
+        unauthorized(res);
+        return;
+      }
+      try {
+        const result = await wipeAllClients();
+        json(res, 200, { ok: true, ...result });
+      } catch (e) {
+        json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "wipe" });
+      }
+      return;
+    }
+
     if (method === "POST" && path === "/v1/clients") {
       if (!requireGlabs(auth)) {
         unauthorized(res);
@@ -377,6 +393,17 @@ const server = createServer(async (req, res) => {
           reason: e instanceof Error ? e.message : "invalid",
         });
       }
+      return;
+    }
+
+    const clientDel = path.match(/^\/v1\/clients\/([a-zA-Z0-9_-]+)$/);
+    if (method === "DELETE" && clientDel) {
+      if (!requireGlabs(auth)) {
+        unauthorized(res);
+        return;
+      }
+      const ok = await deleteClient(clientDel[1]);
+      json(res, ok ? 200 : 404, { ok, reason: ok ? undefined : "notFound" });
       return;
     }
 

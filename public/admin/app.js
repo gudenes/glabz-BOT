@@ -599,7 +599,10 @@ async function loadClients() {
             <strong>${escapeHtml(c.name)}</strong>
             <div class="muted sm mono">${escapeHtml(c.slug)}</div>
           </div>
-          <button type="button" class="btn secondary sm" data-open-portal="${escapeAttr(c.id)}">Abrir projeto</button>
+          <div class="row-actions">
+            <button type="button" class="btn secondary sm" data-open-portal="${escapeAttr(c.id)}">Abrir projeto</button>
+            <button type="button" class="btn secondary sm" data-del-client="${escapeAttr(c.id)}" data-del-name="${escapeAttr(c.name)}">Excluir</button>
+          </div>
         </div>`
       )
       .join("");
@@ -616,6 +619,28 @@ document.addEventListener("click", (e) => {
 });
 
 $("new-client-btn")?.addEventListener("click", () => $("modal-client")?.showModal());
+$("wipe-clients-btn")?.addEventListener("click", async () => {
+  if (!confirm("Apagar TODOS os clientes, fluxos e acessos? O admin GLabs permanece.")) return;
+  try {
+    const data = await api("/v1/clients/wipe", { method: "POST", body: "{}" });
+    toast(data.deleted?.length ? `Apagados: ${data.deleted.join(", ")}` : "Nenhum cliente");
+    await loadClients();
+  } catch (e) {
+    toast(e.message, "err");
+  }
+});
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest?.("[data-del-client]");
+  if (!btn) return;
+  if (!confirm(`Excluir “${btn.dataset.delName}”?`)) return;
+  try {
+    await api(`/v1/clients/${btn.dataset.delClient}`, { method: "DELETE" });
+    toast("Cliente excluído");
+    await loadClients();
+  } catch (ex) {
+    toast(ex.message, "err");
+  }
+});
 
 $("form-client")?.addEventListener("submit", async (e) => {
   e.preventDefault();

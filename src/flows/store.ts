@@ -262,6 +262,15 @@ export function deleteFlow(id: string): boolean {
   return true;
 }
 
+export function deleteFlowsForClient(clientId: string): number {
+  const file = loadFlows();
+  const before = file.flows.length;
+  file.flows = file.flows.filter((f) => f.clientId !== clientId);
+  const removed = before - file.flows.length;
+  if (removed) saveFlows(file);
+  return removed;
+}
+
 export function getConversationState(
   accountId: string,
   phoneE164: string
