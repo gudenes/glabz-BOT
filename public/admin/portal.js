@@ -19,7 +19,7 @@ async function api(path, opts = {}) {
 }
 
 const WELCOME =
-  "Oi. Me conta o negócio e o que o atendimento no WhatsApp precisa fazer — do jeito que você falaria com um colega. Depois eu simulo a conversa aqui, como o bot, e só então a gente monta o fluxo.";
+  "Oi. Isto ainda não é o bot no ar — é só o briefing. Me conta o negócio e o que o atendimento precisa fazer. Quando já der, eu mostro um ensaio curto e monto o fluxo para a gente revisar.";
 
 const state = {
   portal: null,
@@ -61,7 +61,7 @@ function setView(view) {
   if (view === "flow") {
     syncFlowPane();
     if (!hasOwnFlows()) {
-      $("stage-sub").textContent = "Conversa com o bot — depois a gente desenha o fluxo";
+      $("stage-sub").textContent = "Briefing — ensaio curto, depois a gente desenha o fluxo";
     }
   }
   else hideStudioChrome();
@@ -118,14 +118,20 @@ function studioLayout() {
   $("btn-studio-expand")?.classList.toggle("hidden", state.view !== "flow" || !open || first);
   $("btn-studio-expand").textContent = expanded ? "Recolher" : "Expandir";
   $("studio-expand").textContent = expanded && !first ? "Recolher" : "Expandir";
-  $("studio-title").textContent = state.studio.phase === "simulate" || state.studio.phase === "ready"
-    ? "Simulação"
-    : "Atendimento";
+  const phase = state.studio.phase;
+  $("studio-kicker").textContent =
+    phase === "ready" ? "Pronto" : phase === "preview" ? "Ensaio" : "Briefing";
+  $("studio-kicker").className =
+    "studio-kicker" + (phase === "ready" ? " ready" : phase === "preview" ? " preview" : "");
+  $("studio-title").textContent =
+    phase === "ready" ? "Vamos revisar" : phase === "preview" ? "Ensaio do tom" : "Montar o atendimento";
   $("studio-sub").textContent =
-    state.studio.phase === "simulate" || state.studio.phase === "ready"
-      ? "Agora eu sou o bot. Fala como o cliente — a gente ajusta o tom antes de montar o fluxo."
-      : "Fala como se estivesse no WhatsApp. A gente esclarece e simula antes de desenhar o fluxo.";
-  $("studio-ready")?.classList.toggle("hidden", state.studio.phase !== "ready");
+    phase === "ready"
+      ? "Já deu para desenhar. O fluxo abre ao lado para você ajustar e publicar."
+      : phase === "preview"
+        ? "Isto é só um exemplo do tom — o WhatsApp ainda não está atendendo."
+        : "Ainda não é o bot no ar. Combinamos o que ele deve fazer; um ensaio curto e depois montamos o fluxo.";
+  $("studio-ready")?.classList.toggle("hidden", phase !== "ready" || state.studio.busy);
 }
 
 function syncFlowPane() {
@@ -550,6 +556,17 @@ function studioSay(text, who = "coach") {
   return b;
 }
 
+function studioThink(label = "Pensando") {
+  const log = $("studio-log");
+  if (!log) return null;
+  const row = document.createElement("div");
+  row.className = "think";
+  row.innerHTML = `<span class="think-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${label}</span>`;
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+  return row;
+}
+
 function openStudio({ expand = true } = {}) {
   state.studio.open = true;
   state.studio.expanded = expand || !hasOwnFlows();
@@ -574,11 +591,30 @@ function studioHistory() {
   return state.studio.messages.map((m) => ({ role: m.role, content: m.content }));
 }
 
-async function sendStudio(text, action = "chat") {
+async function applyStudioReply(data) {
+  if (data.say) {
+    const who = data.as === "bot" ? "bot" : "coach";
+    studioSay(data.say, who);
+    state.studio.messages.push({ role: "assistant", content: data.say, as: who });
+  }
+  if (data.phase) state.studio.phase = data.phase;
+}
+
+async function revealBuiltFlow() {
+  state.studio.phase = "ready";
+  toast("Fluxo pronto para revisar");
+  await refresh();
+  state.studio.open = true;
+  state.studio.expanded = false;
+  openBuilder();
+  studioLayout();
+}
+
+async function sendStudio(_text, action = "chat") {
   if (state.studio.busy) return;
-  const pending = studioSay(action === "build" ? "Montando o fluxo…" : "…", "sys");
-  pending?.classList.add("pending");
+  let pending = studioThink(action === "build" ? "Montando o fluxo" : "Pensando");
   state.studio.busy = true;
+  studioLayout();
   $("studio-form")?.querySelector("button")?.setAttribute("disabled", "true");
   $("studio-build")?.setAttribute("disabled", "true");
   try {
@@ -587,19 +623,22 @@ async function sendStudio(text, action = "chat") {
       body: JSON.stringify({ messages: studioHistory(), action }),
     });
     pending?.remove();
-    if (data.say) {
-      const who = data.as === "bot" ? "bot" : "coach";
-      studioSay(data.say, who);
-      state.studio.messages.push({ role: "assistant", content: data.say, as: who });
-    }
-    if (data.phase) state.studio.phase = data.phase;
+    pending = null;
+    await applyStudioReply(data);
     if (data.kind === "flow") {
-      state.studio.phase = "ready";
-      toast("Fluxo montado");
-      await refresh();
-      state.studio.open = true;
-      state.studio.expanded = false;
-      openBuilder();
+      await revealBuiltFlow();
+      return;
+    }
+    if (action === "chat" && data.phase === "ready") {
+      pending = studioThink("Ótimo — montando o fluxo agora");
+      const built = await api("/v1/flows/studio", {
+        method: "POST",
+        body: JSON.stringify({ messages: studioHistory(), action: "build" }),
+      });
+      pending?.remove();
+      pending = null;
+      await applyStudioReply(built);
+      if (built.kind === "flow") await revealBuiltFlow();
     }
     studioLayout();
   } catch (ex) {
@@ -610,6 +649,7 @@ async function sendStudio(text, action = "chat") {
     state.studio.busy = false;
     $("studio-form")?.querySelector("button")?.removeAttribute("disabled");
     $("studio-build")?.removeAttribute("disabled");
+    studioLayout();
   }
 }
 

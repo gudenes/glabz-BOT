@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=15" />
+    <link rel="stylesheet" href="/admin/portal.css?v=16" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -112,8 +112,9 @@
           <div id="flow-studio" class="studio hidden" aria-label="Montar fluxo na conversa">
             <header class="studio-head">
               <div>
-                <strong id="studio-title">Atendimento</strong>
-                <p id="studio-sub">Fala como se estivesse no WhatsApp. A gente esclarece e simula antes de desenhar o fluxo.</p>
+                <span class="studio-kicker" id="studio-kicker">Briefing</span>
+                <strong id="studio-title">Montar o atendimento</strong>
+                <p id="studio-sub">Ainda não é o bot no ar. A gente combina o que ele deve fazer; um ensaio curto e depois montamos o fluxo para revisar.</p>
               </div>
               <div class="studio-head-actions">
                 <button type="button" class="btn-text" id="studio-expand">Expandir</button>
@@ -122,11 +123,11 @@
             </header>
             <div class="studio-log" id="studio-log"></div>
             <div class="studio-ready hidden" id="studio-ready">
-              <button type="button" class="btn-lime" id="studio-build">Montar o fluxo</button>
-              <span>ou continua falando para ajustar o tom</span>
+              <button type="button" class="btn-lime" id="studio-build">Revisar o fluxo</button>
+              <span>já dá para desenhar — ou continua o briefing</span>
             </div>
             <form class="studio-form" id="studio-form">
-              <input id="studio-input" type="text" placeholder="Ex.: sou um estúdio de pilates, quero marcar aula e tirar dúvida…" autocomplete="off" />
+              <input id="studio-input" type="text" placeholder="Ex.: estúdio de pilates — marcar aula e passar dúvida para a recepção" autocomplete="off" />
               <button class="btn-lime" type="submit">Enviar</button>
             </form>
             <div class="studio-alts" id="studio-alts">
@@ -222,6 +223,6 @@
       <button type="button" data-view="test">Testar</button>
     </nav>
 
-    <script src="/admin/portal.js?v=15" type="module"></script>
+    <script src="/admin/portal.js?v=16" type="module"></script>
   </body>
 </html>
