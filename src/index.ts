@@ -21,8 +21,10 @@ import { join, extname, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   authDir,
+  BOOT_AT,
   botSecret,
   dataDir,
+  gitInfo,
   isProduction,
   listenPort,
   llmApiKey,
@@ -48,7 +50,9 @@ import {
   deleteFlow,
   getFlow,
   listFlows,
+  listFlowVersions,
   resetConversationToBot,
+  restoreFlowVersion,
   saveFlow,
 } from "./flows/store.js";
 import { simulateFlowMessage } from "./flows/engine.js";
@@ -196,6 +200,21 @@ const server = createServer(async (req, res) => {
 
     if (!authorized(req)) {
       unauthorized(res);
+      return;
+    }
+
+    // ── Versão do backend (git commit rodando + uptime) ───
+    if (method === "GET" && path === "/v1/version") {
+      const git = gitInfo();
+      json(res, 200, {
+        ok: true,
+        commit: git.commit,
+        commitShort: git.commit ? git.commit.slice(0, 7) : null,
+        branch: git.branch,
+        message: git.message,
+        bootAt: BOOT_AT,
+        env: isProduction() ? "production" : "local",
+      });
       return;
     }
 
@@ -463,6 +482,42 @@ const server = createServer(async (req, res) => {
         }
         resetConversationToBot(body.accountId, body.phoneE164);
         json(res, 200, { ok: true });
+        return;
+      }
+    }
+
+    // ── Histórico de versões de um fluxo ──────────────────
+    const versionMatch = path.match(
+      /^\/v1\/flows\/([a-zA-Z0-9_-]+)\/versions(?:\/([a-zA-Z0-9_-]+)\/restore)?$/
+    );
+    if (versionMatch) {
+      const flowId = versionMatch[1];
+      const versionId = versionMatch[2];
+
+      if (method === "GET" && !versionId) {
+        if (!getFlow(flowId)) {
+          json(res, 404, { ok: false, reason: "flowNotFound" });
+          return;
+        }
+        const versions = listFlowVersions(flowId).map((v) => ({
+          id: v.id,
+          savedAt: v.savedAt,
+          name: v.snapshot.name,
+          product: v.snapshot.product,
+          status: v.snapshot.status,
+          nodeCount: v.snapshot.nodes.length,
+        }));
+        json(res, 200, { ok: true, versions });
+        return;
+      }
+
+      if (method === "POST" && versionId) {
+        const flow = restoreFlowVersion(flowId, versionId);
+        if (!flow) {
+          json(res, 404, { ok: false, reason: "versionNotFound" });
+          return;
+        }
+        json(res, 200, { ok: true, flow });
         return;
       }
     }

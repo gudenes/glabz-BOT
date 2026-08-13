@@ -35,6 +35,30 @@ export function flowStatesPath(): string {
   return `${dataDir()}/flow_states.json`;
 }
 
+export function flowHistoryPath(): string {
+  return `${dataDir()}/flow_history.json`;
+}
+
+/** Momento em que este processo subiu — proxy de "quando foi feito o deploy". */
+export const BOOT_AT = new Date().toISOString();
+
+/**
+ * Info do commit git rodando neste processo.
+ * Railway injeta RAILWAY_GIT_* automaticamente em deploys vindos do GitHub.
+ * Fora do Railway (dev local), sem essas vars — fica null (UI mostra "local/dev").
+ */
+export function gitInfo(): {
+  commit: string | null;
+  branch: string | null;
+  message: string | null;
+} {
+  return {
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA?.trim() || null,
+    branch: process.env.RAILWAY_GIT_BRANCH?.trim() || null,
+    message: process.env.RAILWAY_GIT_COMMIT_MESSAGE?.trim() || null,
+  };
+}
+
 /** Secret compartilhado entre bot e apps clientes (Bearer). */
 export function botSecret(): string {
   return (

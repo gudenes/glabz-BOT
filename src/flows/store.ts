@@ -1,12 +1,25 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
-import { flowStatesPath, flowsPath } from "../config.js";
+import { flowHistoryPath, flowStatesPath, flowsPath } from "../config.js";
 import type { Flow, FlowConversationState, FlowEdge, FlowNode } from "./types.js";
 import { allSeedTemplates } from "./templates.js";
 
 type FlowsFile = { version: 1; flows: Flow[] };
 type StatesFile = { version: 1; states: FlowConversationState[] };
+
+/** Snapshot de um fluxo salvo em algum momento — permite "voltar no tempo". */
+export type FlowVersion = {
+  id: string;
+  flowId: string;
+  snapshot: Flow;
+  savedAt: string;
+};
+
+type HistoryFile = { version: 1; entries: FlowVersion[] };
+
+/** Máximo de snapshots guardados por fluxo (os mais antigos saem primeiro). */
+const MAX_VERSIONS_PER_FLOW = 30;
 
 /**
  * Garante templates de demo por nome.
@@ -72,6 +85,76 @@ function loadStates(): StatesFile {
 function saveStates(file: StatesFile): void {
   mkdirSync(dirname(flowStatesPath()), { recursive: true });
   writeFileSync(flowStatesPath(), JSON.stringify(file, null, 2), "utf8");
+}
+
+function loadHistory(): HistoryFile {
+  try {
+    if (!existsSync(flowHistoryPath())) return { version: 1, entries: [] };
+    const raw = readFileSync(flowHistoryPath(), "utf8");
+    const data = JSON.parse(raw) as HistoryFile;
+    if (!data?.entries || !Array.isArray(data.entries)) return { version: 1, entries: [] };
+    return data;
+  } catch {
+    return { version: 1, entries: [] };
+  }
+}
+
+function saveHistory(file: HistoryFile): void {
+  mkdirSync(dirname(flowHistoryPath()), { recursive: true });
+  writeFileSync(flowHistoryPath(), JSON.stringify(file, null, 2), "utf8");
+}
+
+/** Guarda o estado ATUAL de um fluxo como uma versão do histórico (antes de sobrescrever). */
+function snapshotFlowVersion(flow: Flow): void {
+  const file = loadHistory();
+  file.entries.push({
+    id: randomUUID(),
+    flowId: flow.id,
+    snapshot: flow,
+    savedAt: new Date().toISOString(),
+  });
+  const forFlow = file.entries.filter((e) => e.flowId === flow.id);
+  if (forFlow.length > MAX_VERSIONS_PER_FLOW) {
+    const excess = forFlow.length - MAX_VERSIONS_PER_FLOW;
+    const oldestIds = new Set(
+      forFlow
+        .slice()
+        .sort((a, b) => a.savedAt.localeCompare(b.savedAt))
+        .slice(0, excess)
+        .map((e) => e.id)
+    );
+    file.entries = file.entries.filter((e) => !oldestIds.has(e.id));
+  }
+  saveHistory(file);
+}
+
+/** Lista as versões salvas de um fluxo, mais recente primeiro. */
+export function listFlowVersions(flowId: string): FlowVersion[] {
+  return loadHistory()
+    .entries.filter((e) => e.flowId === flowId)
+    .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+}
+
+export function getFlowVersion(versionId: string): FlowVersion | null {
+  return loadHistory().entries.find((e) => e.id === versionId) ?? null;
+}
+
+/**
+ * Restaura um snapshot antigo como versão atual do fluxo.
+ * O estado atual (pré-restore) também vira uma versão no histórico — dá pra desfazer.
+ */
+export function restoreFlowVersion(flowId: string, versionId: string): Flow | null {
+  const version = getFlowVersion(versionId);
+  if (!version || version.flowId !== flowId) return null;
+  return saveFlow({
+    id: flowId,
+    name: version.snapshot.name,
+    product: version.snapshot.product,
+    accountId: version.snapshot.accountId,
+    status: version.snapshot.status,
+    nodes: version.snapshot.nodes,
+    edges: version.snapshot.edges,
+  });
 }
 
 export function listFlows(filter?: {
@@ -148,6 +231,8 @@ export function saveFlow(input: {
   };
 
   if (existing) {
+    // Guarda como estava antes de sobrescrever — permite reverter depois.
+    snapshotFlowVersion({ ...existing });
     Object.assign(existing, flow);
   } else {
     file.flows.push(flow);
