@@ -43,7 +43,17 @@ const state = {
     welcomed: false,
   },
   waBoot: { running: false, done: false },
+  sawQr: false,
+  qrWatch: null,
 };
+
+const WA_PHASES = [
+  ["QR reconhecido", "A câmera leu o código. Estamos abrindo a sessão."],
+  ["Sessão do WhatsApp", "Validando o aparelho conectado…"],
+  ["Número do negócio", "Confirmando o telefone que vai atender."],
+  ["Caixa de conversas", "Preparando a inbox para as mensagens."],
+  ["Pronto para o fluxo", "Tudo ligado. Agora é montar o atendimento."],
+];
 
 const TITLES = {
   status: ["WhatsApp", "Conecte seu número e veja o status"],
@@ -184,48 +194,80 @@ function waHtml(text) {
     .replace(/~([^~\n]+)~/g, "<s>$1</s>");
 }
 
-function startWaBoot(sess) {
-  if (state.waBoot.running || state.waBoot.done) return;
-  state.waBoot.running = true;
-  const items = [...document.querySelectorAll("#wa-checks li")];
-  items.forEach((li) => li.classList.remove("on", "done"));
-  $("wa-boot")?.classList.remove("hidden");
-  $("wa-hero")?.classList.add("booting");
-  $("wa-boot-kicker").textContent = "Ligando";
-  $("btn-go-flow")?.classList.add("hidden");
-  $("btn-connect")?.classList.add("hidden");
-  $("qr-kicker").textContent = "Ligando o número";
-  $("qr-kicker").className = "hero-kicker";
-  $("qr-title").textContent = "O sistema está fechando os checks…";
-  $("qr-hint").textContent = "Isso leva uns segundos. Não fecha a aba.";
-  let i = 0;
-  const step = () => {
-    if (!state.waBoot.running && !state.waBoot.done) return;
-    if (i > 0) {
-      items[i - 1].classList.remove("on");
-      items[i - 1].classList.add("done");
-    }
-    if (i < items.length) {
-      items[i].classList.add("on");
-      i += 1;
-      setTimeout(step, 860);
+function stopQrWatch() {
+  if (state.qrWatch) {
+    clearInterval(state.qrWatch);
+    state.qrWatch = null;
+  }
+}
+
+function watchQrPairing() {
+  if (state.qrWatch) return;
+  state.qrWatch = setInterval(() => {
+    if (state.lastWa === "connected" || state.lastWa === "disconnected") {
+      stopQrWatch();
       return;
     }
+    void refresh();
+  }, 1200);
+}
+
+function paintWaPhase(index) {
+  const items = [...document.querySelectorAll("#wa-checks li")];
+  const [title, sub] = WA_PHASES[index] || WA_PHASES[0];
+  items.forEach((li, n) => {
+    li.classList.toggle("done", n < index);
+    li.classList.toggle("on", n === index);
+  });
+  $("wa-boot-kicker").textContent = `Fase ${index + 1} de ${WA_PHASES.length}`;
+  $("wa-boot-title").textContent = title;
+  $("wa-boot-sub").textContent = sub;
+  if ($("wa-boot-fill")) $("wa-boot-fill").style.width = `${((index + 1) / WA_PHASES.length) * 100}%`;
+}
+
+function startWaBoot(sess) {
+  if (state.waBoot.running) return;
+  state.waBoot.running = true;
+  state.waBoot.done = false;
+  stopQrWatch();
+  if (state.view !== "status") queueMicrotask(() => setView("status"));
+  $("wa-boot")?.classList.remove("hidden");
+  $("wa-hero")?.classList.add("booting");
+  $("btn-go-flow")?.classList.add("hidden");
+  $("btn-connect")?.classList.add("hidden");
+  if ($("wa-boot-fill")) $("wa-boot-fill").style.width = "0%";
+  document.querySelectorAll("#wa-checks li").forEach((li) => li.classList.remove("on", "done"));
+  requestAnimationFrame(() => paintWaPhase(0));
+  let i = 0;
+  const tick = () => {
+    if (!state.waBoot.running) return;
+    i += 1;
+    if (i < WA_PHASES.length) {
+      paintWaPhase(i);
+      setTimeout(tick, 1000);
+      return;
+    }
+    document.querySelectorAll("#wa-checks li").forEach((li) => {
+      li.classList.remove("on");
+      li.classList.add("done");
+    });
     state.waBoot.running = false;
     state.waBoot.done = true;
     $("wa-boot-kicker").textContent = "Pronto";
+    $("wa-boot-title").textContent = "Tudo certo. Ponto para começar?";
+    $("wa-boot-sub").textContent = sess?.phoneDisplay
+      ? `${sess.phoneDisplay} ligado — pode montar o atendimento.`
+      : "Número ligado — pode montar o atendimento.";
     $("qr-kicker").textContent = "Conectado";
     $("qr-kicker").className = "hero-kicker ok";
     $("qr-title").textContent = "Tudo certo. Ponto para começar?";
-    $("qr-hint").textContent = sess?.phoneDisplay
-      ? `${sess.phoneDisplay} ligado — pode montar o atendimento.`
-      : "Número ligado — pode montar o atendimento.";
+    $("qr-hint").textContent = $("wa-boot-sub").textContent;
     $("btn-go-flow")?.classList.remove("hidden");
     $("btn-connect")?.classList.remove("hidden");
-    $("btn-connect").textContent = "Gerar novo QR";
+    if ($("btn-connect")) $("btn-connect").textContent = "Gerar novo QR";
     toast("Tudo certo. Ponto para começar?");
   };
-  setTimeout(step, 420);
+  setTimeout(tick, 1000);
 }
 
 function wrapFmt(kind) {
@@ -285,13 +327,23 @@ function render() {
     if (wa === "pending_qr") toast("QR pronto — aponte a câmera do celular");
     if (wa === "disconnected" && prevWa === "connected") {
       state.waBoot = { running: false, done: false };
+      state.sawQr = false;
+      stopQrWatch();
       toast("WhatsApp desconectado");
     }
   }
-  const justPaired = wa === "connected" && prevWa === "pending_qr";
+  if (wa === "pending_qr" || sess?.qrDataUrl) {
+    state.sawQr = true;
+    watchQrPairing();
+  }
+  const shouldBoot =
+    wa === "connected" &&
+    !state.waBoot.running &&
+    !state.waBoot.done &&
+    (prevWa === "pending_qr" || prevWa === "disconnected" || state.sawQr);
   state.lastWa = wa;
   pill(wa);
-  if (justPaired) startWaBoot(sess);
+  if (shouldBoot) startWaBoot(sess);
 
   $("st-status").textContent =
     sess?.status === "connected"
@@ -470,9 +522,12 @@ $("btn-go-flow")?.addEventListener("click", () => setView("flow"));
 $("btn-connect").onclick = async () => {
   if (!state.accountId) return;
   try {
+    state.waBoot = { running: false, done: false };
+    state.sawQr = true;
     await api(`/v1/accounts/${state.accountId}/connect`, { method: "POST", body: "{}" });
     toast("Gerando QR…");
     await refresh();
+    watchQrPairing();
   } catch (e) {
     toast(e.message, "err");
   }

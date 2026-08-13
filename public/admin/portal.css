@@ -242,12 +242,10 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .hero-lead { margin: 0; color: var(--muted); max-width: 48ch; }
 .phone { margin: 14px 0 0; font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
 .hero-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+.hero-card { position: relative; }
 .hero-card.qr-only { grid-template-columns: 1fr 280px; }
-.hero-card.booting {
-  grid-template-columns: 1fr 1fr;
-  align-items: start;
-}
-.hero-card.booting .hero-visual { display: none; }
+.hero-card.booting .hero-copy,
+.hero-card.booting .hero-visual { visibility: hidden; }
 .hero-visual { display: grid; place-items: center; min-height: 240px; }
 .hero-visual img {
   width: min(280px, 70vw);
@@ -262,20 +260,54 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .hero-card.qr-only:has(.hero-visual:empty):not(.booting) { grid-template-columns: 1fr; }
 
 .wa-boot {
-  background: #111;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background:
+    radial-gradient(700px 280px at 80% -10%, rgba(240, 192, 20, 0.16), transparent 55%),
+    #111;
   color: #f4f4f0;
-  border-radius: 20px;
-  padding: 22px 22px 20px;
-  min-width: 0;
-  animation: wa-boot-in 0.55s ease;
+  border-radius: 24px;
+  padding: 36px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  animation: wa-boot-in 0.45s ease;
 }
 .wa-boot-kicker {
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--gold);
+}
+#wa-boot-title {
+  margin: 0 0 8px;
+  font-family: var(--display);
+  font-size: clamp(26px, 4vw, 36px);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+#wa-boot-sub {
+  margin: 0;
+  color: #9a9a94;
+  font-size: 15px;
+  max-width: 42ch;
+}
+.wa-boot-bar {
+  height: 5px;
+  background: #2a2a2a;
+  border-radius: 99px;
+  margin: 22px 0 26px;
+  overflow: hidden;
+}
+.wa-boot-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--gold);
+  transition: width 1s linear;
 }
 .wa-checks {
   list-style: none;
@@ -340,9 +372,7 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
 }
-@media (max-width: 860px) {
-  .hero-card.booting { grid-template-columns: 1fr; }
-}
+
 
 .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
 .stat {
