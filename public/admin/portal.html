@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=12" />
+    <link rel="stylesheet" href="/admin/portal.css?v=13" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -153,7 +153,24 @@
         <section id="view-inbox" class="view hidden fill">
           <div class="inbox">
             <aside class="inbox-list">
-              <input id="inbox-q" class="inbox-search" type="search" placeholder="Buscar conversa…" />
+              <div class="inbox-tools">
+                <button type="button" class="btn-lime inbox-new" id="btn-new-chat">Nova conversa</button>
+                <input id="inbox-q" class="inbox-search" type="search" placeholder="Buscar conversa…" />
+              </div>
+              <form id="new-chat" class="new-chat hidden">
+                <label>
+                  <span>WhatsApp (com DDI)</span>
+                  <input id="new-phone" type="tel" required placeholder="+55 51 99999-9999" />
+                </label>
+                <label>
+                  <span>Primeira mensagem (opcional)</span>
+                  <input id="new-body" type="text" placeholder="Olá! Aqui é o estúdio." maxlength="4000" />
+                </label>
+                <div class="hero-actions">
+                  <button class="btn-lime" type="submit">Começar</button>
+                  <button class="btn-ghost" type="button" id="new-chat-cancel">Cancelar</button>
+                </div>
+              </form>
               <div id="thread-list" class="thread-list"></div>
             </aside>
             <div class="inbox-chat">
@@ -191,6 +208,6 @@
       <button type="button" data-view="test">Testar</button>
     </nav>
 
-    <script src="/admin/portal.js?v=12" type="module"></script>
+    <script src="/admin/portal.js?v=13" type="module"></script>
   </body>
 </html>

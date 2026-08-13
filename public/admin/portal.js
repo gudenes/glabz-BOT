@@ -354,6 +354,45 @@ async function loadInboxMessages(phone) {
   log.scrollTop = log.scrollHeight;
 }
 
+$("btn-new-chat")?.addEventListener("click", () => {
+  $("new-chat").classList.remove("hidden");
+  $("new-phone").focus();
+});
+$("new-chat-cancel")?.addEventListener("click", () => {
+  $("new-chat").classList.add("hidden");
+});
+$("new-chat")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const phone = $("new-phone").value.trim();
+  const body = $("new-body").value.trim();
+  if (!phone) return;
+  try {
+    if (body) {
+      await api("/v1/inbox/send", { method: "POST", body: JSON.stringify({ phone, body }) });
+      toast("Conversa iniciada no WhatsApp");
+    } else {
+      toast("Pode escrever a primeira mensagem");
+    }
+    $("new-chat").classList.add("hidden");
+    $("new-phone").value = "";
+    $("new-body").value = "";
+    const digits = phone.replace(/\D/g, "");
+    await loadInbox();
+    if (!state.threads.some((t) => t.phoneE164 === digits)) {
+      state.threads.unshift({
+        phoneE164: digits || phone,
+        phoneDisplay: phone,
+        contactName: phone,
+        lastPreview: body || "Nova conversa",
+        lastMessageAt: new Date().toISOString(),
+        mode: "human",
+      });
+    }
+    await loadInboxMessages(digits || phone);
+  } catch (ex) {
+    toast(ex.message, "err");
+  }
+});
 $("inbox-q")?.addEventListener("input", renderThreads);
 $("inbox-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
