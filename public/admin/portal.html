@@ -3,76 +3,148 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Meu WhatsApp · Glabs Bot</title>
+    <title>Meu negócio · GLABZ</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=6" />
+    <link rel="stylesheet" href="/admin/portal.css?v=7" />
   </head>
-  <body>
+  <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">Você está no projeto do cliente como admin GLabs</div>
-    <div class="portal">
-      <aside class="rail">
-        <button class="rail-btn on" data-view="status" title="WhatsApp" id="tab-status">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a8 8 0 0 0-6.9 12l-1 3.8 3.9-1A8 8 0 1 0 12 3z"/></svg>
-        </button>
-        <button class="rail-btn" data-view="flow" title="Fluxo" id="tab-flow">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
-        </button>
-        <div class="rail-spacer"></div>
-        <button class="rail-btn" id="btn-logout" title="Sair">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-        </button>
-      </aside>
 
-      <aside class="plist">
-        <div class="plist-head">
-          <h2 id="client-name">Projeto</h2>
+    <div class="app">
+      <aside class="side">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 32 32"><path d="M7 6h10.5c4.2 0 7.5 2.8 7.5 6.4 0 2.4-1.4 4.5-3.6 5.5 2.6.9 4.3 3.2 4.3 5.8 0 3.8-3.5 6.3-8.2 6.3H7V6zm4.4 4.1v4.7h5.4c1.7 0 2.8-.9 2.8-2.3s-1.1-2.4-2.8-2.4H11.4zm0 8.3v5.4h6.2c2 0 3.3-1 3.3-2.7s-1.3-2.7-3.3-2.7h-6.2z" fill="currentColor"/></svg>
+          </span>
+          <span class="brand-word">GLABZ</span>
         </div>
-        <p class="plist-sub" id="client-sub">Carregando…</p>
-        <div class="row-card on" data-view="status">
-          <strong>WhatsApp</strong>
-          <small id="row-wa">conexão</small>
-        </div>
-        <div class="row-card" data-view="flow">
-          <strong>Fluxo</strong>
-          <small id="row-flow">montar atendimento</small>
-        </div>
-      </aside>
 
-      <section class="stage">
-        <header class="stage-head">
-          <div>
-            <h3 id="stage-title">WhatsApp</h3>
-            <p id="stage-sub">Conecte o número e publique o fluxo</p>
+        <p class="side-kicker">Meu negócio</p>
+        <strong class="side-client" id="client-name">—</strong>
+        <span class="side-sub" id="client-sub">Portal do cliente</span>
+
+        <nav class="side-nav">
+          <button type="button" class="nav-link on" data-view="status">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a8 8 0 0 0-6.9 12l-1 3.8 3.9-1A8 8 0 1 0 12 3z"/></svg>
+            WhatsApp
+          </button>
+          <button type="button" class="nav-link" data-view="flow">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            Fluxo
+          </button>
+          <button type="button" class="nav-link" data-view="test">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+            Testar
+          </button>
+          <button type="button" class="nav-link" data-view="pubs">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="m6 14 6-6 6 6"/><path d="M4 4h16"/></svg>
+            Publicações
+          </button>
+        </nav>
+
+        <div class="side-foot">
+          <div class="who">
+            <span class="who-av" id="who-av">G</span>
+            <div>
+              <b id="who-name">—</b>
+              <small id="who-role">Cliente</small>
+            </div>
           </div>
-          <span id="conn-pill" class="pill off">—</span>
+          <button type="button" class="btn-text" id="btn-logout">Sair</button>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="top">
+          <div>
+            <h1 id="stage-title">WhatsApp</h1>
+            <p id="stage-sub">Conecte seu número e veja o status</p>
+          </div>
+          <div class="top-actions">
+            <button type="button" class="btn-ghost" id="btn-refresh">Atualizar</button>
+            <span id="conn-pill" class="pill off">—</span>
+          </div>
         </header>
-        <div class="stage-body" id="view-status">
-          <div class="status-wrap">
-            <div class="qr-card">
-              <h4 id="qr-title">Conectar WhatsApp</h4>
-              <p class="hint" id="qr-hint">Abra o WhatsApp no celular → Aparelhos conectados → Conectar.</p>
-              <div id="qr-box" style="margin:16px 0"></div>
-              <div class="stat-grid">
-                <div class="stat"><span>Número</span><b id="st-phone">—</b></div>
-                <div class="stat"><span>Status</span><b id="st-status">—</b></div>
-                <div class="stat"><span>Fluxo no ar</span><b id="st-live">Nenhum publicado</b></div>
-                <div class="stat"><span>Atualizado</span><b id="st-updated">—</b></div>
-              </div>
-              <div style="display:flex;gap:8px;justify-content:center;margin-top:16px">
-                <button class="btn-wa" id="btn-connect" type="button">Gerar QR</button>
+
+        <!-- WhatsApp -->
+        <section id="view-status" class="view">
+          <div class="hero-card" id="wa-hero">
+            <div class="hero-copy">
+              <p class="hero-kicker" id="qr-kicker">Ainda não conectado</p>
+              <h2 id="qr-title">Conecte o WhatsApp do negócio</h2>
+              <p class="hero-lead" id="qr-hint">Clique em Gerar QR e aponte a câmera: WhatsApp → Aparelhos conectados → Conectar um aparelho.</p>
+              <p class="phone" id="st-phone"></p>
+              <div class="hero-actions">
+                <button class="btn-lime" id="btn-connect" type="button">Gerar QR</button>
                 <button class="btn-ghost" id="btn-disconnect" type="button">Desconectar</button>
               </div>
             </div>
+            <div class="hero-visual" id="qr-box">
+              <div class="wa-orb" aria-hidden="true">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="#25D366"><path d="M12 3a8 8 0 0 0-6.9 12l-1 3.8 3.9-1A8 8 0 1 0 12 3z"/></svg>
+              </div>
+            </div>
           </div>
-        </div>
-        <iframe id="view-flow" class="hidden" title="Editor de fluxo" style="border:0;width:100%;height:100%;background:#0a0c10"></iframe>
-      </section>
+
+          <div class="stat-row">
+            <article class="stat"><span>Status</span><b id="st-status">—</b></article>
+            <article class="stat"><span>Fluxo no ar</span><b id="st-live">Nenhum publicado</b></article>
+            <article class="stat"><span>Publicado</span><b id="st-updated">—</b></article>
+          </div>
+
+          <aside class="tip">
+            <strong>Dica</strong>
+            <p>Depois de conectar, abra <button type="button" class="inline" data-view="test">Testar</button> e fale como o cliente. O fluxo responde na hora, sem gastar o WhatsApp real.</p>
+          </aside>
+        </section>
+
+        <!-- Fluxo -->
+        <section id="view-flow" class="view hidden fill">
+          <iframe id="flow-frame" title="Editor de fluxo"></iframe>
+        </section>
+
+        <!-- Testar -->
+        <section id="view-test" class="view hidden">
+          <div class="test-shell">
+            <div class="test-meta">
+              <h2 id="test-flow-name">Simule uma conversa</h2>
+              <p id="test-flow-sub">O bot responde com o fluxo atual (rascunho ou no ar).</p>
+              <p class="now" id="test-now">Pronto para a primeira mensagem</p>
+              <button type="button" class="btn-ghost" id="test-reset">Recomeçar</button>
+            </div>
+            <div class="chat">
+              <div class="chat-log" id="chat-log">
+                <div class="chat-empty" id="chat-empty">
+                  <p>Digite como o cliente. Ex.: “Oi, quero marcar uma sessão”.</p>
+                </div>
+              </div>
+              <form class="chat-form" id="chat-form">
+                <input id="chat-input" type="text" placeholder="Digite sua mensagem…" autocomplete="off" maxlength="500" />
+                <button class="btn-lime" type="submit">Enviar</button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <!-- Publicações -->
+        <section id="view-pubs" class="view hidden">
+          <div id="pubs-list" class="pubs"></div>
+        </section>
+      </main>
     </div>
-    <script src="/admin/portal.js?v=6" type="module"></script>
+
+    <nav class="mobile-nav" aria-label="Principal">
+      <button type="button" data-view="status" class="on">WhatsApp</button>
+      <button type="button" data-view="flow">Fluxo</button>
+      <button type="button" data-view="test">Testar</button>
+      <button type="button" data-view="pubs">No ar</button>
+    </nav>
+
+    <script src="/admin/portal.js?v=7" type="module"></script>
   </body>
 </html>
