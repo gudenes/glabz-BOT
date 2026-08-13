@@ -606,6 +606,7 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 }
 .studio-form {
   display: flex;
+  align-items: flex-end;
   gap: 8px;
   padding: 10px;
   background: #111;
@@ -641,17 +642,24 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
   0%, 100% { box-shadow: 0 0 0 0 rgba(240, 192, 20, 0.45); }
   50% { box-shadow: 0 0 0 8px rgba(240, 192, 20, 0); }
 }
-.studio-form input {
+.studio-form textarea {
   flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  max-height: 38vh;
   border: 1px solid rgba(255,255,255,0.1);
   background: #1c1c1c;
   color: #f4f4f0;
   border-radius: 12px;
   padding: 11px 12px;
   font: inherit;
+  line-height: 1.4;
+  resize: none;
+  overflow-y: auto;
+  field-sizing: content;
 }
-.studio-form input::placeholder { color: #6b6b6b; }
-.studio-form input:focus { outline: 1px solid var(--gold); border-color: var(--gold); }
+.studio-form textarea::placeholder { color: #6b6b6b; }
+.studio-form textarea:focus { outline: 1px solid var(--gold); border-color: var(--gold); }
 .studio-alts {
   display: flex;
   flex-wrap: wrap;

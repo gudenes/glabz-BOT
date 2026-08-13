@@ -775,7 +775,7 @@ async function sendStudio(_text, action = "chat") {
   );
   state.studio.busy = true;
   studioLayout();
-  $("studio-form")?.querySelector("button")?.setAttribute("disabled", "true");
+  $("studio-form")?.querySelector("button[type=submit]")?.setAttribute("disabled", "true");
   $("studio-build")?.setAttribute("disabled", "true");
   $("studio-test")?.setAttribute("disabled", "true");
   try {
@@ -807,7 +807,7 @@ async function sendStudio(_text, action = "chat") {
     toast(ex.message, "err");
   } finally {
     state.studio.busy = false;
-    $("studio-form")?.querySelector("button")?.removeAttribute("disabled");
+    $("studio-form")?.querySelector("button[type=submit]")?.removeAttribute("disabled");
     $("studio-build")?.removeAttribute("disabled");
     $("studio-test")?.removeAttribute("disabled");
     studioLayout();
@@ -847,12 +847,29 @@ async function useTemplate(kind) {
     toast(e.message, "err");
   }
 }
+function growStudioInput() {
+  const el = $("studio-input");
+  if (!el) return;
+  el.style.height = "auto";
+  const max = Math.round(window.innerHeight * 0.38);
+  el.style.height = Math.min(el.scrollHeight, max) + "px";
+}
+
+$("studio-input")?.addEventListener("input", growStudioInput);
+$("studio-input")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    $("studio-form")?.requestSubmit();
+  }
+});
+
 $("studio-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const input = $("studio-input");
   const text = (input.value || "").trim();
   if (!text || state.studio.busy) return;
   input.value = "";
+  growStudioInput();
   studioSay(text, "user");
   state.studio.messages.push({ role: "user", content: text });
   await sendStudio(text, "chat");
@@ -925,7 +942,10 @@ $("studio-mic")?.addEventListener("click", async () => {
       else interim += piece;
     }
     if (final) state.studio.heard += final;
-    if ($("studio-input")) $("studio-input").value = (state.studio.heard + interim).trim();
+    if ($("studio-input")) {
+      $("studio-input").value = (state.studio.heard + interim).trim();
+      growStudioInput();
+    }
   };
   rec.onend = () => {
     if (state.studio.rec === rec) {
