@@ -494,6 +494,7 @@ function renderAll() {
   renderProps();
   if (state.flow) {
     $("flow-name").value = state.flow.name;
+    fitFlowName();
     renderProductSelect();
     $("flow-status").textContent = statusLabel(state.flow.status || "draft");
     $("flow-status").className =
@@ -891,11 +892,15 @@ function renderProps() {
   }
   lastSeenPropsNodeId = node?.id ?? null;
 
+  document.querySelector(".fb-body")?.classList.toggle("has-props", Boolean(node));
+  if (propsPanel) propsPanel.classList.toggle("idle", !node);
+
   if (!node) {
     empty.classList.remove("hidden");
     body.classList.add("hidden");
     return;
   }
+  propsPanel?.classList.remove("collapsed");
   empty.classList.add("hidden");
   body.classList.remove("hidden");
 
@@ -1108,6 +1113,14 @@ function escapeHtml(s) {
 }
 
 // ── Palette (fallback: nó solto; preferir o + nos nós) ───
+document.querySelector(".fb-canvas-wrap")?.addEventListener("click", (ev) => {
+  if (ev.target.closest(".fb-node, .node-plus, .node-add-menu")) return;
+  if (!state.selectedNodeId) return;
+  state.selectedNodeId = null;
+  renderCanvas();
+  renderProps();
+});
+
 document.querySelectorAll(".pal-item").forEach((btn) => {
   btn.onclick = () => {
     if (!state.flow) return;
@@ -1280,9 +1293,17 @@ $("btn-delete").onclick = async () => {
   }
 };
 
+function fitFlowName() {
+  const el = $("flow-name");
+  if (!el) return;
+  const probe = el.value || el.placeholder || "Fluxo";
+  el.style.width = Math.min(Math.max(probe.length * 11 + 28, 96), 440) + "px";
+}
+
 $("flow-name").oninput = () => {
   if (!state.flow) return;
   state.flow.name = $("flow-name").value;
+  fitFlowName();
   updateSaveBadge();
 };
 

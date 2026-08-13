@@ -100,7 +100,7 @@ function openBuilder() {
   const cid = sessionStorage.getItem("glabs_client_id") || state.portal?.client?.id || "";
   if (frame) {
     frame.dataset.loaded = "1";
-    frame.src = `/admin/flows.html?embed=1&client=${encodeURIComponent(cid)}&v=15`;
+    frame.src = `/admin/flows.html?embed=1&client=${encodeURIComponent(cid)}&v=16`;
   }
 }
 

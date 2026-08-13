@@ -20,13 +20,30 @@ body.portal-embed .builder-app {
 body.portal-embed .fb-top {
   background: #fff;
   border-bottom: 1px solid var(--line);
-  padding: 10px 16px;
+  padding: 8px 14px;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+body.portal-embed .fb-top-left {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+body.portal-embed .fb-top-right {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+body.portal-embed .fb-title-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 body.portal-embed .fb-brand-chip,
 body.portal-embed .fb-icon-btn,
 body.portal-embed #build-badge,
 body.portal-embed .fb-select-wrap,
-body.portal-embed #btn-new {
+body.portal-embed #btn-new,
+body.portal-embed #btn-history,
+body.portal-embed #btn-revert {
   display: none !important;
 }
 body.portal-embed .fb-name {
@@ -36,8 +53,16 @@ body.portal-embed .fb-name {
   letter-spacing: -0.03em;
   color: var(--ink);
   background: transparent;
-  border: 0;
-  padding: 4px 0;
+  border: 1px solid transparent;
+  padding: 4px 8px;
+  width: auto;
+  max-width: min(440px, 36vw);
+  min-width: 96px;
+}
+body.portal-embed .fb-name:hover,
+body.portal-embed .fb-name:focus {
+  border-color: var(--line);
+  background: #fafafa;
 }
 body.portal-embed .fb-meta-chip,
 body.portal-embed .fb-save-state {
@@ -55,7 +80,12 @@ body.portal-embed .fb-status.draft {
   background: #f1f1ec;
   color: var(--muted);
 }
-body.portal-embed .fb-actions { border: 0; padding-left: 0; }
+body.portal-embed .fb-actions {
+  border: 0;
+  padding-left: 0;
+  flex-wrap: nowrap;
+}
+body.portal-embed .fb-actions .fb-btn { white-space: nowrap; }
 body.portal-embed .fb-btn-primary {
   background: var(--gold);
   color: var(--gold-ink);
@@ -83,8 +113,14 @@ body.portal-embed .fb-body:has(#panel-list.collapsed):has(#panel-props.collapsed
 body.portal-embed .fb-body:has(#panel-palette.collapsed):has(#panel-props.collapsed),
 body.portal-embed .fb-body:has(#panel-list.collapsed):has(#panel-palette.collapsed):has(#panel-props.collapsed) {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: 1fr;
   grid-template-rows: 58px 1fr;
+  grid-template-areas:
+    "pal"
+    "can";
+}
+body.portal-embed .fb-body.has-props {
+  grid-template-columns: 1fr 320px;
   grid-template-areas:
     "pal props"
     "can props";
@@ -138,10 +174,15 @@ body.portal-embed .fb-canvas-label {
   display: none;
 }
 body.portal-embed .fb-props {
+  display: none;
   grid-area: props;
   background: #fff;
   border: 0;
   border-left: 1px solid var(--line);
+}
+body.portal-embed .fb-body.has-props .fb-props {
+  display: flex;
+  flex-direction: column;
 }
 body.portal-embed .fb-aside-head { color: var(--muted); }
 
