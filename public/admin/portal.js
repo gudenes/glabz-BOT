@@ -47,7 +47,7 @@ const state = {
     heard: "",
     welcomed: false,
   },
-  waBoot: { running: false, done: false },
+  waBoot: { running: false, done: false, dismissed: false },
   sawQr: false,
   qrWatch: null,
 };
@@ -231,14 +231,48 @@ function paintWaPhase(index) {
   if ($("wa-boot-fill")) $("wa-boot-fill").style.width = `${((index + 1) / WA_PHASES.length) * 100}%`;
 }
 
+function showWaCta(sess) {
+  const phone = sess?.phoneDisplay
+    ? `${sess.phoneDisplay} ligado — pode montar o atendimento.`
+    : "Número ligado — pode montar o atendimento.";
+  if ($("wa-boot-done-sub")) $("wa-boot-done-sub").textContent = phone;
+  $("wa-boot-stage")?.classList.add("out");
+  $("wa-checks")?.classList.add("out");
+  setTimeout(() => {
+    $("wa-boot-stage")?.classList.add("hidden");
+    $("wa-checks")?.classList.add("hidden");
+    $("wa-boot-done")?.classList.remove("hidden");
+    requestAnimationFrame(() => $("wa-boot-done")?.classList.add("in"));
+    $("qr-kicker").textContent = "Conectado";
+    $("qr-kicker").className = "hero-kicker ok";
+    $("qr-title").textContent = "Tudo certo. Ponto para começar?";
+    $("qr-hint").textContent = phone;
+    $("btn-go-flow")?.classList.remove("hidden");
+    $("btn-connect")?.classList.remove("hidden");
+    if ($("btn-connect")) $("btn-connect").textContent = "Gerar novo QR";
+    toast("Tudo certo. Ponto para começar?");
+  }, 420);
+}
+
+function dismissWaBoot() {
+  state.waBoot.dismissed = true;
+  $("wa-boot")?.classList.add("hidden");
+  $("view-status")?.classList.remove("wa-full");
+}
+
 function startWaBoot(sess) {
   if (state.waBoot.running) return;
   state.waBoot.running = true;
   state.waBoot.done = false;
+  state.waBoot.dismissed = false;
   stopQrWatch();
   if (state.view !== "status") queueMicrotask(() => setView("status"));
   $("wa-boot")?.classList.remove("hidden");
-  $("wa-hero")?.classList.add("booting");
+  $("view-status")?.classList.add("wa-full");
+  $("wa-boot-stage")?.classList.remove("hidden", "out");
+  $("wa-checks")?.classList.remove("hidden", "out");
+  $("wa-boot-done")?.classList.add("hidden");
+  $("wa-boot-done")?.classList.remove("in");
   $("btn-go-flow")?.classList.add("hidden");
   $("btn-connect")?.classList.add("hidden");
   if ($("wa-boot-fill")) $("wa-boot-fill").style.width = "0%";
@@ -259,19 +293,7 @@ function startWaBoot(sess) {
     });
     state.waBoot.running = false;
     state.waBoot.done = true;
-    $("wa-boot-kicker").textContent = "Pronto";
-    $("wa-boot-title").textContent = "Tudo certo. Ponto para começar?";
-    $("wa-boot-sub").textContent = sess?.phoneDisplay
-      ? `${sess.phoneDisplay} ligado — pode montar o atendimento.`
-      : "Número ligado — pode montar o atendimento.";
-    $("qr-kicker").textContent = "Conectado";
-    $("qr-kicker").className = "hero-kicker ok";
-    $("qr-title").textContent = "Tudo certo. Ponto para começar?";
-    $("qr-hint").textContent = $("wa-boot-sub").textContent;
-    $("btn-go-flow")?.classList.remove("hidden");
-    $("btn-connect")?.classList.remove("hidden");
-    if ($("btn-connect")) $("btn-connect").textContent = "Gerar novo QR";
-    toast("Tudo certo. Ponto para começar?");
+    showWaCta(sess);
   };
   setTimeout(tick, 1000);
 }
@@ -332,7 +354,7 @@ function render() {
   if (prevWa && prevWa !== wa) {
     if (wa === "pending_qr") toast("QR pronto — aponte a câmera do celular");
     if (wa === "disconnected" && prevWa === "connected") {
-      state.waBoot = { running: false, done: false };
+      state.waBoot = { running: false, done: false, dismissed: false };
       state.sawQr = false;
       stopQrWatch();
       toast("WhatsApp desconectado");
@@ -367,9 +389,12 @@ function render() {
   const existingImg = box.querySelector("img");
   if (existingImg) existingImg.remove();
 
+  const showBoot =
+    !state.waBoot.dismissed &&
+    (state.waBoot.running || (wa === "connected" && state.waBoot.done));
   $("btn-go-flow")?.classList.toggle("hidden", wa !== "connected" || state.waBoot.running);
-  $("wa-boot")?.classList.toggle("hidden", !state.waBoot.running && !(wa === "connected" && state.waBoot.done));
-  $("wa-hero")?.classList.toggle("booting", state.waBoot.running || (wa === "connected" && state.waBoot.done));
+  $("wa-boot")?.classList.toggle("hidden", !showBoot);
+  $("view-status")?.classList.toggle("wa-full", showBoot);
 
   if (state.waBoot.running) {
     $("qr-kicker").textContent = "Ligando o número";
@@ -524,11 +549,16 @@ async function refresh() {
 }
 
 $("btn-go-flow")?.addEventListener("click", () => setView("flow"));
+$("btn-go-flow-boot")?.addEventListener("click", () => {
+  dismissWaBoot();
+  setView("flow");
+});
+$("btn-wa-later")?.addEventListener("click", dismissWaBoot);
 
 $("btn-connect").onclick = async () => {
   if (!state.accountId) return;
   try {
-    state.waBoot = { running: false, done: false };
+    state.waBoot = { running: false, done: false, dismissed: false };
     state.sawQr = true;
     await api(`/v1/accounts/${state.accountId}/connect`, { method: "POST", body: "{}" });
     toast("Gerando QR…");

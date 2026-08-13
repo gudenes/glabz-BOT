@@ -242,10 +242,7 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .hero-lead { margin: 0; color: var(--muted); max-width: 48ch; }
 .phone { margin: 14px 0 0; font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
 .hero-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
-.hero-card { position: relative; }
 .hero-card.qr-only { grid-template-columns: 1fr 280px; }
-.hero-card.booting .hero-copy,
-.hero-card.booting .hero-visual { visibility: hidden; }
 .hero-visual { display: grid; place-items: center; min-height: 240px; }
 .hero-visual img {
   width: min(280px, 70vw);
@@ -257,23 +254,112 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
   box-shadow: 0 12px 40px rgba(0,0,0,0.08);
 }
 .hero-visual:empty { display: none; }
-.hero-card.qr-only:has(.hero-visual:empty):not(.booting) { grid-template-columns: 1fr; }
+.hero-card.qr-only:has(.hero-visual:empty) { grid-template-columns: 1fr; }
+
+#view-status.wa-full {
+  min-height: calc(100vh - 118px);
+}
+#view-status.wa-full #wa-hero,
+#view-status.wa-full .stat-row,
+#view-status.wa-full .tip {
+  display: none;
+}
 
 .wa-boot {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
+  min-height: calc(100vh - 130px);
   background:
-    radial-gradient(700px 280px at 80% -10%, rgba(240, 192, 20, 0.16), transparent 55%),
+    radial-gradient(900px 360px at 70% -10%, rgba(240, 192, 20, 0.16), transparent 55%),
     #111;
   color: #f4f4f0;
   border-radius: 24px;
-  padding: 36px 40px;
+  padding: 48px 48px 56px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  gap: 48px;
   animation: wa-boot-in 0.45s ease;
 }
+.wa-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0;
+}
+.wa-steps li {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  position: relative;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b6b6b;
+  opacity: 0.4;
+  transition: opacity 0.45s ease, color 0.45s ease;
+}
+.wa-steps li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 13px;
+  left: calc(50% + 20px);
+  width: calc(100% - 40px);
+  height: 2px;
+  background: #2a2a2a;
+  transition: background 0.45s ease;
+}
+.wa-steps li i {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1.5px solid #3a3a3a;
+  background: #111;
+  position: relative;
+  z-index: 1;
+  transition: border-color 0.4s, background 0.4s;
+}
+.wa-steps li.on {
+  opacity: 1;
+  color: #f4f4f0;
+}
+.wa-steps li.on i {
+  border-color: var(--gold);
+  border-top-color: transparent;
+  animation: wa-spin 0.75s linear infinite;
+}
+.wa-steps li.done {
+  opacity: 1;
+  color: #f4f4f0;
+}
+.wa-steps li.done i {
+  border-color: var(--gold);
+  background: var(--gold);
+  animation: none;
+}
+.wa-steps li.done i::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 5px;
+  width: 6px;
+  height: 11px;
+  border: solid var(--gold-ink);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.wa-steps li.done:not(:last-child)::after { background: var(--gold); }
+.wa-steps.out,
+.wa-boot-stage.out {
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+.wa-boot-stage { transition: opacity 0.45s ease, transform 0.45s ease; }
 .wa-boot-kicker {
   margin: 0 0 10px;
   font-size: 11px;
@@ -282,24 +368,27 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
   text-transform: uppercase;
   color: var(--gold);
 }
-#wa-boot-title {
-  margin: 0 0 8px;
+#wa-boot-title,
+#wa-boot-done-title {
+  margin: 0 0 10px;
   font-family: var(--display);
-  font-size: clamp(26px, 4vw, 36px);
+  font-size: clamp(32px, 5vw, 48px);
   letter-spacing: -0.04em;
-  line-height: 1;
+  line-height: 0.98;
 }
-#wa-boot-sub {
+#wa-boot-sub,
+#wa-boot-done-sub {
   margin: 0;
   color: #9a9a94;
-  font-size: 15px;
-  max-width: 42ch;
+  font-size: 16px;
+  max-width: 40ch;
 }
 .wa-boot-bar {
   height: 5px;
+  max-width: 420px;
   background: #2a2a2a;
   border-radius: 99px;
-  margin: 22px 0 26px;
+  margin: 28px 0 0;
   overflow: hidden;
 }
 .wa-boot-bar i {
@@ -309,68 +398,35 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
   background: var(--gold);
   transition: width 1s linear;
 }
-.wa-checks {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 11px;
+.wa-boot-cta {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
 }
-.wa-checks li {
+.wa-boot-cta.in {
+  opacity: 1;
+  transform: none;
+}
+.wa-boot-actions {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 14.5px;
-  font-weight: 600;
-  color: #6b6b6b;
-  opacity: 0.4;
-  transform: translateY(4px);
-  transition: opacity 0.55s ease, color 0.55s ease, transform 0.55s ease;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 28px;
 }
-.wa-checks li i {
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  border: 1.5px solid #3a3a3a;
-  flex-shrink: 0;
-  position: relative;
-  transition: border-color 0.4s, background 0.4s;
-}
-.wa-checks li.on {
-  opacity: 1;
+.btn-ghost.light {
+  background: transparent;
   color: #f4f4f0;
-  transform: none;
+  border-color: rgba(255,255,255,0.18);
 }
-.wa-checks li.on i {
-  border-color: var(--gold);
-  border-top-color: transparent;
-  animation: wa-spin 0.75s linear infinite;
-}
-.wa-checks li.done {
-  opacity: 1;
-  color: #f4f4f0;
-  transform: none;
-}
-.wa-checks li.done i {
-  border-color: var(--gold);
-  background: var(--gold);
-  animation: none;
-}
-.wa-checks li.done i::after {
-  content: "";
-  position: absolute;
-  left: 5px;
-  top: 2px;
-  width: 5px;
-  height: 8px;
-  border: solid var(--gold-ink);
-  border-width: 0 1.6px 1.6px 0;
-  transform: rotate(45deg);
-}
+.btn-ghost.light:hover { border-color: var(--gold); color: var(--gold); }
 @keyframes wa-spin { to { transform: rotate(360deg); } }
 @keyframes wa-boot-in {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
+}
+@media (max-width: 860px) {
+  .wa-boot { padding: 28px 20px 36px; min-height: calc(100vh - 160px); gap: 32px; }
+  .wa-steps li span { font-size: 11px; }
 }
 
 

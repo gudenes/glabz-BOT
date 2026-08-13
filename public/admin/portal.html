@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=22" />
+    <link rel="stylesheet" href="/admin/portal.css?v=23" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -81,6 +81,30 @@
 
         <!-- WhatsApp -->
         <section id="view-status" class="view">
+          <aside id="wa-boot" class="wa-boot hidden" aria-live="polite">
+            <ol class="wa-steps" id="wa-checks">
+              <li><i></i><span>QR</span></li>
+              <li><i></i><span>Sessão</span></li>
+              <li><i></i><span>Número</span></li>
+              <li><i></i><span>Conversas</span></li>
+              <li><i></i><span>Pronto</span></li>
+            </ol>
+            <div class="wa-boot-stage" id="wa-boot-stage">
+              <p class="wa-boot-kicker" id="wa-boot-kicker">Fase 1 de 5</p>
+              <h2 id="wa-boot-title">QR reconhecido</h2>
+              <p id="wa-boot-sub">O sistema está ligando o número. Isso leva cerca de 5 segundos.</p>
+              <div class="wa-boot-bar" aria-hidden="true"><i id="wa-boot-fill"></i></div>
+            </div>
+            <div class="wa-boot-cta hidden" id="wa-boot-done">
+              <p class="wa-boot-kicker">Pronto</p>
+              <h2 id="wa-boot-done-title">Tudo certo. Ponto para começar?</h2>
+              <p id="wa-boot-done-sub">Número ligado — pode montar o atendimento.</p>
+              <div class="wa-boot-actions">
+                <button type="button" class="btn-lime" id="btn-go-flow-boot">Configurar o fluxo</button>
+                <button type="button" class="btn-ghost light" id="btn-wa-later">Agora não</button>
+              </div>
+            </div>
+          </aside>
           <div class="hero-card qr-only" id="wa-hero">
             <div class="hero-copy">
               <p class="hero-kicker" id="qr-kicker">Ainda não conectado</p>
@@ -94,19 +118,6 @@
               </div>
             </div>
             <div class="hero-visual" id="qr-box"></div>
-            <aside id="wa-boot" class="wa-boot hidden" aria-live="polite">
-              <p class="wa-boot-kicker" id="wa-boot-kicker">Fase 1 de 5</p>
-              <h2 id="wa-boot-title">QR reconhecido</h2>
-              <p id="wa-boot-sub">O sistema está ligando o número. Isso leva cerca de 5 segundos.</p>
-              <div class="wa-boot-bar" aria-hidden="true"><i id="wa-boot-fill"></i></div>
-              <ol class="wa-checks" id="wa-checks">
-                <li><i></i><span>QR reconhecido</span></li>
-                <li><i></i><span>Sessão do WhatsApp</span></li>
-                <li><i></i><span>Número do negócio</span></li>
-                <li><i></i><span>Caixa de conversas</span></li>
-                <li><i></i><span>Pronto para o fluxo</span></li>
-              </ol>
-            </aside>
           </div>
 
           <div class="stat-row">
@@ -246,6 +257,6 @@
       <button type="button" data-view="test">Testar</button>
     </nav>
 
-    <script src="/admin/portal.js?v=22" type="module"></script>
+    <script src="/admin/portal.js?v=23" type="module"></script>
   </body>
 </html>
