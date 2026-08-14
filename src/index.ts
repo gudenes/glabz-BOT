@@ -53,8 +53,10 @@ import {
 import { listMessages, listThreads } from "./inbox.js";
 import {
   deleteAccount,
+  deleteProduct,
   ensureAccount,
   getAccount,
+  isDefaultProduct,
   listAccounts,
   listProducts,
   updateAccount,
@@ -574,6 +576,32 @@ const server = createServer(async (req, res) => {
           reason: e instanceof Error ? e.message : "invalid",
         });
       }
+      return;
+    }
+
+    const productDel = path.match(/^\/v1\/products\/([a-zA-Z0-9_-]+)$/);
+    if (method === "DELETE" && productDel) {
+      const slug = productDel[1];
+      if (isDefaultProduct(slug)) {
+        json(res, 400, {
+          ok: false,
+          reason: "product padrão (gestor/prontuario) não pode ser removido",
+        });
+        return;
+      }
+      const accountsInUse = listAccounts({ product: slug }).length;
+      const flowsInUse = listFlows({ product: slug }).length;
+      if (accountsInUse > 0 || flowsInUse > 0) {
+        json(res, 400, {
+          ok: false,
+          reason: `em uso: ${accountsInUse} account(s) e ${flowsInUse} flow(s) — remova primeiro`,
+          accountsInUse,
+          flowsInUse,
+        });
+        return;
+      }
+      const ok = deleteProduct(slug);
+      json(res, ok ? 200 : 404, { ok, reason: ok ? undefined : "productNotFound" });
       return;
     }
 

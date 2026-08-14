@@ -1,4 +1,9 @@
 import { toast } from "./toast.js";
+import { applyStaticTranslations, mountLangToggle, t } from "./i18n.js";
+
+applyStaticTranslations();
+const langToggleSlot = document.getElementById("lang-toggle-slot");
+if (langToggleSlot) mountLangToggle(langToggleSlot);
 
 const $ = (id) => document.getElementById(id);
 
@@ -21,9 +26,9 @@ async function api(path, opts = {}) {
 function welcomeText() {
   const name = state.portal?.client?.name?.trim();
   if (name) {
-    return `Oi. Vocês são a ${name} — isso já está no cadastro, não preciso do nome de novo. Me conta o que o atendimento no WhatsApp precisa fazer. Pode falar no microfone.`;
+    return t("portal.studio.welcomeNamed", { name });
   }
-  return "Oi. Isto ainda não é o bot no ar — é só o briefing. Me conta o negócio e o que o atendimento precisa fazer. Pode falar no microfone.";
+  return t("portal.studio.welcome");
 }
 
 const state = {
@@ -53,19 +58,19 @@ const state = {
 };
 
 const WA_PHASES = [
-  ["QR reconhecido", "A câmera leu o código. Estamos abrindo a sessão."],
-  ["Sessão do WhatsApp", "Validando o aparelho conectado…"],
-  ["Número do negócio", "Confirmando o telefone que vai atender."],
-  ["Caixa de conversas", "Preparando a inbox para as mensagens."],
-  ["Pronto para o fluxo", "Tudo ligado. Agora é montar o atendimento."],
+  ["portal.boot.phase1.title", "portal.boot.phase1.sub"],
+  ["portal.boot.phase2.title", "portal.boot.phase2.sub"],
+  ["portal.boot.phase3.title", "portal.boot.phase3.sub"],
+  ["portal.boot.phase4.title", "portal.boot.phase4.sub"],
+  ["portal.boot.phase5.title", "portal.boot.phase5.sub"],
 ];
 
 const TITLES = {
-  status: ["WhatsApp", "Conecte seu número e veja o status"],
-  inbox: ["Conversas", "Fale com o cliente no WhatsApp real"],
-  flow: ["Fluxo", "Desenhe o atendimento e publique"],
-  test: ["Testar", "Simule uma conversa como o cliente"],
-  pubs: ["Publicações", "O que está no ar neste projeto"],
+  status: ["portal.nav.whatsapp", "portal.stageSub.default"],
+  inbox: ["portal.nav.inbox", "portal.inboxStageSub"],
+  flow: ["portal.nav.flow", "portal.flowStageSub"],
+  test: ["portal.nav.test", "portal.testStageSub"],
+  pubs: ["portal.nav.pubs", "portal.pubsStageSub"],
 };
 
 function setView(view) {
@@ -76,12 +81,12 @@ function setView(view) {
   for (const id of ["status", "inbox", "flow", "test", "pubs"]) {
     $(`view-${id}`)?.classList.toggle("hidden", id !== view);
   }
-  $("hello").textContent = state.firstName ? `Olá, ${state.firstName}!` : TITLES[view][0];
-  $("stage-sub").textContent = TITLES[view][1];
+  $("hello").textContent = state.firstName ? t("portal.helloName", { name: state.firstName }) : t(TITLES[view][0]);
+  $("stage-sub").textContent = t(TITLES[view][1]);
   if (view === "flow") {
     syncFlowPane();
     if (!hasOwnFlows()) {
-      $("stage-sub").textContent = "Briefing — ensaio curto, depois a gente desenha o fluxo";
+      $("stage-sub").textContent = t("portal.studio.stageSub");
     }
   }
   else hideStudioChrome();
@@ -137,37 +142,37 @@ function studioLayout() {
   $("studio-alts")?.classList.toggle("hidden", hasOwnFlows());
   $("btn-wizard")?.classList.toggle("hidden", state.view !== "flow" || first || open);
   $("btn-studio-expand")?.classList.toggle("hidden", state.view !== "flow" || !open || first);
-  $("btn-studio-expand").textContent = expanded ? "Recolher" : "Expandir";
-  $("studio-expand").textContent = expanded && !first ? "Recolher" : "Expandir";
+  $("btn-studio-expand").textContent = expanded ? t("portal.collapse") : t("portal.expand");
+  $("studio-expand").textContent = expanded && !first ? t("portal.collapse") : t("portal.expand");
   const phase = state.studio.phase;
   const kick =
     phase === "ready"
-      ? ["Pronto", "ready"]
+      ? [t("portal.studio.kicker.ready"), "ready"]
       : phase === "debrief"
-        ? ["Depois do ensaio", "ready"]
+        ? [t("portal.studio.kicker.afterRehearsal"), "ready"]
         : phase === "preview"
-          ? ["Ensaio", "preview"]
+          ? [t("portal.studio.kicker.rehearsal"), "preview"]
           : phase === "offer"
-            ? ["Vamos testar?", "preview"]
-            : ["Briefing", ""];
+            ? [t("portal.studio.kicker.testQuestion"), "preview"]
+            : [t("portal.studio.kicker.briefing"), ""];
   $("studio-kicker").textContent = kick[0];
   $("studio-kicker").className = "studio-kicker" + (kick[1] ? " " + kick[1] : "");
   $("studio-title").textContent =
     phase === "preview"
-      ? "Ensaio do tom"
+      ? t("portal.studio.title.rehearsal")
       : phase === "offer"
-        ? "Já tenho o essencial"
+        ? t("portal.studio.title.essentials")
         : phase === "debrief" || phase === "ready"
-          ? "Feedback do ensaio"
-          : "Montar o atendimento";
+          ? t("portal.studio.title.feedback")
+          : t("portal.studio.title.default");
   $("studio-sub").textContent =
     phase === "preview"
-      ? "Fala como o cliente. Pedido de mudança no fluxo só depois — agora é só o tom."
+      ? t("portal.studio.sub.rehearsal")
       : phase === "offer"
-        ? "Se estiver bom, a gente testa o tom. Se faltar algo, continua o briefing."
+        ? t("portal.studio.sub.offer")
         : phase === "debrief" || phase === "ready"
-          ? "O ensaio acabou. Agora sim: muda o tom ou monta o fluxo."
-          : "Ainda não é o bot no ar. Combinamos o que ele deve fazer; depois testamos o tom e montamos o fluxo.";
+          ? t("portal.studio.sub.afterRehearsal")
+          : t("portal.studio.sub.ask");
   $("studio-offer")?.classList.toggle("hidden", phase !== "offer" || state.studio.busy);
   $("studio-ready")?.classList.toggle(
     "hidden",
@@ -220,21 +225,21 @@ function watchQrPairing() {
 
 function paintWaPhase(index) {
   const items = [...document.querySelectorAll("#wa-checks li")];
-  const [title, sub] = WA_PHASES[index] || WA_PHASES[0];
+  const [titleKey, subKey] = WA_PHASES[index] || WA_PHASES[0];
   items.forEach((li, n) => {
     li.classList.toggle("done", n < index);
     li.classList.toggle("on", n === index);
   });
-  $("wa-boot-kicker").textContent = `Fase ${index + 1} de ${WA_PHASES.length}`;
-  $("wa-boot-title").textContent = title;
-  $("wa-boot-sub").textContent = sub;
+  $("wa-boot-kicker").textContent = t("portal.boot.phaseLabel", { n: index + 1, total: WA_PHASES.length });
+  $("wa-boot-title").textContent = t(titleKey);
+  $("wa-boot-sub").textContent = t(subKey);
   if ($("wa-boot-fill")) $("wa-boot-fill").style.width = `${((index + 1) / WA_PHASES.length) * 100}%`;
 }
 
 function showWaCta(sess) {
   const phone = sess?.phoneDisplay
-    ? `${sess.phoneDisplay} ligado — pode montar o atendimento.`
-    : "Número ligado — pode montar o atendimento.";
+    ? t("portal.boot.done.subWithPhone", { phone: sess.phoneDisplay })
+    : t("portal.boot.done.sub");
   if ($("wa-boot-done-sub")) $("wa-boot-done-sub").textContent = phone;
   $("wa-boot-stage")?.classList.add("out");
   $("wa-checks")?.classList.add("out");
@@ -243,14 +248,14 @@ function showWaCta(sess) {
     $("wa-checks")?.classList.add("hidden");
     $("wa-boot-done")?.classList.remove("hidden");
     requestAnimationFrame(() => $("wa-boot-done")?.classList.add("in"));
-    $("qr-kicker").textContent = "Conectado";
+    $("qr-kicker").textContent = t("portal.qr.connected");
     $("qr-kicker").className = "hero-kicker ok";
-    $("qr-title").textContent = "Tudo certo. Ponto para começar?";
+    $("qr-title").textContent = t("portal.qr.allSet");
     $("qr-hint").textContent = phone;
     $("btn-go-flow")?.classList.remove("hidden");
     $("btn-connect")?.classList.remove("hidden");
-    if ($("btn-connect")) $("btn-connect").textContent = "Gerar novo QR";
-    toast("Tudo certo. Ponto para começar?");
+    if ($("btn-connect")) $("btn-connect").textContent = t("portal.qr.generateNew");
+    toast(t("portal.qr.allSet"));
   }, 420);
 }
 
@@ -313,13 +318,13 @@ function pill(status) {
   const el = $("conn-pill");
   if (status === "connected") {
     el.className = "pill ok";
-    el.textContent = "Conectado";
+    el.textContent = t("portal.status.connected");
   } else if (status === "pending_qr") {
     el.className = "pill warn";
-    el.textContent = "Aguardando QR";
+    el.textContent = t("portal.status.pendingQr");
   } else {
     el.className = "pill off";
-    el.textContent = status === "error" ? "Erro" : "Desconectado";
+    el.textContent = status === "error" ? t("portal.status.error") : t("portal.status.disconnected");
   }
 }
 
@@ -343,7 +348,7 @@ function render() {
   const p = state.portal;
   if (!p) return;
   $("client-name").textContent = p.client.name;
-  $("client-sub").textContent = p.impersonating ? "visão admin" : "Portal do cliente";
+  $("client-sub").textContent = p.impersonating ? t("portal.impersonateView") : t("portal.clientPortal");
   $("impersonate").classList.toggle("hidden", !p.impersonating);
 
   const acc = p.accounts[0];
@@ -352,12 +357,12 @@ function render() {
   const wa = sess?.status || "disconnected";
   const prevWa = state.lastWa;
   if (prevWa && prevWa !== wa) {
-    if (wa === "pending_qr") toast("QR pronto — aponte a câmera do celular");
+    if (wa === "pending_qr") toast(t("portal.status.qrReady"));
     if (wa === "disconnected" && prevWa === "connected") {
       state.waBoot = { running: false, done: false, dismissed: false };
       state.sawQr = false;
       stopQrWatch();
-      toast("WhatsApp desconectado");
+      toast(t("portal.status.disconnectedFull"));
     }
   }
   if (wa === "pending_qr" || sess?.qrDataUrl) {
@@ -375,13 +380,13 @@ function render() {
 
   $("st-status").textContent =
     sess?.status === "connected"
-      ? "Conectado"
+      ? t("portal.status.connected")
       : sess?.status === "pending_qr"
-        ? "Aguardando QR"
+        ? t("portal.status.pendingQr")
         : sess?.status === "error"
-          ? "Erro"
-          : "Desconectado";
-  $("st-live").textContent = p.liveFlow?.name || "Nenhum publicado";
+          ? t("portal.status.error")
+          : t("portal.status.disconnected");
+  $("st-live").textContent = p.liveFlow?.name || t("portal.stat.none");
   $("st-updated").textContent = fmtWhen(p.liveFlow?.publishedAt || p.liveFlow?.updatedAt);
   $("st-phone").textContent = sess?.phoneDisplay || "";
 
@@ -397,10 +402,10 @@ function render() {
   $("view-status")?.classList.toggle("wa-full", showBoot);
 
   if (state.waBoot.running) {
-    $("qr-kicker").textContent = "Ligando o número";
+    $("qr-kicker").textContent = t("portal.qr.connectingNumber");
     $("qr-kicker").className = "hero-kicker";
-    $("qr-title").textContent = "O sistema está fechando os checks…";
-    $("qr-hint").textContent = "Isso leva uns segundos. Não fecha a aba.";
+    $("qr-title").textContent = t("portal.qr.closingChecks");
+    $("qr-hint").textContent = t("portal.qr.fewSeconds");
     $("btn-connect").classList.add("hidden");
     return;
   }
@@ -408,61 +413,63 @@ function render() {
   $("btn-connect")?.classList.remove("hidden");
 
   if (sess?.status === "connected") {
-    $("qr-kicker").textContent = "Conectado";
+    $("qr-kicker").textContent = t("portal.qr.connected");
     $("qr-kicker").className = "hero-kicker ok";
     $("qr-title").textContent = state.waBoot.done
-      ? "Tudo certo. Ponto para começar?"
-      : "Seu número está conectado e pronto para receber mensagens.";
+      ? t("portal.qr.readyToStart")
+      : t("portal.qr.readyAndConnected");
     $("qr-hint").textContent = sess.connectedAt
-      ? `Conectado desde ${fmtWhen(sess.connectedAt)}`
-      : "Pode montar o fluxo. Se cair, gere um QR de novo.";
-    $("btn-connect").textContent = "Gerar novo QR";
-    $("wa-boot-kicker").textContent = "Pronto";
+      ? t("portal.qr.connectedSince", { when: fmtWhen(sess.connectedAt) })
+      : t("portal.qr.buildFlowOrRegenerate");
+    $("btn-connect").textContent = t("portal.qr.generateNew");
+    $("wa-boot-kicker").textContent = t("portal.boot.check.ready");
   } else if (sess?.qrDataUrl) {
-    $("qr-kicker").textContent = "Aguardando leitura";
+    $("qr-kicker").textContent = t("portal.qr.awaitingScan");
     $("qr-kicker").className = "hero-kicker";
-    $("qr-title").textContent = "Escaneie o QR com o celular";
-    $("qr-hint").textContent = "WhatsApp → Aparelhos conectados → Conectar um aparelho.";
-    $("btn-connect").textContent = "Gerar outro QR";
+    $("qr-title").textContent = t("portal.qr.scanWithPhone");
+    $("qr-hint").textContent = t("portal.qr.hint");
+    $("btn-connect").textContent = t("portal.qr.generateAnother");
     const img = document.createElement("img");
     img.src = sess.qrDataUrl;
-    img.alt = "QR Code WhatsApp";
+    img.alt = t("portal.qr.altText");
     box.appendChild(img);
   } else {
-    $("qr-kicker").textContent = "Ainda não conectado";
+    $("qr-kicker").textContent = t("portal.qr.notConnected");
     $("qr-kicker").className = "hero-kicker";
-    $("qr-title").textContent = "Conecte o WhatsApp do negócio";
-    $("qr-hint").textContent =
-      "Clique em Gerar QR e aponte a câmera: WhatsApp → Aparelhos conectados → Conectar um aparelho.";
-    $("btn-connect").textContent = "Gerar QR";
+    $("qr-title").textContent = t("portal.qr.title");
+    $("qr-hint").textContent = t("portal.qr.hint");
+    $("btn-connect").textContent = t("portal.qr.generate");
   }
 }
 
 function renderTestMeta() {
   const f = activeFlow();
-  $("test-flow-name").textContent = f ? f.name : "Nenhum fluxo ainda";
+  $("test-flow-name").textContent = f ? f.name : t("portal.test.noFlowYet");
   $("test-flow-sub").textContent = f
     ? f.status === "live"
-      ? "Testando o fluxo que está no ar."
-      : "Testando o rascunho — publique quando gostar."
-    : "Crie um fluxo na aba Fluxo para testar.";
+      ? t("portal.test.testingLive")
+      : t("portal.test.testingDraft")
+    : t("portal.test.createFlowHint");
 }
 
 function renderPubs() {
   const list = $("pubs-list");
   const flows = state.portal?.flows || [];
   if (!flows.length) {
-    list.innerHTML = `<div class="pub"><div><h3>Nenhum fluxo</h3><p>Abra Fluxo e publique o primeiro atendimento.</p></div></div>`;
+    list.innerHTML = `<div class="pub"><div><h3>${t("portal.pubs.emptyTitle")}</h3><p>${t("portal.pubs.emptyBody")}</p></div></div>`;
     return;
   }
   list.innerHTML = flows
     .map((f) => {
       const when = fmtWhen(f.publishedAt || f.updatedAt);
-      const badge = f.status === "live" ? `<span class="pill live">No ar</span>` : `<span class="pill off">Rascunho</span>`;
+      const badge =
+        f.status === "live"
+          ? `<span class="pill live">${t("portal.pubs.live")}</span>`
+          : `<span class="pill off">${t("portal.pubs.draft")}</span>`;
       return `<article class="pub">
         <div>
           <h3>${escapeHtml(f.name)}</h3>
-          <p>${f.status === "live" ? "Publicado" : "Atualizado"} ${escapeHtml(when)}</p>
+          <p>${f.status === "live" ? t("portal.pubs.published") : t("portal.pubs.updated")} ${escapeHtml(when)}</p>
         </div>
         ${badge}
       </article>`;
@@ -490,9 +497,9 @@ function appendChat(kind, text) {
 function resetChat() {
   state.simState = null;
   $("chat-log").innerHTML =
-    `<div class="chat-empty" id="chat-empty"><p>Digite como o cliente. Ex.: “Oi, quero marcar uma sessão”.</p></div>`;
-  $("test-now").textContent = "Pronto para a primeira mensagem";
-  toast("Simulação recomeçada");
+    `<div class="chat-empty" id="chat-empty"><p>${t("portal.test.emptyHint")}</p></div>`;
+  $("test-now").textContent = t("portal.test.ready");
+  toast(t("portal.test.restarted"));
 }
 
 async function sendChat(ev) {
@@ -502,13 +509,13 @@ async function sendChat(ev) {
   const text = (input.value || "").trim();
   if (!text || state.simBusy) return;
   if (!flow?.nodes) {
-    appendChat("sys", "Crie um fluxo antes de testar.");
+    appendChat("sys", t("portal.test.createFirst"));
     return;
   }
   input.value = "";
   appendChat("user", text);
   state.simBusy = true;
-  $("test-now").textContent = "Pensando…";
+  $("test-now").textContent = t("portal.test.thinking");
   try {
     const data = await api("/v1/flows/simulate", {
       method: "POST",
@@ -525,16 +532,24 @@ async function sendChat(ev) {
     state.simState = data.state || null;
     const last = (data.trace || []).at(-1);
     if (last) {
-      const label = { ask: "Perguntando", message: "Enviou texto", llm_intent: "Entendeu a intenção", action: "Rodou uma ação", handoff: "Passou ao atendente", end: "Encerrou" }[last.type] || last.type;
+      const label =
+        {
+          ask: t("portal.test.trace.ask"),
+          message: t("portal.test.trace.message"),
+          llm_intent: t("portal.test.trace.intent"),
+          action: t("portal.test.trace.action"),
+          handoff: t("portal.test.trace.handoff"),
+          end: t("portal.test.trace.end"),
+        }[last.type] || last.type;
       $("test-now").textContent = last.detail ? `${label} · ${last.detail}` : label;
       appendChat("sys", $("test-now").textContent);
     }
     for (const reply of data.replies || []) appendChat("bot", reply);
-    if (data.handoff) appendChat("sys", "Passou para um atendente humano");
-    if (!data.replies?.length && !data.trace?.length) appendChat("sys", "Sem resposta do fluxo");
+    if (data.handoff) appendChat("sys", t("portal.test.humanHandoff"));
+    if (!data.replies?.length && !data.trace?.length) appendChat("sys", t("portal.test.noReply"));
   } catch (e) {
-    appendChat("sys", "Erro: " + e.message);
-    $("test-now").textContent = "Erro";
+    appendChat("sys", t("portal.test.errorPrefix") + e.message);
+    $("test-now").textContent = t("portal.status.error");
     toast(e.message, "err");
   } finally {
     state.simBusy = false;
@@ -561,7 +576,7 @@ $("btn-connect").onclick = async () => {
     state.waBoot = { running: false, done: false, dismissed: false };
     state.sawQr = true;
     await api(`/v1/accounts/${state.accountId}/connect`, { method: "POST", body: "{}" });
-    toast("Gerando QR…");
+    toast(t("portal.qr.generating"));
     await refresh();
     watchQrPairing();
   } catch (e) {
@@ -570,10 +585,10 @@ $("btn-connect").onclick = async () => {
 };
 $("btn-disconnect").onclick = async () => {
   if (!state.accountId) return;
-  if (!confirm("Desconectar este WhatsApp?")) return;
+  if (!confirm(t("portal.qr.confirmDisconnect"))) return;
   try {
     await api(`/v1/accounts/${state.accountId}/disconnect`, { method: "POST", body: "{}" });
-    toast("Número desconectado");
+    toast(t("portal.qr.disconnected"));
     await refresh();
   } catch (e) {
     toast(e.message, "err");
@@ -605,15 +620,15 @@ function renderThreads() {
   );
   const el = $("thread-list");
   if (!list.length) {
-    el.innerHTML = `<p class="hint" style="padding:14px">Nenhuma conversa ainda. Elas aparecem quando alguém mandar mensagem no número conectado.</p>`;
+    el.innerHTML = `<p class="hint" style="padding:14px">${t("portal.inbox.empty")}</p>`;
     return;
   }
   el.innerHTML = list
     .map(
-      (t) => `<button type="button" class="thread ${t.phoneE164 === state.selectedPhone ? "on" : ""}" data-phone="${escapeHtml(t.phoneE164)}">
-        <b>${escapeHtml(t.contactName)}</b>
-        <small>${escapeHtml(t.lastPreview)}</small>
-        <span class="tag">${t.mode === "human" ? "Você atende" : "Bot"}</span>
+      (th) => `<button type="button" class="thread ${th.phoneE164 === state.selectedPhone ? "on" : ""}" data-phone="${escapeHtml(th.phoneE164)}">
+        <b>${escapeHtml(th.contactName)}</b>
+        <small>${escapeHtml(th.lastPreview)}</small>
+        <span class="tag">${th.mode === "human" ? t("portal.inbox.youAnswer") : t("portal.inbox.bot")}</span>
       </button>`
     )
     .join("");
@@ -625,12 +640,12 @@ function renderThreads() {
 async function loadInboxMessages(phone) {
   state.selectedPhone = phone;
   renderThreads();
-  const t = state.threads.find((x) => x.phoneE164 === phone);
-  $("inbox-title").textContent = t?.contactName || phone;
-  $("inbox-sub").textContent = t?.phoneDisplay || phone;
+  const thread = state.threads.find((x) => x.phoneE164 === phone);
+  $("inbox-title").textContent = thread?.contactName || phone;
+  $("inbox-sub").textContent = thread?.phoneDisplay || phone;
   $("inbox-form").classList.remove("hidden");
   $("btn-bot-mode").classList.remove("hidden");
-  $("btn-bot-mode").textContent = t?.mode === "human" ? "Devolver ao bot" : "Atender eu";
+  $("btn-bot-mode").textContent = thread?.mode === "human" ? t("portal.inbox.returnToBot") : t("portal.inbox.answerMyself");
   const data = await api(`/v1/inbox/threads/${encodeURIComponent(phone)}/messages`);
   const log = $("inbox-log");
   log.innerHTML = "";
@@ -642,7 +657,7 @@ async function loadInboxMessages(phone) {
     log.appendChild(b);
   }
   if (!data.messages?.length) {
-    log.innerHTML = `<div class="chat-empty"><p>Sem mensagens neste contato.</p></div>`;
+    log.innerHTML = `<div class="chat-empty"><p>${t("portal.inbox.noMessages")}</p></div>`;
   }
   log.scrollTop = log.scrollHeight;
 }
@@ -653,19 +668,19 @@ $("new-chat")?.addEventListener("submit", async (e) => {
   if (!phone) return;
   const digits = phone.replace(/\D/g, "");
   $("new-phone").value = "";
-  if (!state.threads.some((t) => t.phoneE164 === digits)) {
+  if (!state.threads.some((th) => th.phoneE164 === digits)) {
     state.threads.unshift({
       phoneE164: digits || phone,
       phoneDisplay: phone,
       contactName: phone,
-      lastPreview: "Nova conversa",
+      lastPreview: t("portal.inbox.newChat"),
       lastMessageAt: new Date().toISOString(),
       mode: "human",
     });
   }
   await loadInboxMessages(digits || phone);
   $("inbox-input")?.focus();
-  toast("Escreva a mensagem e envie");
+  toast(t("portal.inbox.writeAndSend"));
 });
 $("inbox-q")?.addEventListener("input", renderThreads);
 document.querySelectorAll("[data-fmt]").forEach((b) => {
@@ -677,7 +692,7 @@ $("inbox-file")?.addEventListener("change", async (e) => {
   const phone = state.selectedPhone;
   if (!file || !phone) return;
   if (file.size > 7_500_000) {
-    toast("Arquivo grande demais (máx. 7 MB)", "err");
+    toast(t("portal.inbox.fileTooBig"), "err");
     return;
   }
   const buf = await file.arrayBuffer();
@@ -695,7 +710,7 @@ $("inbox-file")?.addEventListener("change", async (e) => {
         media: { base64, mimetype: file.type || "application/octet-stream", fileName: file.name, kind },
       }),
     });
-    toast("Arquivo enviado");
+    toast(t("portal.inbox.fileSent"));
     await loadInbox();
   } catch (ex) {
     toast(ex.message, "err");
@@ -710,7 +725,7 @@ $("inbox-form")?.addEventListener("submit", async (e) => {
   input.value = "";
   try {
     await api("/v1/inbox/send", { method: "POST", body: JSON.stringify({ phone, body: text }) });
-    toast("Enviado no WhatsApp");
+    toast(t("portal.inbox.sentOnWhatsapp"));
     await loadInbox();
   } catch (ex) {
     toast(ex.message, "err");
@@ -719,16 +734,16 @@ $("inbox-form")?.addEventListener("submit", async (e) => {
 $("btn-bot-mode")?.addEventListener("click", async () => {
   const phone = state.selectedPhone;
   if (!phone) return;
-  const t = state.threads.find((x) => x.phoneE164 === phone);
-  const next = t?.mode === "human" ? "bot" : "human";
+  const thread = state.threads.find((x) => x.phoneE164 === phone);
+  const next = thread?.mode === "human" ? "bot" : "human";
   await api("/v1/inbox/mode", { method: "POST", body: JSON.stringify({ phone, mode: next }) });
-  toast(next === "bot" ? "Bot voltou a atender" : "Você está atendendo");
+  toast(next === "bot" ? t("portal.inbox.botReturned") : t("portal.inbox.youAreAnswering"));
   await loadInbox();
 });
 
 $("btn-refresh").onclick = async () => {
   await refresh();
-  toast("Atualizado");
+  toast(t("portal.refreshed"));
 };
 $("test-reset").onclick = () => resetChat();
 $("chat-form").onsubmit = sendChat;
@@ -744,7 +759,7 @@ function studioSay(text, who = "coach") {
   return b;
 }
 
-function studioThink(label = "Pensando") {
+function studioThink(label = t("portal.studio.thinking")) {
   const log = $("studio-log");
   if (!log) return null;
   const row = document.createElement("div");
@@ -790,7 +805,7 @@ async function applyStudioReply(data) {
 
 async function revealBuiltFlow() {
   state.studio.phase = "ready";
-  toast("Fluxo pronto — o canvas está inteiro para revisar");
+  toast(t("portal.studio.flowReadyHint"));
   await refresh();
   state.studio.open = false;
   state.studio.expanded = false;
@@ -801,7 +816,11 @@ async function revealBuiltFlow() {
 async function sendStudio(_text, action = "chat") {
   if (state.studio.busy) return;
   const pending = studioThink(
-    action === "build" ? "Montando o fluxo" : action === "test" ? "Abrindo o ensaio" : "Pensando"
+    action === "build"
+      ? t("portal.studio.buildingFlow")
+      : action === "test"
+        ? t("portal.studio.openingRehearsal")
+        : t("portal.studio.thinking")
   );
   state.studio.busy = true;
   studioLayout();
@@ -827,13 +846,13 @@ async function sendStudio(_text, action = "chat") {
       state.studio.previewTurns += 1;
       if (state.studio.previewTurns >= 2) {
         state.studio.phase = "debrief";
-        studioSay("Ensaio encerrado. Agora o que você falar vale como ajuste — ou a gente monta o fluxo.", "sys");
+        studioSay(t("portal.studio.rehearsalEndedNote"), "sys");
       }
     }
     studioLayout();
   } catch (ex) {
     pending?.remove();
-    studioSay("Não deu: " + ex.message, "sys");
+    studioSay(t("portal.studio.failedPrefix") + ex.message, "sys");
     toast(ex.message, "err");
   } finally {
     state.studio.busy = false;
@@ -849,7 +868,7 @@ $("btn-collapse-side")?.addEventListener("click", () => {
   const on = app.classList.toggle("side-collapsed");
   localStorage.setItem("glabs_side_collapsed", on ? "1" : "0");
   $("btn-collapse-side").textContent = on ? "›" : "‹";
-  $("btn-collapse-side").title = on ? "Abrir menu" : "Recolher menu";
+  $("btn-collapse-side").title = on ? t("portal.studio.openMenu") : t("portal.studio.collapseMenu");
 });
 if (localStorage.getItem("glabs_side_collapsed") === "1") {
   document.querySelector(".app")?.classList.add("side-collapsed");
@@ -868,7 +887,7 @@ $("tpl-pick")?.querySelectorAll("[data-tpl]").forEach((b) => {
 async function useTemplate(kind) {
   try {
     await api("/v1/flows/from-template", { method: "POST", body: JSON.stringify({ template: kind }) });
-    toast("Template pronto");
+    toast(t("portal.studio.templateReady"));
     await refresh();
     state.studio.open = false;
     openBuilder();
@@ -910,16 +929,17 @@ $("studio-build")?.addEventListener("click", async () => {
 });
 $("studio-test")?.addEventListener("click", async () => {
   if (state.studio.busy) return;
-  studioSay("Vamos testar agora", "user");
-  state.studio.messages.push({ role: "user", content: "Vamos testar agora" });
+  const msg = t("portal.studio.testNowMsg");
+  studioSay(msg, "user");
+  state.studio.messages.push({ role: "user", content: msg });
   state.studio.previewTurns = 0;
-  await sendStudio("Vamos testar agora", "test");
+  await sendStudio(msg, "test");
 });
 
 function setMicUi(on) {
   $("studio-mic")?.classList.toggle("on", on);
   $("studio-listen")?.classList.toggle("hidden", !on);
-  if ($("studio-mic-label")) $("studio-mic-label").textContent = on ? "Parar" : "Falar";
+  if ($("studio-mic-label")) $("studio-mic-label").textContent = on ? t("portal.studio.stopMic") : t("portal.studio.talk");
 }
 
 function stopStudioMic({ send = false } = {}) {
@@ -939,7 +959,7 @@ function stopStudioMic({ send = false } = {}) {
 $("studio-mic")?.addEventListener("click", async () => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
-    toast("Áudio neste browser não roda — usa o Chrome", "err");
+    toast(t("portal.studio.audioNotSupported"), "err");
     return;
   }
   if (state.studio.rec) {
@@ -947,14 +967,14 @@ $("studio-mic")?.addEventListener("click", async () => {
     return;
   }
   if (!window.isSecureContext) {
-    toast("Microfone só funciona em HTTPS", "err");
+    toast(t("portal.studio.micNeedsHttps"), "err");
     return;
   }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach((t) => t.stop());
+    stream.getTracks().forEach((track) => track.stop());
   } catch {
-    toast("Autoriza o microfone no navegador para construir por áudio", "err");
+    toast(t("portal.studio.micPermission"), "err");
     return;
   }
   const rec = new SR();
@@ -989,12 +1009,12 @@ $("studio-mic")?.addEventListener("click", async () => {
   rec.onerror = (ev) => {
     if (ev.error === "no-speech" || ev.error === "aborted") return;
     stopStudioMic({ send: false });
-    toast(ev.error === "not-allowed" ? "Autoriza o microfone no Chrome" : "Não deu para ouvir", "err");
+    toast(ev.error === "not-allowed" ? t("portal.studio.micPermissionChrome") : t("portal.studio.couldntHear"), "err");
   };
   state.studio.rec = rec;
   setMicUi(true);
   rec.start();
-  toast("Pode falar o atendimento");
+  toast(t("portal.studio.canSpeakNow"));
 });
 
 window.addEventListener("message", async (ev) => {
@@ -1039,8 +1059,8 @@ try {
     state.firstName = person;
     $("who-name").textContent = asAdmin ? (me.user.name || "GLabs") : clientName || me.user.email;
     $("who-av").textContent = (asAdmin ? (me.user.name || "G") : clientName || "C").slice(0, 1).toUpperCase();
-    $("who-role").textContent = asAdmin ? "Admin · vendo o cliente" : "Cliente";
-    $("hello").textContent = person ? `Olá, ${person}!` : "Olá!";
+    $("who-role").textContent = asAdmin ? t("portal.role.adminViewing") : t("portal.role.client");
+    $("hello").textContent = person ? t("portal.helloName", { name: person }) : t("portal.hello");
     setInterval(() => {
       void refresh();
       if (state.view === "inbox") void loadInbox();

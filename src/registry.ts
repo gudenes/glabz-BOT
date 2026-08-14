@@ -266,6 +266,20 @@ export function updateAccount(
   return acc;
 }
 
+/** Slugs de product padrão — não podem ser removidos (reaparecem sozinhos em load()). */
+export function isDefaultProduct(slug: string): boolean {
+  return DEFAULT_PRODUCTS.some((d) => d.slug === slug);
+}
+
+export function deleteProduct(slug: string): boolean {
+  const reg = load();
+  const before = reg.products.length;
+  reg.products = reg.products.filter((p) => p.slug !== slug);
+  if (reg.products.length === before) return false;
+  save(reg);
+  return true;
+}
+
 export function deleteAccount(accountId: string): boolean {
   const reg = load();
   const before = reg.accounts.length;

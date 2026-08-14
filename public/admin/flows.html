@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/styles.css?v=9" />
+    <link rel="stylesheet" href="/admin/styles.css?v=15" />
     <link rel="stylesheet" href="/admin/flows.css?v=14" />
     <link rel="stylesheet" href="/admin/flows-portal.css?v=14" />
   </head>
@@ -22,15 +22,16 @@
             <path d="M4 8h6v12H4V8zm10-4h6v16h-6V4z" fill="currentColor" opacity=".9"/>
           </svg>
         </div>
-        <h1>Fluxos de atendimento</h1>
-        <p class="fb-login-sub">Monte automações de WhatsApp com visual limpo — sem código.</p>
+        <h1 data-i18n="builder.title">Fluxos de atendimento</h1>
+        <p class="fb-login-sub" data-i18n="builder.sub">Monte automações de WhatsApp com visual limpo — sem código.</p>
         <label class="fb-field">
-          <span>Senha do bot</span>
-          <input id="login-secret" type="password" placeholder="Cole o secret" autocomplete="current-password" />
+          <span data-i18n="builder.login.secretLabel">Senha do bot</span>
+          <input id="login-secret" type="password" data-i18n-placeholder="builder.login.secretPh" placeholder="Cole o secret" autocomplete="current-password" />
         </label>
         <p id="login-error" class="err hidden"></p>
-        <button id="login-btn" class="fb-btn fb-btn-primary fb-btn-block" type="button">Entrar</button>
-        <a class="fb-login-back" href="/admin/">Voltar ao painel</a>
+        <button id="login-btn" class="fb-btn fb-btn-primary fb-btn-block" type="button" data-i18n="builder.login.enter">Entrar</button>
+        <a class="fb-login-back" href="/admin/" data-i18n="builder.login.back">Voltar ao painel</a>
+        <span id="lang-toggle-slot-login" style="display:block;margin-top:10px"></span>
       </div>
     </div>
 
@@ -42,11 +43,11 @@
           </a>
           <div class="fb-brand-chip">
             <span class="fb-brand-dot"></span>
-            Fluxos
+            <span data-i18n="builder.brand">Fluxos</span>
           </div>
           <div class="fb-title-wrap">
             <input id="flow-name" class="fb-name" value="Novo fluxo" spellcheck="false" />
-            <span id="flow-status" class="fb-status draft">Rascunho</span>
+            <span id="flow-status" class="fb-status draft" data-i18n="builder.status.draft">Rascunho</span>
           </div>
           <button type="button" id="save-state" class="fb-save-state" title="Estado do rascunho">
             <span id="save-dot" class="save-dot"></span>
@@ -60,17 +61,18 @@
             <select id="flow-product" class="fb-select" title="Produto"></select>
           </div>
           <div class="fb-actions">
-            <button type="button" id="btn-sim" class="fb-btn fb-btn-secondary" title="Testar o fluxo digitando">
+            <button type="button" id="btn-sim" class="fb-btn fb-btn-secondary" title="Testar o fluxo digitando" data-i18n-title="builder.test.tooltip">
               <svg class="fb-ico" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>
-              Testar
+              <span data-i18n="builder.test">Testar</span>
             </button>
-            <button type="button" id="btn-history" class="fb-btn fb-btn-ghost" title="Ver versões salvas anteriormente">Histórico</button>
-            <button type="button" id="btn-revert" class="fb-btn fb-btn-ghost" title="Descartar edições não salvas">Reverter</button>
-            <button type="button" id="btn-new" class="fb-btn fb-btn-ghost">Novo</button>
-            <button type="button" id="btn-save" class="fb-btn fb-btn-secondary">Salvar</button>
-            <button type="button" id="btn-unpublish" class="fb-btn fb-btn-ghost">Pausar</button>
-            <button type="button" id="btn-delete" class="fb-btn fb-btn-ghost" title="Excluir este fluxo">Excluir</button>
-            <button type="button" id="btn-publish" class="fb-btn fb-btn-primary">Publicar</button>
+            <button type="button" id="btn-history" class="fb-btn fb-btn-ghost" title="Ver versões salvas anteriormente" data-i18n="builder.history">Histórico</button>
+            <button type="button" id="btn-revert" class="fb-btn fb-btn-ghost" title="Descartar edições não salvas" data-i18n="builder.revert">Reverter</button>
+            <button type="button" id="btn-new" class="fb-btn fb-btn-ghost" data-i18n="builder.new">Novo</button>
+            <button type="button" id="btn-save" class="fb-btn fb-btn-secondary" data-i18n="builder.save">Salvar</button>
+            <button type="button" id="btn-unpublish" class="fb-btn fb-btn-ghost" data-i18n="builder.pause">Pausar</button>
+            <button type="button" id="btn-delete" class="fb-btn fb-btn-ghost" title="Excluir este fluxo" data-i18n="builder.delete">Excluir</button>
+            <button type="button" id="btn-publish" class="fb-btn fb-btn-primary" data-i18n="builder.publish">Publicar</button>
+            <span id="lang-toggle-slot-header"></span>
           </div>
         </div>
       </header>
@@ -78,7 +80,7 @@
       <div class="fb-body">
         <aside class="fb-list" id="panel-list">
           <div class="fb-aside-head">
-            <span>Seus fluxos</span>
+            <span data-i18n="builder.panel.yourFlows">Seus fluxos</span>
             <button type="button" class="fb-aside-toggle" data-toggle="panel-list" data-side="left" title="Recolher/expandir"></button>
           </div>
           <div id="flow-list" class="fb-list-items"></div>
@@ -86,7 +88,7 @@
 
         <aside class="fb-palette" id="panel-palette">
           <div class="fb-aside-head">
-            <span>Passos</span>
+            <span data-i18n="builder.panel.steps">Passos</span>
             <button type="button" class="fb-aside-toggle" data-toggle="panel-palette" data-side="left" title="Recolher/expandir"></button>
           </div>
           <p class="fb-palette-hint">Ou use o <strong>+</strong> em cada cartão</p>
@@ -94,48 +96,48 @@
             <span class="pal-icon msg" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </span>
-            <span class="pal-text"><strong>Mensagem</strong><small>Enviar texto</small></span>
+            <span class="pal-text"><strong data-i18n="builder.step.message">Mensagem</strong><small data-i18n="builder.step.messageHint">Enviar texto</small></span>
           </button>
           <button type="button" class="pal-item" data-type="ask">
             <span class="pal-icon ask" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
             </span>
-            <span class="pal-text"><strong>Perguntar</strong><small>Guardar resposta</small></span>
+            <span class="pal-text"><strong data-i18n="builder.step.ask">Perguntar</strong><small data-i18n="builder.step.askHint">Guardar resposta</small></span>
           </button>
           <button type="button" class="pal-item" data-type="llm_intent">
             <span class="pal-icon llm" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/><path d="m16 16-1.9-1.9"/></svg>
             </span>
-            <span class="pal-text"><strong>Entender intenção</strong><small>IA classifica o pedido</small></span>
+            <span class="pal-text"><strong data-i18n="builder.step.intent">Entender intenção</strong><small data-i18n="builder.step.intentHint">IA classifica o pedido</small></span>
           </button>
           <button type="button" class="pal-item" data-type="action">
             <span class="pal-icon act" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a6 6 0 0 1-12 0V8Z"/></svg>
             </span>
-            <span class="pal-text"><strong>Ação</strong><small>Calendário, HTTP…</small></span>
+            <span class="pal-text"><strong data-i18n="builder.step.action">Ação</strong><small data-i18n="builder.step.actionHint">Calendário, HTTP…</small></span>
           </button>
           <button type="button" class="pal-item" data-type="condition">
             <span class="pal-icon cond" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
             </span>
-            <span class="pal-text"><strong>Se / senão</strong><small>Caminho condicional</small></span>
+            <span class="pal-text"><strong data-i18n="builder.step.condition">Se / senão</strong><small data-i18n="builder.step.conditionHint">Caminho condicional</small></span>
           </button>
           <button type="button" class="pal-item" data-type="handoff">
             <span class="pal-icon hand" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>
             </span>
-            <span class="pal-text"><strong>Atendente</strong><small>Passar para humano</small></span>
+            <span class="pal-text"><strong data-i18n="builder.step.handoff">Atendente</strong><small data-i18n="builder.step.handoffHint">Passar para humano</small></span>
           </button>
           <button type="button" class="pal-item" data-type="end">
             <span class="pal-icon end" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
             </span>
-            <span class="pal-text"><strong>Encerrar</strong><small>Fim do fluxo</small></span>
+            <span class="pal-text"><strong data-i18n="builder.step.end">Encerrar</strong><small data-i18n="builder.step.endHint">Fim do fluxo</small></span>
           </button>
         </aside>
 
         <main class="fb-canvas-wrap">
-          <div class="fb-canvas-label">Área do fluxo · arraste os cartões</div>
+          <div class="fb-canvas-label" data-i18n="builder.canvasLabel">Área do fluxo · arraste os cartões</div>
           <div id="canvas" class="fb-canvas">
             <svg id="edges-svg" class="fb-edges" aria-hidden="true"></svg>
           </div>
@@ -143,14 +145,14 @@
 
         <aside class="fb-props" id="panel-props">
           <div class="fb-aside-head">
-            <span>Detalhes</span>
+            <span data-i18n="builder.panel.details">Detalhes</span>
             <button type="button" class="fb-aside-toggle" data-toggle="panel-props" data-side="right" title="Recolher/expandir"></button>
           </div>
           <div id="props-empty" class="fb-props-empty">
             <div class="fb-empty-icon" aria-hidden="true">
               <svg class="fb-ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>
             </div>
-            <p>Selecione um passo no fluxo para editar o texto e as opções.</p>
+            <p data-i18n="builder.panel.detailsEmpty">Selecione um passo no fluxo para editar o texto e as opções.</p>
           </div>
           <div id="props-body" class="hidden"></div>
         </aside>
@@ -162,15 +164,15 @@
           <div class="sim-head-left">
             <span class="sim-dot"></span>
             <div>
-              <strong>Testar fluxo</strong>
-              <small id="sim-status">Digite como o cliente</small>
+              <strong data-i18n="builder.sim.title">Testar fluxo</strong>
+              <small id="sim-status" data-i18n="builder.sim.status">Digite como o cliente</small>
             </div>
           </div>
           <div class="sim-head-actions">
-            <button type="button" id="sim-reset" class="fb-btn fb-btn-ghost fb-btn-square" title="Recomeçar">
+            <button type="button" id="sim-reset" class="fb-btn fb-btn-ghost fb-btn-square" title="Recomeçar" data-i18n-title="builder.sim.restart">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
             </button>
-            <button type="button" id="sim-close" class="fb-btn fb-btn-ghost fb-btn-square" title="Fechar">
+            <button type="button" id="sim-close" class="fb-btn fb-btn-ghost fb-btn-square" title="Fechar" data-i18n-title="common.close">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </div>
@@ -178,11 +180,11 @@
         <div class="sim-meta" id="sim-meta"></div>
         <div class="sim-chat" id="sim-chat">
           <div class="sim-empty" id="sim-empty">
-            <p>Simule o WhatsApp do cliente.<br/>A primeira mensagem inicia o fluxo.</p>
+            <p data-i18n-html="builder.sim.emptyHint">Simule o WhatsApp do cliente.<br/>A primeira mensagem inicia o fluxo.</p>
             <div class="sim-chips">
-              <button type="button" class="sim-chip" data-text="Oi, quero marcar uma sessão">marcar sessão</button>
-              <button type="button" class="sim-chip" data-text="Quanto custa?">dúvida</button>
-              <button type="button" class="sim-chip" data-text="Preciso da nota fiscal">admin</button>
+              <button type="button" class="sim-chip" data-text="Oi, quero marcar uma sessão" data-i18n="builder.sim.chip.book">marcar sessão</button>
+              <button type="button" class="sim-chip" data-text="Quanto custa?" data-i18n="builder.sim.chip.doubt">dúvida</button>
+              <button type="button" class="sim-chip" data-text="Preciso da nota fiscal" data-i18n="builder.sim.chip.admin">admin</button>
             </div>
           </div>
         </div>
@@ -191,10 +193,11 @@
             id="sim-input"
             type="text"
             placeholder="Mensagem do cliente…"
+            data-i18n-placeholder="builder.sim.placeholder"
             autocomplete="off"
             maxlength="500"
           />
-          <button type="submit" class="fb-btn fb-btn-primary" id="sim-send">Enviar</button>
+          <button type="submit" class="fb-btn fb-btn-primary" id="sim-send" data-i18n="builder.sim.send">Enviar</button>
         </form>
       </div>
 
@@ -202,10 +205,10 @@
       <div id="history-panel" class="history-panel hidden" aria-label="Histórico de versões">
         <div class="history-head">
           <div class="history-head-left">
-            <strong>Histórico de versões</strong>
+            <strong data-i18n="builder.history.title">Histórico de versões</strong>
             <small id="history-sub">—</small>
           </div>
-          <button type="button" id="history-close" class="fb-btn fb-btn-ghost fb-btn-square" title="Fechar">
+          <button type="button" id="history-close" class="fb-btn fb-btn-ghost fb-btn-square" title="Fechar" data-i18n-title="common.close">
             <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
@@ -215,6 +218,6 @@
       <div id="toast" class="fb-toast hidden"></div>
     </div>
 
-    <script src="/admin/flows.js?v=16" type="module"></script>
+    <script src="/admin/flows.js?v=17" type="module"></script>
   </body>
 </html>

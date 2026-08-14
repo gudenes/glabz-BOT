@@ -18,37 +18,38 @@
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">GZ</span>
           <span class="brand-word">GLABZ</span>
+          <span id="lang-toggle-slot"></span>
         </div>
-        <p class="login-kicker">Automação de WhatsApp para o seu negócio</p>
-        <h1>WhatsApp do seu negócio, no piloto automático.</h1>
-        <p class="login-lead">Conecte o número, desenhe o atendimento, teste como o cliente e publique.</p>
+        <p class="login-kicker" data-i18n="login.kicker">Automação de WhatsApp para o seu negócio</p>
+        <h1 data-i18n="login.title">WhatsApp do seu negócio, no piloto automático.</h1>
+        <p class="login-lead" data-i18n="login.lead">Conecte o número, desenhe o atendimento, teste como o cliente e publique.</p>
       </div>
 
       <div class="login-card">
         <form id="form-login" class="login-form">
           <label>
-            <span>E-mail</span>
+            <span data-i18n="login.email">E-mail</span>
             <input id="email" type="email" autocomplete="username" required placeholder="voce@estudio.com" />
           </label>
           <label>
-            <span>Senha</span>
+            <span data-i18n="login.password">Senha</span>
             <input id="password" type="password" autocomplete="current-password" required />
           </label>
           <p id="login-error" class="err hidden"></p>
-          <button type="submit" class="btn-lime" id="login-btn">Entrar</button>
+          <button type="submit" class="btn-lime" id="login-btn" data-i18n="login.enter">Entrar</button>
         </form>
 
         <form id="form-change" class="login-form hidden">
-          <p class="hint">Primeiro acesso — escolha uma senha nova.</p>
+          <p class="hint" data-i18n="login.firstAccess">Primeiro acesso — escolha uma senha nova.</p>
           <label>
-            <span>Nova senha</span>
+            <span data-i18n="login.newPassword">Nova senha</span>
             <input id="new-pass" type="password" autocomplete="new-password" required minlength="6" />
           </label>
           <p id="change-error" class="err hidden"></p>
-          <button type="submit" class="btn-lime">Salvar e continuar</button>
+          <button type="submit" class="btn-lime" data-i18n="login.saveAndContinue">Salvar e continuar</button>
         </form>
       </div>
     </main>
-    <script src="/admin/login.js?v=8" type="module"></script>
+    <script src="/admin/login.js?v=9" type="module"></script>
   </body>
 </html>
