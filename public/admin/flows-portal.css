@@ -42,9 +42,18 @@ body.portal-embed .fb-icon-btn,
 body.portal-embed #build-badge,
 body.portal-embed .fb-select-wrap,
 body.portal-embed #btn-new,
-body.portal-embed #btn-history,
-body.portal-embed #btn-revert {
+body.portal-embed #btn-history {
   display: none !important;
+}
+/* Reverter fica visível pro cliente também poder desfazer edições não salvas */
+body.portal-embed #btn-revert {
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+body.portal-embed #btn-revert:hover {
+  color: var(--ink);
+  background: #f3f3ef;
 }
 body.portal-embed .fb-name {
   font-family: Syne, Figtree, sans-serif;
@@ -102,6 +111,15 @@ body.portal-embed .fb-btn-ghost { color: var(--muted); }
 body.portal-embed .fb-btn-ghost:hover {
   color: var(--ink);
   background: #f3f3ef;
+}
+body.portal-embed .lang-flag {
+  border-color: var(--line);
+  background: #fff;
+}
+body.portal-embed .lang-flag:hover { background: #f3f3ef; }
+body.portal-embed .lang-flag.active {
+  background: #fafafa;
+  border-color: #d8d8d2;
 }
 
 body.portal-embed .fb-body,
