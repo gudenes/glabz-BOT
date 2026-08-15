@@ -323,7 +323,7 @@ function renderDrawer(item) {
     <div class="drawer-section">
       <h4>${t("admin.drawer.sendTest")}</h4>
       <label class="field"><span>${t("admin.drawer.phoneDdi")}</span><input id="send-to" class="input" placeholder="+34 612 345 678" /></label>
-      <label class="field"><span>${t("admin.drawer.message")}</span><textarea id="send-body" class="input" rows="3">Olá! Teste Glabs Bot.</textarea></label>
+      <label class="field"><span>${t("admin.drawer.message")}</span><textarea id="send-body" class="input" rows="3">Olá! Teste Glabz.</textarea></label>
       <button type="button" class="btn primary sm" data-act="send">${t("admin.drawer.send")}</button>
     </div>
     <div class="drawer-section">

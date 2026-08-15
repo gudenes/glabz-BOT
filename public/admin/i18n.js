@@ -28,25 +28,25 @@ const DICT = {
     "login.toast.passwordUpdated": "Senha atualizada",
 
     // ── index.html / app.js (admin GLabs) ──
-    "admin.brand.sub": "Canal WhatsApp multi-product",
+    "admin.brand.sub": "Canal WhatsApp multiproduto",
     "admin.login.secretLabel": "Secret do bot",
     "admin.login.hint": "Mesmo valor de <code>GLABS_BOT_SECRET</code> no Railway. Fica só neste navegador.",
     "admin.login.enter": "Entrar",
     "admin.login.informSecret": "Informe o secret.",
     "admin.login.invalidSecret": "Secret inválido.",
-    "admin.nav.overview": "Overview",
+    "admin.nav.overview": "Visão geral",
     "admin.nav.accounts": "Contas",
-    "admin.nav.products": "Products",
+    "admin.nav.products": "Produtos",
     "admin.nav.clients": "Clientes",
     "admin.nav.flows": "Fluxos",
     "admin.logout": "Sair",
     "admin.refresh": "Atualizar",
     "admin.newAccount": "Nova conta",
-    "admin.title.overview": "Overview",
+    "admin.title.overview": "Visão geral",
     "admin.sub.overview": "Sessões e saúde do canal",
     "admin.title.accounts": "Contas",
     "admin.sub.accounts": "Uma conta = um número WhatsApp",
-    "admin.title.products": "Products",
+    "admin.title.products": "Produtos",
     "admin.sub.products": "Apps GLabs que consomem o bot",
     "admin.title.clients": "Clientes",
     "admin.sub.clients": "Onboarding e acesso ao portal",
@@ -55,8 +55,8 @@ const DICT = {
     "admin.overview.stat.accounts": "Contas",
     "admin.overview.stat.connected": "Conectadas",
     "admin.overview.stat.pendingQr": "Aguardando QR",
-    "admin.overview.stat.products": "Products",
-    "admin.accounts.filterProduct": "Filtrar product…",
+    "admin.overview.stat.products": "Produtos",
+    "admin.accounts.filterProduct": "Filtrar produto…",
     "admin.accounts.allStatus": "Todos os status",
     "admin.accounts.status.connected": "Conectado",
     "admin.accounts.status.pendingQr": "Aguardando QR",
@@ -76,15 +76,15 @@ const DICT = {
     "admin.clients.toast.deletedOne": "Cliente excluído",
     "admin.clients.toast.created": "Cliente criado. Senha temporária: {pass}",
     "admin.clients.alert.created": "Cliente: {name}\nE-mail: {email}\nSenha temporária: {pass}\n\nMande isso para o cliente. Ele troca no primeiro acesso.",
-    "admin.products.panelTitle": "Products (apps GLabs)",
-    "admin.products.new": "Novo product",
-    "admin.products.empty": "Nenhum product.",
+    "admin.products.panelTitle": "Produtos (apps GLabs)",
+    "admin.products.new": "Novo produto",
+    "admin.products.empty": "Nenhum produto.",
     "admin.products.accountsCount": "{n} conta(s)",
     "admin.products.noDefaultWebhook": "sem webhook default",
     "admin.products.remove": "Remover",
-    "admin.products.confirmRemove": "Remover o product “{slug}”? Só funciona se não houver accounts/flows usando ele.",
-    "admin.products.toast.removed": "Product removido",
-    "admin.products.toast.saved": "Product salvo",
+    "admin.products.confirmRemove": "Remover o produto “{slug}”? Só funciona se não houver contas/fluxos usando ele.",
+    "admin.products.toast.removed": "Produto removido",
+    "admin.products.toast.saved": "Produto salvo",
     "admin.drawer.account": "Conta",
     "admin.drawer.status": "Status",
     "admin.drawer.phone": "Telefone",
@@ -94,11 +94,11 @@ const DICT = {
     "admin.drawer.connectQr": "Conectar / QR",
     "admin.drawer.disconnect": "Desconectar",
     "admin.drawer.refresh": "Atualizar",
-    "admin.drawer.accountSection": "Account",
-    "admin.drawer.product": "Product",
+    "admin.drawer.accountSection": "Conta",
+    "admin.drawer.product": "Produto",
     "admin.drawer.tenant": "Tenant",
     "admin.drawer.webhook": "Webhook",
-    "admin.drawer.label": "Label",
+    "admin.drawer.label": "Rótulo",
     "admin.drawer.webhookUrl": "Webhook URL",
     "admin.drawer.saveMeta": "Salvar metadados",
     "admin.drawer.sendTest": "Enviar teste",
@@ -115,7 +115,7 @@ const DICT = {
     "admin.drawer.removeAccount": "Remover conta do bot",
     "admin.drawer.qrHint": "WhatsApp → Dispositivos conectados → Conectar dispositivo",
     "admin.drawer.confirmDisconnect": "Desconectar e apagar credenciais desta sessão?",
-    "admin.drawer.confirmDelete": "Remover account do registry e desconectar sessão?",
+    "admin.drawer.confirmDelete": "Remover conta do registro e desconectar sessão?",
     "admin.drawer.toast.connecting": "Conectando…",
     "admin.drawer.toast.disconnected": "Desconectado",
     "admin.drawer.toast.metaSaved": "Metadados salvos",
@@ -124,16 +124,16 @@ const DICT = {
     "admin.drawer.toast.profileUpdated": "Perfil atualizado",
     "admin.drawer.toast.accountRemoved": "Conta removida",
     "admin.modal.newAccount.title": "Nova conta WhatsApp",
-    "admin.modal.newAccount.sub": "1 account = 1 número. Product + tenant do app cliente.",
-    "admin.modal.newAccount.product": "Product",
+    "admin.modal.newAccount.sub": "1 conta = 1 número. Produto + tenant do app cliente.",
+    "admin.modal.newAccount.product": "Produto",
     "admin.modal.newAccount.tenant": "externalTenantId",
     "admin.modal.newAccount.tenantPh": "id do tenant no app",
     "admin.modal.newAccount.webhook": "Webhook URL",
-    "admin.modal.newAccount.label": "Label (opcional)",
+    "admin.modal.newAccount.label": "Rótulo (opcional)",
     "admin.modal.newAccount.labelPh": "Corretora XPTO",
     "admin.modal.newAccount.submit": "Criar / atualizar",
     "admin.modal.newAccount.toast": "Conta criada / atualizada",
-    "admin.modal.newProduct.title": "Novo product",
+    "admin.modal.newProduct.title": "Novo produto",
     "admin.modal.newProduct.sub": "Registra um app GLabs que vai consumir o bot.",
     "admin.modal.newProduct.slug": "Slug",
     "admin.modal.newProduct.name": "Nome",
@@ -925,47 +925,81 @@ function injectStyle() {
   styleInjected = true;
   const style = document.createElement("style");
   style.textContent = `
-    .lang-toggle {
+    .lang-toggle-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .lang-flag {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
       border: 1px solid rgba(255,255,255,0.1);
       background: rgba(255,255,255,0.04);
       cursor: pointer;
-      font-size: 16px;
+      font-size: 14px;
       line-height: 1;
       padding: 0;
       flex-shrink: 0;
-      transition: background 0.12s, transform 0.12s;
+      filter: grayscale(1) opacity(0.55);
+      transition: filter 0.15s, background 0.12s, transform 0.12s, border-color 0.12s;
     }
-    .lang-toggle:hover { background: rgba(255,255,255,0.09); transform: translateY(-1px); }
-    .lang-toggle:active { transform: scale(0.96); }
+    .lang-flag:hover { background: rgba(255,255,255,0.09); transform: translateY(-1px); }
+    .lang-flag:active { transform: scale(0.96); }
+    .lang-flag.active {
+      filter: none;
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.2);
+      cursor: default;
+    }
   `;
   document.head.appendChild(style);
 }
 
 /**
- * Cria e insere o botão de bandeira num container. Ao clicar, alterna idioma
+ * Cria e insere as duas bandeiras (PT/EN) num container. A do idioma ativo
+ * fica colorida; a outra em preto-e-branco. Clicar na inativa troca o idioma
  * e recarrega a página (mais simples e confiável do que re-renderizar cada tela).
  */
 export function mountLangToggle(container, opts = {}) {
   injectStyle();
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "lang-toggle" + (opts.className ? ` ${opts.className}` : "");
-  btn.title = "Language / Idioma";
+  const wrap = document.createElement("div");
+  wrap.className = "lang-toggle-group" + (opts.className ? ` ${opts.className}` : "");
+
+  const ptBtn = document.createElement("button");
+  ptBtn.type = "button";
+  ptBtn.title = "Português";
+  ptBtn.textContent = "🇧🇷";
+
+  const enBtn = document.createElement("button");
+  enBtn.type = "button";
+  enBtn.title = "English";
+  enBtn.textContent = "🇺🇸";
+
   const sync = () => {
-    btn.textContent = getLang() === "pt" ? "🇧🇷" : "🇺🇸";
+    const lang = getLang();
+    ptBtn.className = "lang-flag" + (lang === "pt" ? " active" : "");
+    enBtn.className = "lang-flag" + (lang === "en" ? " active" : "");
   };
   sync();
-  btn.onclick = () => {
-    setLang(getLang() === "pt" ? "en" : "pt");
+
+  ptBtn.onclick = () => {
+    if (getLang() === "pt") return;
+    setLang("pt");
     location.reload();
   };
-  if (opts.prepend) container.prepend(btn);
-  else container.appendChild(btn);
-  return btn;
+  enBtn.onclick = () => {
+    if (getLang() === "en") return;
+    setLang("en");
+    location.reload();
+  };
+
+  wrap.append(ptBtn, enBtn);
+  if (opts.prepend) container.prepend(wrap);
+  else container.appendChild(wrap);
+  return wrap;
 }
