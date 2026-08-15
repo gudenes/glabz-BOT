@@ -909,9 +909,16 @@ function renderProps() {
   body.classList.remove("hidden");
 
   const d = node.data || {};
-  let html = `<div class="field"><label>Tipo</label><input value="${typeLabel(
-    node.type
-  )}" disabled /></div>`;
+  let html =
+    node.type === "trigger"
+      ? `<div class="field"><label>${t("builder.props.type")}</label><input value="${typeLabel(node.type)}" disabled /></div>`
+      : `<div class="field"><label>${t("builder.props.type")}</label>
+          <select id="p-type">
+            ${ADDABLE_TYPES.map(
+              (it) => `<option value="${it.type}"${it.type === node.type ? " selected" : ""}>${escapeHtml(it.label)}</option>`
+            ).join("")}
+          </select>
+        </div>`;
 
   if (node.type === "message" || node.type === "handoff") {
     const key = node.type === "message" ? "text" : "message";
@@ -1106,6 +1113,43 @@ function renderProps() {
     toast(t("builder.toast.clickNextCard"));
   };
   $("p-del").onclick = () => deleteNode(node);
+  $("p-type")?.addEventListener("change", (ev) => changeNodeType(node, ev.target.value));
+}
+
+/**
+ * Campos de "texto principal" equivalentes entre tipos — preserva o que a
+ * pessoa já escreveu quando dá pra reaproveitar (ex.: message.text vira
+ * ask.prompt), em vez de resetar tudo pro padrão genérico.
+ */
+const MAIN_TEXT_FIELD = { message: "text", ask: "prompt", handoff: "message" };
+
+/** Troca o tipo de um nó já existente, sem apagar — mantém id/posição/ligações. */
+function changeNodeType(node, newType) {
+  if (!newType || newType === node.type || node.type === "trigger" || newType === "trigger") return;
+
+  const oldField = MAIN_TEXT_FIELD[node.type];
+  const newField = MAIN_TEXT_FIELD[newType];
+  const carryText = oldField && newField ? node.data?.[oldField] : null;
+
+  const wasBranching = ["llm_intent", "condition", "action"].includes(node.type);
+  const isBranching = ["llm_intent", "condition", "action"].includes(newType);
+  const outEdges = state.flow.edges.filter((e) => e.from === node.id);
+  const labeledOutEdges = outEdges.filter((e) => e.label);
+
+  node.type = newType;
+  node.data = defaultData(newType);
+  if (carryText && newField) node.data[newField] = carryText;
+
+  state.selectedNodeId = node.id;
+  renderCanvas();
+  renderProps();
+  toast(t("builder.toast.typeChanged"));
+
+  // Nó tinha várias ligações rotuladas (ex.: intenções) e virou um tipo linear —
+  // só a primeira ligação será seguida, o resto fica sem uso até serem revisadas.
+  if (wasBranching && !isBranching && labeledOutEdges.length > 1) {
+    toast(t("builder.toast.typeChangedEdgesWarning"), "err");
+  }
 }
 
 function escapeHtml(s) {
