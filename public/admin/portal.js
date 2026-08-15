@@ -35,8 +35,6 @@ const state = {
   portal: null,
   accountId: null,
   view: "status",
-  simState: null,
-  simBusy: false,
   lastWa: null,
   firstName: "",
   threads: [],
@@ -73,26 +71,64 @@ const TITLES = {
   pubs: ["portal.nav.pubs", "portal.pubsStageSub"],
 };
 
+/**
+ * "test" não tem seção própria — reaproveita a aba Fluxo (mesmo builder,
+ * mesmo simulador com destaque de passo no canvas). Ver [[git-branching-strategy]]
+ * princípio: nunca reimplementar no portal algo que o builder já tem.
+ */
 function setView(view) {
   state.view = view;
   document.querySelectorAll("[data-view]").forEach((b) => {
     b.classList.toggle("on", b.dataset.view === view);
   });
-  for (const id of ["status", "inbox", "flow", "test", "pubs"]) {
-    $(`view-${id}`)?.classList.toggle("hidden", id !== view);
+  const shownSection = view === "test" ? "flow" : view;
+  for (const id of ["status", "inbox", "flow", "pubs"]) {
+    $(`view-${id}`)?.classList.toggle("hidden", id !== shownSection);
   }
   $("hello").textContent = state.firstName ? t("portal.helloName", { name: state.firstName }) : t(TITLES[view][0]);
   $("stage-sub").textContent = t(TITLES[view][1]);
-  if (view === "flow") {
+  if (shownSection === "flow") {
     syncFlowPane();
     if (!hasOwnFlows()) {
       $("stage-sub").textContent = t("portal.studio.stageSub");
+    } else if (view === "test") {
+      openBuilderSimulator();
     }
+  } else {
+    hideStudioChrome();
   }
-  else hideStudioChrome();
-  if (view === "test") renderTestMeta();
   if (view === "pubs") renderPubs();
   if (view === "inbox") void loadInbox();
+}
+
+/**
+ * Abre o simulador de dentro do iframe do builder (mesmo painel usado no admin).
+ * frame.dataset.loaded vira "1" assim que a navegação COMEÇA (não quando termina),
+ * então não dá pra confiar nele pra saber se o app lá dentro já rodou o boot() —
+ * espera o próprio botão existir no DOM do iframe antes de clicar.
+ */
+function openBuilderSimulator() {
+  const frame = $("flow-frame");
+  if (!frame) return;
+  if (frame.dataset.loaded !== "1") openBuilder();
+  frame.classList.remove("hidden");
+
+  let tries = 0;
+  const tryClick = () => {
+    tries += 1;
+    let btn = null;
+    try {
+      btn = frame.contentWindow?.document?.getElementById("btn-sim");
+    } catch {
+      /* mesma origem sempre — só acontece enquanto ainda está carregando */
+    }
+    if (btn) {
+      btn.click();
+      return;
+    }
+    if (tries < 40) setTimeout(tryClick, 150); // até ~6s esperando o boot() do iframe
+  };
+  tryClick();
 }
 
 function hasOwnFlows() {
@@ -339,11 +375,6 @@ function fmtWhen(iso) {
   });
 }
 
-function activeFlow() {
-  const flows = state.portal?.flows || [];
-  return flows.find((f) => f.status === "live") || flows[0] || null;
-}
-
 function render() {
   const p = state.portal;
   if (!p) return;
@@ -442,16 +473,6 @@ function render() {
   }
 }
 
-function renderTestMeta() {
-  const f = activeFlow();
-  $("test-flow-name").textContent = f ? f.name : t("portal.test.noFlowYet");
-  $("test-flow-sub").textContent = f
-    ? f.status === "live"
-      ? t("portal.test.testingLive")
-      : t("portal.test.testingDraft")
-    : t("portal.test.createFlowHint");
-}
-
 function renderPubs() {
   const list = $("pubs-list");
   const flows = state.portal?.flows || [];
@@ -484,82 +505,9 @@ function escapeHtml(s) {
     .replace(/>/g, "&gt;");
 }
 
-function appendChat(kind, text) {
-  const log = $("chat-log");
-  $("chat-empty")?.remove();
-  const b = document.createElement("div");
-  b.className = "bub " + kind;
-  b.textContent = text;
-  log.appendChild(b);
-  log.scrollTop = log.scrollHeight;
-}
-
-function resetChat() {
-  state.simState = null;
-  $("chat-log").innerHTML =
-    `<div class="chat-empty" id="chat-empty"><p>${t("portal.test.emptyHint")}</p></div>`;
-  $("test-now").textContent = t("portal.test.ready");
-  toast(t("portal.test.restarted"));
-}
-
-async function sendChat(ev) {
-  ev.preventDefault();
-  const flow = activeFlow();
-  const input = $("chat-input");
-  const text = (input.value || "").trim();
-  if (!text || state.simBusy) return;
-  if (!flow?.nodes) {
-    appendChat("sys", t("portal.test.createFirst"));
-    return;
-  }
-  input.value = "";
-  appendChat("user", text);
-  state.simBusy = true;
-  $("test-now").textContent = t("portal.test.thinking");
-  try {
-    const data = await api("/v1/flows/simulate", {
-      method: "POST",
-      body: JSON.stringify({
-        flowId: flow.id,
-        name: flow.name,
-        product: flow.product,
-        nodes: flow.nodes,
-        edges: flow.edges,
-        text,
-        state: state.simState,
-      }),
-    });
-    state.simState = data.state || null;
-    const last = (data.trace || []).at(-1);
-    if (last) {
-      const label =
-        {
-          ask: t("portal.test.trace.ask"),
-          message: t("portal.test.trace.message"),
-          llm_intent: t("portal.test.trace.intent"),
-          action: t("portal.test.trace.action"),
-          handoff: t("portal.test.trace.handoff"),
-          end: t("portal.test.trace.end"),
-        }[last.type] || last.type;
-      $("test-now").textContent = last.detail ? `${label} · ${last.detail}` : label;
-      appendChat("sys", $("test-now").textContent);
-    }
-    for (const reply of data.replies || []) appendChat("bot", reply);
-    if (data.handoff) appendChat("sys", t("portal.test.humanHandoff"));
-    if (!data.replies?.length && !data.trace?.length) appendChat("sys", t("portal.test.noReply"));
-  } catch (e) {
-    appendChat("sys", t("portal.test.errorPrefix") + e.message);
-    $("test-now").textContent = t("portal.status.error");
-    toast(e.message, "err");
-  } finally {
-    state.simBusy = false;
-  }
-}
-
 async function refresh() {
   state.portal = await api("/v1/portal");
   render();
-  if (state.view === "test") renderTestMeta();
   if (state.view === "pubs") renderPubs();
 }
 
@@ -745,9 +693,6 @@ $("btn-refresh").onclick = async () => {
   await refresh();
   toast(t("portal.refreshed"));
 };
-$("test-reset").onclick = () => resetChat();
-$("chat-form").onsubmit = sendChat;
-
 function studioSay(text, who = "coach") {
   const log = $("studio-log");
   if (!log) return;
