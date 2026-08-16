@@ -5,7 +5,7 @@ import {
   getFlow,
   upsertConversationState,
 } from "./store.js";
-import { classifyIntent } from "./llm.js";
+import { classifyIntent, extractDate } from "./llm.js";
 import { runAction } from "./connectors/index.js";
 
 function render(template: string, vars: Record<string, string>): string {
@@ -54,6 +54,8 @@ export type FlowTraceStep = {
   nodeId: string;
   type: string;
   detail?: string;
+  /** Texto enviado ao cliente nesse passo (message/ask/handoff), se houver. */
+  reply?: string;
 };
 
 export type FlowStepResult = EngineResult & {
@@ -156,8 +158,14 @@ export async function runFlowStep(opts: {
 
     if (node.type === "message") {
       const msg = render(String(node.data.text || ""), vars);
-      if (msg.trim()) replies.push(msg);
-      trace.push({ nodeId: node.id, type: "message", detail: "enviou texto" });
+      const hasReply = Boolean(msg.trim());
+      if (hasReply) replies.push(msg);
+      trace.push({
+        nodeId: node.id,
+        type: "message",
+        detail: "enviou texto",
+        reply: hasReply ? msg : undefined,
+      });
       node = nextNode(flow, node.id);
       continue;
     }
@@ -169,6 +177,7 @@ export async function runFlowStep(opts: {
       trace.push({
         nodeId: node.id,
         type: "ask",
+        reply: prompt,
         detail: `aguarda ${waitingFor}`,
       });
       break;
@@ -223,6 +232,20 @@ export async function runFlowStep(opts: {
       continue;
     }
 
+    if (node.type === "llm_extract") {
+      const result = await extractDate({ text });
+      const varName = String(node.data.varName || "data_confirmada");
+      if (result.date) vars[varName] = result.date;
+      vars.date_extract_status = result.status;
+      trace.push({
+        nodeId: node.id,
+        type: "llm_extract",
+        detail: `${result.status}${result.date ? " · " + result.date : ""} (${result.source})`,
+      });
+      node = nextNode(flow, node.id, result.status);
+      continue;
+    }
+
     if (node.type === "action") {
       const connector = String(node.data.connector || "calendar");
       const operation = String(node.data.operation || "list_slots");
@@ -249,6 +272,7 @@ export async function runFlowStep(opts: {
         ctx: {
           product: flow.product,
           accountId: flow.accountId,
+          clientId: flow.clientId ?? null,
           simulate,
         },
       });
@@ -289,7 +313,8 @@ export async function runFlowStep(opts: {
         ),
         vars
       );
-      if (msg.trim()) replies.push(msg);
+      const handoffHasReply = Boolean(msg.trim());
+      if (handoffHasReply) replies.push(msg);
       handoff = true;
       handoffReason = String(node.data.reason || "handoff");
       vars.handoff_reason = handoffReason;
@@ -297,6 +322,7 @@ export async function runFlowStep(opts: {
         nodeId: node.id,
         type: "handoff",
         detail: handoffReason,
+        reply: handoffHasReply ? msg : undefined,
       });
       break;
     }

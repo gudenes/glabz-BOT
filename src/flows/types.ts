@@ -1,7 +1,7 @@
 /**
  * Modelo de fluxo visual + runtime.
  *
- * Nós: trigger | message | ask | condition | llm_intent | action | handoff | end
+ * Nós: trigger | message | ask | condition | llm_intent | llm_extract | action | handoff | end
  */
 
 export type FlowStatus = "draft" | "live";
@@ -12,6 +12,7 @@ export type FlowNodeType =
   | "ask"
   | "condition"
   | "llm_intent"
+  | "llm_extract"
   | "action"
   | "handoff"
   | "end";

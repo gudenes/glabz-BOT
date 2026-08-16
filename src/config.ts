@@ -106,3 +106,39 @@ export function databaseUrl(): string {
     ""
   );
 }
+
+/** OAuth do Google (Calendar) — Client ID/Secret criados uma vez no Google Cloud Console. */
+export function googleClientId(): string {
+  return process.env.GOOGLE_CLIENT_ID?.trim() || "";
+}
+
+export function googleClientSecret(): string {
+  return process.env.GOOGLE_CLIENT_SECRET?.trim() || "";
+}
+
+export function googleRedirectUri(): string {
+  return (
+    process.env.GOOGLE_REDIRECT_URI?.trim() ||
+    `http://localhost:${listenPort()}/v1/integrations/google-calendar/callback`
+  );
+}
+
+export function googleOAuthConfigured(): boolean {
+  return Boolean(googleClientId() && googleClientSecret());
+}
+
+/**
+ * Chave usada pra cifrar refresh_token em repouso (AES-256-GCM).
+ * Em produção precisa vir de TOKEN_ENCRYPTION_KEY (ou reaproveita botSecret());
+ * sem nenhuma das duas, sobe só em dev com uma chave fixa — nunca em produção.
+ */
+export function tokenEncryptionKey(): string {
+  const key = process.env.TOKEN_ENCRYPTION_KEY?.trim() || botSecret();
+  if (key) return key;
+  if (isProduction()) {
+    throw new Error(
+      "TOKEN_ENCRYPTION_KEY (ou GLABS_BOT_SECRET) obrigatório em produção pra cifrar tokens salvos"
+    );
+  }
+  return "dev-only-insecure-key-nao-usar-em-producao";
+}

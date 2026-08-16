@@ -1,4 +1,5 @@
 import { llmApiKey, llmBaseUrl, llmModel } from "../config.js";
+import { BR_WEEKDAY_NAMES, brDateIso, brLocalParts, brWeekday } from "../br-time.js";
 
 /**
  * Classifica intenção com LLM (xAI/OpenAI-compatible).
@@ -108,4 +109,140 @@ export async function classifyIntent(opts: {
   }
 
   return { intent: "default", source: "default" };
+}
+
+export type DateExtraction = {
+  status: "ok" | "ambiguous" | "unclear";
+  date: string | null; // AAAA-MM-DD
+  source: "llm" | "keyword";
+};
+
+/**
+ * Extrai uma data mencionada em texto livre (ex.: "segunda-feira",
+ * "amanhã", "dia 17"), relativa a `now`. Diferente de classifyIntent
+ * (lista fechada de slugs), aqui a saída é um valor livre — data ISO — com
+ * um status indicando se deu pra ter certeza (ok), se faltou informação
+ * (ambiguous, ex.: "semana que vem" sem dizer o dia) ou se não tinha nada
+ * de data no texto (unclear).
+ */
+export async function extractDate(opts: { text: string; now?: Date }): Promise<DateExtraction> {
+  const now = opts.now || new Date();
+  const todayIso = brDateIso(now);
+  const weekdayName = BR_WEEKDAY_NAMES[brWeekday(now)];
+
+  const key = llmApiKey();
+  if (key) {
+    try {
+      const res = await fetch(`${llmBaseUrl().replace(/\/$/, "")}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          model: llmModel(),
+          temperature: 0,
+          max_tokens: 60,
+          messages: [
+            {
+              role: "system",
+              content: `Hoje é ${weekdayName}, ${todayIso} (formato AAAA-MM-DD). O usuário respondeu a uma pergunta sobre que dia ele prefere marcar um horário. Extraia a data mencionada.
+Responda APENAS um JSON válido, sem nenhum texto além dele, no formato:
+{"status":"ok"|"ambiguous"|"unclear","date":"AAAA-MM-DD"|null}
+- "ok": você tem certeza de UMA data específica (calcule a partir de hoje se for relativa, tipo "amanhã" ou "segunda-feira").
+- "ambiguous": faltam informações pra decidir entre datas possíveis (ex.: "semana que vem" sem dizer o dia).
+- "unclear": o texto não menciona nenhuma data.`,
+            },
+            { role: "user", content: opts.text.slice(0, 400) },
+          ],
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as {
+          choices?: { message?: { content?: string } }[];
+        };
+        const raw = (data.choices?.[0]?.message?.content || "").trim();
+        const match = raw.match(/\{[\s\S]*\}/);
+        if (match) {
+          const parsed = JSON.parse(match[0]) as { status?: string; date?: string | null };
+          const date =
+            parsed.date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : null;
+          if (parsed.status === "ok" && date) return { status: "ok", date, source: "llm" };
+          if (parsed.status === "ambiguous" || parsed.status === "unclear") {
+            return { status: parsed.status, date: null, source: "llm" };
+          }
+        }
+      } else {
+        console.warn("[flow/llm] extractDate HTTP", res.status, await res.text().catch(() => ""));
+      }
+    } catch (e) {
+      console.warn("[flow/llm] extractDate failed", (e as Error).message);
+    }
+  }
+
+  return keywordExtractDate(opts.text, now);
+}
+
+const WEEKDAY_ALIASES: Record<string, number> = {
+  domingo: 0,
+  segunda: 1,
+  terca: 2,
+  quarta: 3,
+  quinta: 4,
+  sexta: 5,
+  sabado: 6,
+};
+
+function stripAccents(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function addDays(d: Date, days: number): Date {
+  return new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+function isoDateFromParts(y: number, m: number, day: number): string {
+  const d = new Date(Date.UTC(y, m, day));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+}
+
+/** Fallback sem LLM (sem API key configurada, ou se a chamada falhar). */
+function keywordExtractDate(text: string, now: Date): DateExtraction {
+  const t = stripAccents(text.toLowerCase());
+
+  if (/\bhoje\b/.test(t)) return { status: "ok", date: brDateIso(now), source: "keyword" };
+  if (/\bamanha\b/.test(t)) return { status: "ok", date: brDateIso(addDays(now, 1)), source: "keyword" };
+
+  const dateSlash = t.match(/\b(\d{1,2})\/(\d{1,2})\b/);
+  if (dateSlash) {
+    const day = Number(dateSlash[1]);
+    const month = Number(dateSlash[2]) - 1;
+    const { y } = brLocalParts(now);
+    return { status: "ok", date: isoDateFromParts(y, month, day), source: "keyword" };
+  }
+
+  const dayOnly = t.match(/\bdia\s+(\d{1,2})\b/);
+  if (dayOnly) {
+    const day = Number(dayOnly[1]);
+    const { y, m, day: today } = brLocalParts(now);
+    const targetMonth = day < today ? m + 1 : m;
+    return { status: "ok", date: isoDateFromParts(y, targetMonth, day), source: "keyword" };
+  }
+
+  for (const [name, weekday] of Object.entries(WEEKDAY_ALIASES)) {
+    if (t.includes(name)) {
+      const isNextWeek = /proxim|semana que vem/.test(t);
+      let delta = (weekday - brWeekday(now) + 7) % 7;
+      if (delta === 0) delta = 7; // hoje já é esse dia -> assume a próxima ocorrência (a menos que diga "hoje")
+      if (isNextWeek) delta += 7;
+      return { status: "ok", date: brDateIso(addDays(now, delta)), source: "keyword" };
+    }
+  }
+
+  if (/semana que vem|proxima semana|mes que vem/.test(t)) {
+    return { status: "ambiguous", date: null, source: "keyword" };
+  }
+
+  return { status: "unclear", date: null, source: "keyword" };
 }

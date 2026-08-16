@@ -12,6 +12,7 @@ export type ConnectorResult = {
 export type ConnectorContext = {
   accountId?: string | null;
   product?: string;
+  clientId?: string | null;
   /** true no simulador — preferir mock se não houver webhook */
   simulate?: boolean;
 };

@@ -86,6 +86,12 @@ function defaultData(type) {
           { slug: "outro", description: "outra dúvida" },
         ],
       };
+    case "llm_extract":
+      return {
+        label: "Extrair data",
+        prompt: "Data que o cliente prefere pra marcar o horário.",
+        varName: "data_confirmada",
+      };
     case "condition":
       return { field: "last", op: "contains", value: "sim" };
     case "action":
@@ -124,6 +130,7 @@ function nodeTitle(node) {
   if (node.type === "message") return prettyPreview(d.text || "Mensagem") || "Mensagem";
   if (node.type === "ask") return prettyPreview(d.prompt || "Pergunta") || "Pergunta";
   if (node.type === "llm_intent") return d.label || "Entender intenção";
+  if (node.type === "llm_extract") return d.label || "Extrair data";
   if (node.type === "condition")
     return `${d.field || "texto"} ${d.op || "contém"} “${d.value || ""}”`;
   if (node.type === "action") {
@@ -226,6 +233,8 @@ function friendlyEdgeLabel(label) {
     false: "não",
     ok: "ok",
     erro: "erro",
+    ambiguous: "ambíguo",
+    unclear: "não entendi",
   };
   return map[label] || label;
 }
@@ -237,6 +246,7 @@ function typeLabel(type) {
       message: t("builder.step.message"),
       ask: t("builder.step.ask"),
       llm_intent: t("builder.step.intent"),
+      llm_extract: t("builder.step.extract"),
       condition: t("builder.step.condition"),
       action: t("builder.step.action"),
       handoff: t("builder.step.handoff"),
@@ -703,6 +713,7 @@ const ADDABLE_TYPES = [
   { type: "message", label: t("builder.step.message"), ic: "msg" },
   { type: "ask", label: t("builder.step.ask"), ic: "ask" },
   { type: "llm_intent", label: t("builder.step.intent"), ic: "llm" },
+  { type: "llm_extract", label: t("builder.step.extract"), ic: "extract" },
   { type: "action", label: t("builder.step.action"), ic: "act" },
   { type: "condition", label: t("builder.step.condition"), ic: "cond" },
   { type: "handoff", label: t("builder.step.handoff"), ic: "hand" },
@@ -773,6 +784,8 @@ function addChildNode(parentNode, type) {
     edgeLabel = siblings === 0 ? "true" : "false";
   } else if (parentNode.type === "action") {
     edgeLabel = siblings === 0 ? "ok" : "erro";
+  } else if (parentNode.type === "llm_extract") {
+    edgeLabel = ["ok", "ambiguous", "unclear"][siblings] || "ok";
   }
 
   state.flow.edges.push({
@@ -904,14 +917,23 @@ function renderProps() {
     body.classList.add("hidden");
     return;
   }
-  propsPanel?.classList.remove("collapsed");
+  // Se o painel estiver recolhido, permanece recolhido — só o pulse acima
+  // (ícone piscando) avisa que o conteúdo mudou. Forçar a expansão aqui
+  // anulava esse aviso, abrindo o painel em toda seleção de passo.
   empty.classList.add("hidden");
   body.classList.remove("hidden");
 
   const d = node.data || {};
-  let html = `<div class="field"><label>Tipo</label><input value="${typeLabel(
-    node.type
-  )}" disabled /></div>`;
+  let html =
+    node.type === "trigger"
+      ? `<div class="field"><label>${t("builder.props.type")}</label><input value="${typeLabel(node.type)}" disabled /></div>`
+      : `<div class="field"><label>${t("builder.props.type")}</label>
+          <select id="p-type">
+            ${ADDABLE_TYPES.map(
+              (it) => `<option value="${it.type}"${it.type === node.type ? " selected" : ""}>${escapeHtml(it.label)}</option>`
+            ).join("")}
+          </select>
+        </div>`;
 
   if (node.type === "message" || node.type === "handoff") {
     const key = node.type === "message" ? "text" : "message";
@@ -950,6 +972,13 @@ function renderProps() {
       </div>
       <p class="fb-hint">Ao ligar o próximo passo, use o mesmo código (ex.: marcar_consulta) ou “default”.</p>`;
   }
+  if (node.type === "llm_extract") {
+    html += `<div class="field"><label>O que buscar (contexto pra IA)</label>
+      <textarea id="p-prompt">${escapeHtml(String(d.prompt || ""))}</textarea></div>
+      <div class="field"><label>Salvar em variável</label>
+      <input id="p-var" value="${escapeHtml(String(d.varName || "data_confirmada"))}" /></div>
+      <p class="fb-hint">Ligações: <code>ok</code> (extraiu certo) / <code>ambiguous</code> (faltou info) / <code>unclear</code> (não tinha data). Var extra: <code>date_extract_status</code>.</p>`;
+  }
 
   if (node.type === "action") {
     const cfg = d.config && typeof d.config === "object" ? d.config : {};
@@ -968,12 +997,21 @@ function renderProps() {
         <option value="create_event"${operation === "create_event" ? " selected" : ""}>Criar evento</option>
         <option value="cancel_event"${operation === "cancel_event" ? " selected" : ""}>Cancelar evento</option>
       </select></div>
-      <div class="field"><label>Webhook (opcional)</label>
+      <div class="field" id="p-provider-wrap"><label>Fonte dos horários</label>
+      <select id="p-provider">
+        <option value=""${cfg.provider !== "google" ? " selected" : ""}>Webhook / mock</option>
+        <option value="google"${cfg.provider === "google" ? " selected" : ""}>Google Calendar do cliente</option>
+      </select></div>
+      <div class="field" id="p-webhook-wrap"><label>Webhook (opcional)</label>
       <input id="p-webhook" value="${escapeHtml(String(cfg.webhookUrl || cfg.url || d.webhookUrl || ""))}" placeholder="https://… (vazio = mock)" /></div>
+      <div class="field" id="p-target-date-wrap"><label>Data alvo (variável, opcional)</label>
+      <input id="p-target-date" value="${escapeHtml(String(cfg.targetDateVar || ""))}" placeholder="ex.: data_confirmada" />
+      <p class="fb-hint" style="margin-top:4px">Se vazio, lista os próximos dias corridos. Preenchido (ex.: com a variável de um passo "Extrair data" anterior), lista só aquele dia.</p></div>
+      <p class="fb-hint" id="p-google-hint">O cliente precisa conectar o Google Calendar dele em <strong>Dados da conta → Integrações</strong> no portal antes de publicar um fluxo usando essa opção.</p>
       <div class="field"><label>Mock no simulador</label>
       <select id="p-force-mock">
         <option value="1"${cfg.forceMock !== false ? " selected" : ""}>Sim — sempre mock</option>
-        <option value="0"${cfg.forceMock === false ? " selected" : ""}>Não — usa webhook se houver</option>
+        <option value="0"${cfg.forceMock === false ? " selected" : ""}>Não — usa a integração de verdade</option>
       </select></div>
       <p class="fb-hint">Ligações: <code>ok</code> e <code>erro</code>. Vars: <code>slots_text</code>, <code>event_link</code>, <code>event_summary</code>.</p>`;
   }
@@ -989,22 +1027,38 @@ function renderProps() {
   if (node.type === "action") {
     const syncOp = () => {
       const wrap = $("p-op-wrap");
-      if (!wrap) return;
-      wrap.style.display = $("p-connector").value === "calendar" ? "" : "none";
+      const providerWrap = $("p-provider-wrap");
+      const isCalendar = $("p-connector").value === "calendar";
+      if (wrap) wrap.style.display = isCalendar ? "" : "none";
+      if (providerWrap) providerWrap.style.display = isCalendar ? "" : "none";
+      syncProvider();
+    };
+    const syncProvider = () => {
+      const isGoogle = $("p-provider")?.value === "google";
+      $("p-webhook-wrap") && ($("p-webhook-wrap").style.display = isGoogle ? "none" : "");
+      $("p-google-hint") && ($("p-google-hint").style.display = isGoogle ? "" : "none");
+      $("p-target-date-wrap") && ($("p-target-date-wrap").style.display = isGoogle ? "" : "none");
     };
     $("p-connector").onchange = syncOp;
+    $("p-provider")?.addEventListener("change", syncProvider);
     syncOp();
     $("p-apply").onclick = () => {
       const connector = $("p-connector").value;
       const webhook = $("p-webhook").value.trim();
       const forceMock = $("p-force-mock").value === "1";
+      const provider = connector === "calendar" ? $("p-provider").value : "";
       const config = {
         ...(node.data.config && typeof node.data.config === "object"
           ? node.data.config
           : {}),
         forceMock,
       };
-      if (webhook) {
+      if (provider) config.provider = provider;
+      else delete config.provider;
+      const targetDateVar = provider === "google" ? $("p-target-date").value.trim() : "";
+      if (targetDateVar) config.targetDateVar = targetDateVar;
+      else delete config.targetDateVar;
+      if (webhook && provider !== "google") {
         if (connector === "http") config.url = webhook;
         else config.webhookUrl = webhook;
       } else {
@@ -1095,6 +1149,12 @@ function renderProps() {
           op: $("p-op").value,
           value: $("p-value").value,
         };
+      } else if (node.type === "llm_extract") {
+        node.data = {
+          ...node.data,
+          prompt: $("p-prompt").value,
+          varName: $("p-var").value.trim() || "data_confirmada",
+        };
       }
       renderCanvas();
       toast(t("builder.toast.stepUpdated"));
@@ -1106,6 +1166,43 @@ function renderProps() {
     toast(t("builder.toast.clickNextCard"));
   };
   $("p-del").onclick = () => deleteNode(node);
+  $("p-type")?.addEventListener("change", (ev) => changeNodeType(node, ev.target.value));
+}
+
+/**
+ * Campos de "texto principal" equivalentes entre tipos — preserva o que a
+ * pessoa já escreveu quando dá pra reaproveitar (ex.: message.text vira
+ * ask.prompt), em vez de resetar tudo pro padrão genérico.
+ */
+const MAIN_TEXT_FIELD = { message: "text", ask: "prompt", handoff: "message" };
+
+/** Troca o tipo de um nó já existente, sem apagar — mantém id/posição/ligações. */
+function changeNodeType(node, newType) {
+  if (!newType || newType === node.type || node.type === "trigger" || newType === "trigger") return;
+
+  const oldField = MAIN_TEXT_FIELD[node.type];
+  const newField = MAIN_TEXT_FIELD[newType];
+  const carryText = oldField && newField ? node.data?.[oldField] : null;
+
+  const wasBranching = ["llm_intent", "llm_extract", "condition", "action"].includes(node.type);
+  const isBranching = ["llm_intent", "llm_extract", "condition", "action"].includes(newType);
+  const outEdges = state.flow.edges.filter((e) => e.from === node.id);
+  const labeledOutEdges = outEdges.filter((e) => e.label);
+
+  node.type = newType;
+  node.data = defaultData(newType);
+  if (carryText && newField) node.data[newField] = carryText;
+
+  state.selectedNodeId = node.id;
+  renderCanvas();
+  renderProps();
+  toast(t("builder.toast.typeChanged"));
+
+  // Nó tinha várias ligações rotuladas (ex.: intenções) e virou um tipo linear —
+  // só a primeira ligação será seguida, o resto fica sem uso até serem revisadas.
+  if (wasBranching && !isBranching && labeledOutEdges.length > 1) {
+    toast(t("builder.toast.typeChangedEdgesWarning"), "err");
+  }
 }
 
 function escapeHtml(s) {
@@ -1192,6 +1289,27 @@ function initPanels() {
   });
 }
 initPanels();
+
+// No portal, a coluna de canvas fica espremida (ou some) em iframes estreitos —
+// a grade de Passos(190px)+Detalhes(300px) fixos não sobra espaço nenhum pro
+// canvas quando o iframe fica abaixo de ~860px. Recolhe os dois automaticamente
+// nesse caso, pelo mesmo mecanismo de sempre (o botão continua liberando pra
+// expandir manualmente se o usuário preferir apertar mesmo assim).
+if (EMBED) {
+  const narrowMq = window.matchMedia("(max-width: 860px)");
+  const applyNarrowCollapse = () => {
+    for (const id of ["panel-palette", "panel-props"]) {
+      const panel = document.getElementById(id);
+      if (!panel) continue;
+      panel.classList.toggle("collapsed", narrowMq.matches);
+      const btn = document.querySelector(`[data-toggle="${id}"]`);
+      if (btn) syncToggleIcon(btn, panel);
+    }
+    if (state.flow) renderCanvas();
+  };
+  narrowMq.addEventListener("change", applyNarrowCollapse);
+  applyNarrowCollapse();
+}
 
 // ── Atalhos de teclado ───────────────────────────────────
 document.addEventListener("keydown", (e) => {
@@ -1422,6 +1540,7 @@ function typeLabelPt(type) {
       message: t("builder.step.message"),
       ask: t("builder.sim.trace.ask"),
       llm_intent: t("builder.sim.trace.intent"),
+      llm_extract: t("builder.step.extract"),
       action: t("builder.step.action"),
       condition: t("builder.step.condition"),
       handoff: t("builder.step.handoff"),
@@ -1444,6 +1563,10 @@ async function playTrace(trace) {
     const label = typeLabelPt(step.type);
     const detail = step.detail ? ` · ${step.detail}` : "";
     appendSimBubble("sys", `${label}${detail}`, step.nodeId);
+    // Mostra a mensagem enviada nesse passo (message/ask/handoff) já aqui, na hora —
+    // antes ela só aparecia depois de TODO o trace tocar, então um fluxo que termina
+    // logo depois (nó Fim) parecia "encerrar antes de mostrar a última mensagem".
+    if (step.reply) appendSimBubble("bot", step.reply, step.nodeId);
     updateSimStatus(t("builder.sim.nowAt", { label }));
     await sleep(420);
   }
@@ -1521,8 +1644,13 @@ async function sendSimMessage() {
       }
     }
 
-    for (const reply of data.replies || []) {
-      appendSimBubble("bot", reply, state.simActiveNodeId);
+    // playTrace já mostrou cada reply junto do passo que a gerou, na ordem certa.
+    // Só cai aqui de fallback se por algum motivo o trace não trouxe reply nenhum
+    // atrelado (ex.: resposta de um backend antigo, sem o campo).
+    if (!trace.some((step) => step.reply)) {
+      for (const reply of data.replies || []) {
+        appendSimBubble("bot", reply, state.simActiveNodeId);
+      }
     }
 
     if (data.handoff) {

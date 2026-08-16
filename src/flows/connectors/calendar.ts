@@ -112,9 +112,10 @@ function flattenVars(raw: unknown): Record<string, string> {
 }
 
 /**
- * Connector calendário.
- * - Se `webhookUrl` (ou CALENDAR_WEBHOOK_URL) → HTTP
- * - Senão → mock determinístico (demo + simulador)
+ * Connector calendário. Três modos, escolhidos por `config.provider`:
+ * - "google" → Google Calendar do próprio cliente (OAuth, ver google-oauth.ts)
+ * - "webhook" (padrão se webhookUrl setada) → HTTP genérico
+ * - senão → mock determinístico (demo + simulador)
  */
 export async function runCalendar(opts: {
   operation: CalendarOp | string;
@@ -125,14 +126,27 @@ export async function runCalendar(opts: {
   const op = String(opts.operation || "list_slots") as CalendarOp;
   const vars = opts.vars || {};
   const config = opts.config || {};
+  const provider = String(config.provider || "");
   const webhookUrl =
     String(config.webhookUrl || process.env.CALENDAR_WEBHOOK_URL || "").trim() ||
     null;
 
-  // Preferir HTTP se configurado (mesmo no simulador, se quiser real)
-  const forceMock =
-    config.forceMock === true ||
-    (opts.ctx?.simulate && config.useMockInSim !== false && !webhookUrl);
+  // "Mock no simulador" no painel de Detalhes é o único controle exposto na UI
+  // pra isso — precisa ser a fonte única de verdade. Um forceMock:false explícito
+  // tem que valer em qualquer contexto (simulador ou WhatsApp de verdade), senão
+  // a opção "Não — usa a integração de verdade" vira letra morta dentro do
+  // simulador (foi exatamente o bug: um `|| (simulate && ...)` sobrescrevia a
+  // escolha explícita do usuário sempre que rodando via Testar).
+  const forceMock = config.forceMock !== false;
+
+  if (provider === "google" && !forceMock && opts.ctx?.clientId) {
+    const { googleCancelEvent, googleCreateEvent, googleListSlots } = await import(
+      "./google-calendar-provider.js"
+    );
+    if (op === "list_slots") return googleListSlots(opts.ctx.clientId, config, vars);
+    if (op === "create_event") return googleCreateEvent(opts.ctx.clientId, vars, config);
+    if (op === "cancel_event") return googleCancelEvent(opts.ctx.clientId, vars);
+  }
 
   if (webhookUrl && !forceMock) {
     const remote = await callHttpWebhook(webhookUrl, {

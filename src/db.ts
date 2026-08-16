@@ -45,6 +45,36 @@ CREATE TABLE IF NOT EXISTS clients (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Dados da conta do portal: faturamento (editável pelo cliente) e perfil de negócio.
+-- Colunas soltas em vez de tabela própria — são poucas, 1:1 com clients, sem join extra.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_name TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_document TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_whatsapp TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_zip TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_street TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_number TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_district TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_complement TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_role TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_size TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_segment TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_audience TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_source TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_profile_updated_at TIMESTAMPTZ;
+
+-- Integração Google Calendar por cliente (OAuth) — 1 conexão por cliente por enquanto.
+-- refresh_token_enc fica cifrado (AES-256-GCM, ver tokenEncryptionKey() em config.ts),
+-- nunca gravado em texto puro.
+CREATE TABLE IF NOT EXISTS google_calendar_links (
+  client_id TEXT PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+  google_email TEXT NOT NULL,
+  calendar_id TEXT NOT NULL DEFAULT 'primary',
+  refresh_token_enc TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  connected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
