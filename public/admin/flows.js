@@ -1488,6 +1488,10 @@ async function playTrace(trace) {
     const label = typeLabelPt(step.type);
     const detail = step.detail ? ` · ${step.detail}` : "";
     appendSimBubble("sys", `${label}${detail}`, step.nodeId);
+    // Mostra a mensagem enviada nesse passo (message/ask/handoff) já aqui, na hora —
+    // antes ela só aparecia depois de TODO o trace tocar, então um fluxo que termina
+    // logo depois (nó Fim) parecia "encerrar antes de mostrar a última mensagem".
+    if (step.reply) appendSimBubble("bot", step.reply, step.nodeId);
     updateSimStatus(t("builder.sim.nowAt", { label }));
     await sleep(420);
   }
@@ -1565,8 +1569,13 @@ async function sendSimMessage() {
       }
     }
 
-    for (const reply of data.replies || []) {
-      appendSimBubble("bot", reply, state.simActiveNodeId);
+    // playTrace já mostrou cada reply junto do passo que a gerou, na ordem certa.
+    // Só cai aqui de fallback se por algum motivo o trace não trouxe reply nenhum
+    // atrelado (ex.: resposta de um backend antigo, sem o campo).
+    if (!trace.some((step) => step.reply)) {
+      for (const reply of data.replies || []) {
+        appendSimBubble("bot", reply, state.simActiveNodeId);
+      }
     }
 
     if (data.handoff) {

@@ -54,6 +54,8 @@ export type FlowTraceStep = {
   nodeId: string;
   type: string;
   detail?: string;
+  /** Texto enviado ao cliente nesse passo (message/ask/handoff), se houver. */
+  reply?: string;
 };
 
 export type FlowStepResult = EngineResult & {
@@ -156,8 +158,14 @@ export async function runFlowStep(opts: {
 
     if (node.type === "message") {
       const msg = render(String(node.data.text || ""), vars);
-      if (msg.trim()) replies.push(msg);
-      trace.push({ nodeId: node.id, type: "message", detail: "enviou texto" });
+      const hasReply = Boolean(msg.trim());
+      if (hasReply) replies.push(msg);
+      trace.push({
+        nodeId: node.id,
+        type: "message",
+        detail: "enviou texto",
+        reply: hasReply ? msg : undefined,
+      });
       node = nextNode(flow, node.id);
       continue;
     }
@@ -169,6 +177,7 @@ export async function runFlowStep(opts: {
       trace.push({
         nodeId: node.id,
         type: "ask",
+        reply: prompt,
         detail: `aguarda ${waitingFor}`,
       });
       break;
@@ -289,7 +298,8 @@ export async function runFlowStep(opts: {
         ),
         vars
       );
-      if (msg.trim()) replies.push(msg);
+      const handoffHasReply = Boolean(msg.trim());
+      if (handoffHasReply) replies.push(msg);
       handoff = true;
       handoffReason = String(node.data.reason || "handoff");
       vars.handoff_reason = handoffReason;
@@ -297,6 +307,7 @@ export async function runFlowStep(opts: {
         nodeId: node.id,
         type: "handoff",
         detail: handoffReason,
+        reply: handoffHasReply ? msg : undefined,
       });
       break;
     }
