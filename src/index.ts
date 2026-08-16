@@ -644,6 +644,7 @@ const server = createServer(async (req, res) => {
     if (method === "GET" && path === "/v1/integrations/google-calendar/callback") {
       const backTo = "/admin/portal.html?view=integrations";
       const fail = (reason: string) => {
+        console.warn("[google-oauth] callback failed:", reason);
         res.writeHead(302, { location: `${backTo}&google_error=${encodeURIComponent(reason)}` });
         res.end();
       };
@@ -683,6 +684,7 @@ const server = createServer(async (req, res) => {
         res.writeHead(302, { location: `${backTo}&google_connected=1` });
         res.end();
       } catch (e) {
+        console.warn("[google-oauth] callback exception:", e instanceof Error ? e.stack || e.message : e);
         fail(e instanceof Error ? e.message.slice(0, 60) : "unknown");
       }
       return;

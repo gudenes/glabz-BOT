@@ -131,11 +131,13 @@ export async function runCalendar(opts: {
     String(config.webhookUrl || process.env.CALENDAR_WEBHOOK_URL || "").trim() ||
     null;
 
-  // No simulador, por padrão prefere mock (mesmo com integração real configurada) —
-  // a pessoa testando pode opt-in explicitamente com useMockInSim:false.
-  const forceMock =
-    config.forceMock === true ||
-    (opts.ctx?.simulate && config.useMockInSim !== false);
+  // "Mock no simulador" no painel de Detalhes é o único controle exposto na UI
+  // pra isso — precisa ser a fonte única de verdade. Um forceMock:false explícito
+  // tem que valer em qualquer contexto (simulador ou WhatsApp de verdade), senão
+  // a opção "Não — usa a integração de verdade" vira letra morta dentro do
+  // simulador (foi exatamente o bug: um `|| (simulate && ...)` sobrescrevia a
+  // escolha explícita do usuário sempre que rodando via Testar).
+  const forceMock = config.forceMock !== false;
 
   if (provider === "google" && !forceMock && opts.ctx?.clientId) {
     const { googleCancelEvent, googleCreateEvent, googleListSlots } = await import(
