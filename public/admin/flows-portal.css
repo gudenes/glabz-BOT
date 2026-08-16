@@ -44,6 +44,10 @@ body.portal-embed .fb-select-wrap,
 body.portal-embed #btn-new {
   display: none !important;
 }
+/* Bandeiras de idioma já aparecem no cabeçalho do portal — evita duplicar dentro do canvas */
+body.portal-embed #lang-toggle-slot-header {
+  display: none !important;
+}
 /* Reverter e Histórico ficam visíveis: cliente também usa o mesmo builder de verdade */
 body.portal-embed #btn-revert,
 body.portal-embed #btn-history {
@@ -304,3 +308,12 @@ body.portal-embed .node-add-menu {
   box-shadow: 0 16px 40px rgba(0,0,0,0.12);
 }
 body.portal-embed .fb-toast { color: #fff; }
+
+/* Com Detalhes (coluna de 320px) e Testar abertos juntos num iframe estreito,
+   o simulador flutuante (position:fixed, ancorado no canto) sobrepõe a coluna
+   de Detalhes e some com o canvas. Desloca o simulador pra não invadir essa
+   coluna quando ela está visível. */
+body.portal-embed .fb-body.has-props ~ #sim-panel {
+  right: calc(320px + 18px);
+  width: max(200px, min(340px, calc(100vw - 320px - 36px)));
+}
