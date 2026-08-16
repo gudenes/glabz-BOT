@@ -84,6 +84,55 @@ export async function listThreads(accountId: string): Promise<InboxThread[]> {
     .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
 }
 
+export type MessageStatsPoint = { date: string; in: number; out: number };
+
+/**
+ * Agregação diária de wa_messages por direção, num intervalo [from, to).
+ * Os dias são contados em horário de Brasília (AT TIME ZONE), não UTC —
+ * senão uma mensagem enviada às 22h local cairia no dia seguinte.
+ */
+export async function getMessageStats(
+  clientId: string,
+  from: Date,
+  to: Date
+): Promise<MessageStatsPoint[]> {
+  if (!hasDatabase()) return [];
+  const rows = await db()`
+    SELECT
+      date_trunc('day', sent_at AT TIME ZONE 'America/Sao_Paulo') AS day,
+      direction,
+      count(*)::int AS n
+    FROM wa_messages
+    WHERE client_id = ${clientId} AND sent_at >= ${from} AND sent_at < ${to}
+    GROUP BY 1, 2
+    ORDER BY 1
+  `;
+  const byDay = new Map<string, MessageStatsPoint>();
+  for (const r of rows) {
+    const date = new Date(r.day as Date).toISOString().slice(0, 10);
+    const point = byDay.get(date) || { date, in: 0, out: 0 };
+    if (r.direction === "in") point.in = Number(r.n);
+    else if (r.direction === "out") point.out = Number(r.n);
+    byDay.set(date, point);
+  }
+  return [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Conversas com pelo menos 1 mensagem no intervalo [from, to). */
+export async function countActiveConversations(
+  clientId: string,
+  from: Date,
+  to: Date
+): Promise<number> {
+  if (!hasDatabase()) return 0;
+  const rows = await db()`
+    SELECT count(DISTINCT phone_e164)::int AS n
+    FROM wa_messages
+    WHERE client_id = ${clientId} AND sent_at >= ${from} AND sent_at < ${to}
+  `;
+  return Number(rows[0]?.n || 0);
+}
+
 export async function listMessages(
   accountId: string,
   phone: string

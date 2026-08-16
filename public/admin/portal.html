@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=23" />
+    <link rel="stylesheet" href="/admin/portal.css?v=24" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -51,6 +51,14 @@
           <button type="button" class="nav-link" data-view="pubs">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="m6 14 6-6 6 6"/><path d="M4 4h16"/></svg>
             <span data-i18n="portal.nav.pubs">Publicações</span>
+          </button>
+          <button type="button" class="nav-link" data-view="dashboard">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m7 15 4-5 3 3 5-7"/></svg>
+            <span data-i18n="portal.nav.dashboard">Dashboards</span>
+          </button>
+          <button type="button" class="nav-link" data-view="account">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+            <span data-i18n="portal.nav.account">Dados da conta</span>
           </button>
         </nav>
 
@@ -225,6 +233,136 @@
         <section id="view-pubs" class="view hidden">
           <div id="pubs-list" class="pubs"></div>
         </section>
+
+        <!-- Dashboards -->
+        <section id="view-dashboard" class="view hidden">
+          <div class="dash-filters">
+            <div class="seg" id="dash-range">
+              <button type="button" class="seg-btn on" data-range="today" data-i18n="portal.dashboard.range.today">Hoje</button>
+              <button type="button" class="seg-btn" data-range="yesterday" data-i18n="portal.dashboard.range.yesterday">Ontem</button>
+              <button type="button" class="seg-btn" data-range="last_month" data-i18n="portal.dashboard.range.lastMonth">Mês passado</button>
+              <button type="button" class="seg-btn" data-range="this_month" data-i18n="portal.dashboard.range.thisMonth">Este mês</button>
+            </div>
+          </div>
+
+          <div class="stat-row dash-stats">
+            <article class="stat"><span data-i18n="portal.dashboard.stat.instances">Instâncias</span><b id="dash-instances">—</b></article>
+            <article class="stat"><span data-i18n="portal.dashboard.stat.connected">Conectadas</span><b id="dash-connected">—</b></article>
+            <article class="stat"><span data-i18n="portal.dashboard.stat.sent">Enviadas</span><b id="dash-sent">—</b></article>
+            <article class="stat"><span data-i18n="portal.dashboard.stat.received">Recebidas</span><b id="dash-received">—</b></article>
+            <article class="stat"><span data-i18n="portal.dashboard.stat.conversations">Conversas ativas</span><b id="dash-conversations">—</b></article>
+          </div>
+
+          <div class="hero-card dash-chart-card">
+            <div class="hero-copy">
+              <p class="hero-kicker" data-i18n="portal.dashboard.chart.kicker">Últimos 30 dias</p>
+              <h2 data-i18n="portal.dashboard.chart.title">Recebidas x Enviadas</h2>
+              <div class="chart-legend">
+                <span class="dot in" aria-hidden="true"></span><span data-i18n="portal.dashboard.chart.received">Recebidas</span>
+                <span class="dot out" aria-hidden="true"></span><span data-i18n="portal.dashboard.chart.sent">Enviadas</span>
+              </div>
+            </div>
+            <div id="dash-chart" class="dash-chart" aria-hidden="true"></div>
+          </div>
+        </section>
+
+        <!-- Dados da conta -->
+        <section id="view-account" class="view hidden">
+          <form id="form-account-profile" class="card-form">
+            <h2 data-i18n="portal.account.profile.title">Dados da conta</h2>
+            <div class="field">
+              <span data-i18n="portal.account.profile.name">Nome completo</span>
+              <input id="acc-profile-name" type="text" required maxlength="120" />
+            </div>
+            <div class="field">
+              <span data-i18n="portal.account.profile.email">E-mail</span>
+              <div class="verified-row">
+                <input id="acc-profile-email" type="email" disabled />
+                <svg class="verified-check" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 2 7v6c0 5 4 9 10 9s10-4 10-9V7z"/></svg>
+              </div>
+              <small class="hint" data-i18n="portal.account.profile.emailVerified">E-mail verificado</small>
+            </div>
+            <button class="btn-lime" type="submit" data-i18n="common.save">Salvar</button>
+          </form>
+
+          <form id="form-account-billing" class="card-form">
+            <h2 data-i18n="portal.account.billing.title">Dados de faturamento</h2>
+            <div class="field">
+              <span data-i18n="portal.account.billing.name">Nome completo / razão social</span>
+              <input id="bill-name" type="text" maxlength="160" />
+            </div>
+            <div class="field">
+              <span data-i18n="portal.account.billing.document">CPF/CNPJ</span>
+              <input id="bill-document" type="text" inputmode="numeric" maxlength="18" />
+            </div>
+            <div class="field">
+              <span data-i18n="portal.account.billing.whatsapp">WhatsApp</span>
+              <input id="bill-whatsapp" type="tel" placeholder="+55 51 9…" />
+            </div>
+            <div class="field-grid">
+              <div class="field">
+                <span data-i18n="portal.account.billing.zip">CEP</span>
+                <input id="bill-zip" type="text" inputmode="numeric" maxlength="9" />
+              </div>
+              <div class="field field-wide">
+                <span data-i18n="portal.account.billing.street">Logradouro</span>
+                <input id="bill-street" type="text" maxlength="160" />
+              </div>
+              <div class="field">
+                <span data-i18n="portal.account.billing.number">Número</span>
+                <input id="bill-number" type="text" maxlength="20" />
+              </div>
+              <div class="field">
+                <span data-i18n="portal.account.billing.district">Bairro</span>
+                <input id="bill-district" type="text" maxlength="100" />
+              </div>
+              <div class="field field-wide">
+                <span data-i18n="portal.account.billing.complement">Complemento</span>
+                <input id="bill-complement" type="text" maxlength="120" />
+              </div>
+            </div>
+            <button class="btn-lime" type="submit" data-i18n="common.save">Salvar</button>
+          </form>
+
+          <form id="form-account-business" class="card-form">
+            <h2 data-i18n="portal.account.business.title">Sobre seu negócio</h2>
+            <div class="field">
+              <span data-i18n="portal.account.business.role">Seu cargo</span>
+              <input id="biz-role" type="text" maxlength="80" />
+            </div>
+            <div class="field">
+              <span data-i18n="portal.account.business.size">Tamanho do negócio</span>
+              <select id="biz-size">
+                <option value="" data-i18n="portal.account.business.size.pick">Selecione…</option>
+                <option value="solo" data-i18n="portal.account.business.size.solo">Só eu</option>
+                <option value="2-5" data-i18n="portal.account.business.size.2-5">2 a 5 pessoas</option>
+                <option value="6-20" data-i18n="portal.account.business.size.6-20">6 a 20 pessoas</option>
+                <option value="21-50" data-i18n="portal.account.business.size.21-50">21 a 50 pessoas</option>
+                <option value="50+" data-i18n="portal.account.business.size.50plus">Mais de 50</option>
+              </select>
+            </div>
+            <div class="field">
+              <span data-i18n="portal.account.business.segment">Segmento / nicho</span>
+              <input id="biz-segment" type="text" maxlength="120" />
+            </div>
+            <div class="field">
+              <span data-i18n="portal.account.business.audience">Público atendido</span>
+              <input id="biz-audience" type="text" maxlength="160" />
+            </div>
+            <div class="field">
+              <span data-i18n="portal.account.business.source">Como conheceu o Glabz</span>
+              <select id="biz-source">
+                <option value="" data-i18n="portal.account.business.source.pick">Selecione…</option>
+                <option value="indication" data-i18n="portal.account.business.source.indication">Indicação</option>
+                <option value="social" data-i18n="portal.account.business.source.social">Redes sociais</option>
+                <option value="search" data-i18n="portal.account.business.source.search">Busca no Google</option>
+                <option value="event" data-i18n="portal.account.business.source.event">Evento</option>
+                <option value="other" data-i18n="portal.account.business.source.other">Outro</option>
+              </select>
+            </div>
+            <button class="btn-lime" type="submit" data-i18n="common.save">Salvar</button>
+          </form>
+        </section>
       </main>
     </div>
 
@@ -233,8 +371,11 @@
       <button type="button" data-view="inbox" data-i18n="portal.nav.inbox">Conversas</button>
       <button type="button" data-view="flow" data-i18n="portal.nav.flow">Fluxo</button>
       <button type="button" data-view="test" data-i18n="portal.nav.test">Testar</button>
+      <button type="button" data-view="pubs" data-i18n="portal.nav.pubs">Publicações</button>
+      <button type="button" data-view="dashboard" data-i18n="portal.nav.dashboard">Dashboards</button>
+      <button type="button" data-view="account" data-i18n="portal.nav.account">Dados da conta</button>
     </nav>
 
-    <script src="/admin/portal.js?v=24" type="module"></script>
+    <script src="/admin/portal.js?v=25" type="module"></script>
   </body>
 </html>

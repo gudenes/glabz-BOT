@@ -45,6 +45,23 @@ CREATE TABLE IF NOT EXISTS clients (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Dados da conta do portal: faturamento (editável pelo cliente) e perfil de negócio.
+-- Colunas soltas em vez de tabela própria — são poucas, 1:1 com clients, sem join extra.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_name TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_document TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_whatsapp TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_zip TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_street TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_number TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_district TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_complement TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_role TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_size TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_segment TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_audience TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_source TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_profile_updated_at TIMESTAMPTZ;
+
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,

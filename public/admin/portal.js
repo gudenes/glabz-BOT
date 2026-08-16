@@ -37,8 +37,10 @@ const state = {
   view: "status",
   lastWa: null,
   firstName: "",
+  me: null,
   threads: [],
   selectedPhone: null,
+  dashboard: { range: "today", data: null },
   studio: {
     open: false,
     expanded: true,
@@ -69,6 +71,8 @@ const TITLES = {
   flow: ["portal.nav.flow", "portal.flowStageSub"],
   test: ["portal.nav.test", "portal.testStageSub"],
   pubs: ["portal.nav.pubs", "portal.pubsStageSub"],
+  dashboard: ["portal.nav.dashboard", "portal.dashboardStageSub"],
+  account: ["portal.nav.account", "portal.accountStageSub"],
 };
 
 /**
@@ -82,7 +86,7 @@ function setView(view) {
     b.classList.toggle("on", b.dataset.view === view);
   });
   const shownSection = view === "test" ? "flow" : view;
-  for (const id of ["status", "inbox", "flow", "pubs"]) {
+  for (const id of ["status", "inbox", "flow", "pubs", "dashboard", "account"]) {
     $(`view-${id}`)?.classList.toggle("hidden", id !== shownSection);
   }
   $("hello").textContent = state.firstName ? t("portal.helloName", { name: state.firstName }) : t(TITLES[view][0]);
@@ -99,6 +103,8 @@ function setView(view) {
   }
   if (view === "pubs") renderPubs();
   if (view === "inbox") void loadInbox();
+  if (view === "dashboard") void loadDashboard();
+  if (view === "account") loadAccount();
 }
 
 /**
@@ -510,6 +516,165 @@ async function refresh() {
   render();
   if (state.view === "pubs") renderPubs();
 }
+
+/* ── Dashboards ──────────────────────────────────────────── */
+
+async function loadDashboard(range = state.dashboard.range) {
+  state.dashboard.range = range;
+  try {
+    state.dashboard.data = await api(`/v1/portal/dashboard?range=${encodeURIComponent(range)}`);
+  } catch (e) {
+    toast(e.message, "err");
+    return;
+  }
+  renderDashboard();
+}
+
+function renderDashboard() {
+  const data = state.dashboard.data;
+  if (!data) return;
+  $("dash-instances").textContent = String(data.accounts.total);
+  $("dash-connected").textContent = String(data.accounts.connected);
+  $("dash-sent").textContent = String(data.totals.out);
+  $("dash-received").textContent = String(data.totals.in);
+  $("dash-conversations").textContent = String(data.conversations);
+  $("dash-chart").innerHTML = buildLineChartSvg(data.series || []);
+}
+
+/** Gráfico de linha em SVG puro (sem lib) — recebidas x enviadas nos últimos 30 dias. */
+function buildLineChartSvg(series) {
+  const width = 720;
+  const height = 220;
+  const pad = 28;
+  if (!series.length) {
+    return `<p class="dash-chart-empty">${t("portal.dashboard.chart.empty")}</p>`;
+  }
+  const maxY = Math.max(1, ...series.flatMap((p) => [p.in, p.out]));
+  const stepX = series.length > 1 ? (width - 2 * pad) / (series.length - 1) : 0;
+  const toXY = (i, v) => {
+    const x = pad + i * stepX;
+    const y = height - pad - (v / maxY) * (height - 2 * pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  };
+  const ptsIn = series.map((p, i) => toXY(i, p.in)).join(" ");
+  const ptsOut = series.map((p, i) => toXY(i, p.out)).join(" ");
+
+  const guides = [0, 0.5, 1]
+    .map((f) => {
+      const y = height - pad - f * (height - 2 * pad);
+      const label = Math.round(maxY * f);
+      return `<line x1="${pad}" y1="${y.toFixed(1)}" x2="${width - pad}" y2="${y.toFixed(1)}" class="chart-guide" stroke-dasharray="4 4" />
+        <text x="4" y="${(y + 4).toFixed(1)}" class="chart-guide-label">${label}</text>`;
+    })
+    .join("");
+
+  const xLabelsIdx = series.length > 2 ? [0, Math.floor((series.length - 1) / 2), series.length - 1] : series.map((_, i) => i);
+  const xLabels = xLabelsIdx
+    .map((i) => {
+      const x = pad + i * stepX;
+      const [, m, d] = series[i].date.split("-");
+      return `<text x="${x.toFixed(1)}" y="${height - 6}" class="chart-x-label" text-anchor="middle">${d}/${m}</text>`;
+    })
+    .join("");
+
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="none" role="img">
+    ${guides}
+    <polyline points="${ptsIn}" class="chart-line chart-line-in" />
+    <polyline points="${ptsOut}" class="chart-line chart-line-out" />
+    ${xLabels}
+  </svg>`;
+}
+
+document.querySelectorAll("#dash-range .seg-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#dash-range .seg-btn").forEach((b) => b.classList.toggle("on", b === btn));
+    void loadDashboard(btn.dataset.range);
+  });
+});
+
+/* ── Dados da conta ──────────────────────────────────────── */
+
+function loadAccount() {
+  const me = state.me;
+  if (me) {
+    $("acc-profile-name").value = me.name || "";
+    $("acc-profile-email").value = me.email || "";
+  }
+  $("form-account-profile").classList.toggle("hidden", !me);
+
+  const c = state.portal?.client || {};
+  $("bill-name").value = c.billingName || "";
+  $("bill-document").value = c.billingDocument || "";
+  $("bill-whatsapp").value = c.billingWhatsapp || "";
+  $("bill-zip").value = c.billingZip || "";
+  $("bill-street").value = c.billingStreet || "";
+  $("bill-number").value = c.billingNumber || "";
+  $("bill-district").value = c.billingDistrict || "";
+  $("bill-complement").value = c.billingComplement || "";
+
+  $("biz-role").value = c.bizRole || "";
+  $("biz-size").value = c.bizSize || "";
+  $("biz-segment").value = c.bizSegment || "";
+  $("biz-audience").value = c.bizAudience || "";
+  $("biz-source").value = c.bizSource || "";
+}
+
+$("form-account-profile").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  try {
+    await api("/v1/portal/account/profile", {
+      method: "PUT",
+      body: JSON.stringify({ name: $("acc-profile-name").value }),
+    });
+    if (state.me) state.me.name = $("acc-profile-name").value.trim();
+    toast(t("portal.account.saved"));
+  } catch (e) {
+    toast(e.message, "err");
+  }
+});
+
+$("form-account-billing").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  try {
+    const client = await api("/v1/portal/account/billing", {
+      method: "PUT",
+      body: JSON.stringify({
+        billingName: $("bill-name").value,
+        billingDocument: $("bill-document").value,
+        billingWhatsapp: $("bill-whatsapp").value,
+        billingZip: $("bill-zip").value,
+        billingStreet: $("bill-street").value,
+        billingNumber: $("bill-number").value,
+        billingDistrict: $("bill-district").value,
+        billingComplement: $("bill-complement").value,
+      }),
+    });
+    if (state.portal && client) state.portal.client = client;
+    toast(t("portal.account.saved"));
+  } catch (e) {
+    toast(e.message, "err");
+  }
+});
+
+$("form-account-business").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  try {
+    const client = await api("/v1/portal/account/business", {
+      method: "PUT",
+      body: JSON.stringify({
+        bizRole: $("biz-role").value,
+        bizSize: $("biz-size").value,
+        bizSegment: $("biz-segment").value,
+        bizAudience: $("biz-audience").value,
+        bizSource: $("biz-source").value,
+      }),
+    });
+    if (state.portal && client) state.portal.client = client;
+    toast(t("portal.account.saved"));
+  } catch (e) {
+    toast(e.message, "err");
+  }
+});
 
 $("btn-go-flow")?.addEventListener("click", () => setView("flow"));
 $("btn-go-flow-boot")?.addEventListener("click", () => {
@@ -988,6 +1153,7 @@ $("back-admin")?.addEventListener("click", () => {
 
 try {
   const me = await api("/v1/auth/me");
+  state.me = me.user;
   const asAdmin = me.user.role === "glabs";
   if (me.user.mustChangePassword) {
     location.replace("/admin/login.html");

@@ -14,6 +14,8 @@
  *   POST /v1/accounts/:id/connect · disconnect · send · profile
  *   GET/POST /v1/flows · GET/PUT/DELETE /v1/flows/:id
  *   POST /v1/flows/simulate · /v1/flows/:id/publish · /reset-state
+ *   GET  /v1/portal · /v1/portal/dashboard
+ *   PUT  /v1/portal/account/profile · /billing · /business
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { mkdirSync, existsSync, readFileSync, statSync } from "node:fs";
@@ -40,6 +42,7 @@ import {
   sessionCookieHeader,
   seedAdmin,
   updatePassword,
+  updateProfile as updateUserProfile,
   type UserRecord,
 } from "./auth.js";
 import {
@@ -49,8 +52,17 @@ import {
   provisionClient,
   wipeAllClients,
   deleteClient,
+  updateClientBilling,
+  updateClientBizProfile,
+  type ClientBillingPatch,
+  type ClientBizProfilePatch,
 } from "./clients.js";
-import { listMessages, listThreads } from "./inbox.js";
+import {
+  countActiveConversations,
+  getMessageStats,
+  listMessages,
+  listThreads,
+} from "./inbox.js";
 import {
   deleteAccount,
   deleteProduct,
@@ -174,6 +186,37 @@ function actingClientId(req: IncomingMessage, auth: AuthCtx): string | null {
     return raw || null;
   }
   return null;
+}
+
+// América/São_Paulo é sempre UTC-3 (Brasil não tem mais horário de verão desde 2019) —
+// o servidor roda em UTC puro, então os filtros de período do dashboard do portal
+// (Hoje/Ontem/Mês passado/Este mês) precisam desse ajuste manual pra não virar o dia
+// às 21h local em vez de meia-noite.
+const BR_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+function brLocalParts(d: Date): { y: number; m: number; day: number } {
+  const shifted = new Date(d.getTime() - BR_OFFSET_MS);
+  return { y: shifted.getUTCFullYear(), m: shifted.getUTCMonth(), day: shifted.getUTCDate() };
+}
+
+function brMidnightUtc(y: number, m: number, day: number): Date {
+  return new Date(Date.UTC(y, m, day, 0, 0, 0) + BR_OFFSET_MS);
+}
+
+function resolveRangeBR(range: string): { from: Date; to: Date } {
+  const { y, m, day } = brLocalParts(new Date());
+  if (range === "yesterday") {
+    const to = brMidnightUtc(y, m, day);
+    return { from: new Date(to.getTime() - 24 * 60 * 60 * 1000), to };
+  }
+  if (range === "this_month") {
+    return { from: brMidnightUtc(y, m, 1), to: brMidnightUtc(y, m + 1, 1) };
+  }
+  if (range === "last_month") {
+    return { from: brMidnightUtc(y, m - 1, 1), to: brMidnightUtc(y, m, 1) };
+  }
+  // "today" (padrão)
+  return { from: brMidnightUtc(y, m, day), to: brMidnightUtc(y, m, day + 1) };
 }
 
 function requireGlabs(auth: AuthCtx | null): auth is AuthCtx {
@@ -439,6 +482,101 @@ const server = createServer(async (req, res) => {
         llmConfigured: Boolean(llmApiKey()),
         impersonating: auth.kind === "user" && auth.user.role === "glabs",
       });
+      return;
+    }
+
+    if (method === "GET" && path === "/v1/portal/dashboard") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const range = String(url.searchParams.get("range") || "today");
+      const { from, to } = resolveRangeBR(range);
+      const accountsList = listAccounts({ clientId }).map((account) => snapshot(account.id));
+      const periodStats = await getMessageStats(clientId, from, to);
+      const totals = periodStats.reduce(
+        (acc, p) => ({ in: acc.in + p.in, out: acc.out + p.out }),
+        { in: 0, out: 0 }
+      );
+      const conversations = await countActiveConversations(clientId, from, to);
+      const seriesFrom = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000);
+      const rawSeries = await getMessageStats(clientId, seriesFrom, new Date());
+      // getMessageStats só traz dias com mensagem — preenche os 30 dias corridos
+      // (horário de Brasília) com zero, senão o gráfico comprime o eixo X pros
+      // poucos dias que tiveram atividade em vez do período real.
+      const byDate = new Map(rawSeries.map((p) => [p.date, p]));
+      const series: typeof rawSeries = [];
+      const { y, m, day } = brLocalParts(new Date());
+      for (let i = 29; i >= 0; i--) {
+        // Só o rótulo do dia calendário (BR-local) — não é um instante real,
+        // então não soma o offset de novo aqui (getMessageStats já devolve
+        // a data nesse mesmo formato "como se fosse UTC").
+        const date = new Date(Date.UTC(y, m, day - i)).toISOString().slice(0, 10);
+        series.push(byDate.get(date) || { date, in: 0, out: 0 });
+      }
+      json(res, 200, {
+        ok: true,
+        range,
+        accounts: {
+          total: accountsList.length,
+          connected: accountsList.filter((s) => s.status === "connected").length,
+          pendingQr: accountsList.filter((s) => s.status === "pending_qr").length,
+          disconnected: accountsList.filter(
+            (s) => s.status !== "connected" && s.status !== "pending_qr"
+          ).length,
+        },
+        totals,
+        conversations,
+        series,
+      });
+      return;
+    }
+
+    if (method === "PUT" && path === "/v1/portal/account/profile") {
+      if (auth.kind !== "user") {
+        json(res, 400, { ok: false, reason: "só usuários logados" });
+        return;
+      }
+      const body = parseJson<{ name?: string }>(await readBody(req));
+      try {
+        const user = await updateUserProfile(auth.user.id, body?.name || "");
+        json(res, 200, { ok: true, user: user ? { name: user.name, email: user.email } : null });
+      } catch (e) {
+        json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "invalid" });
+      }
+      return;
+    }
+
+    if (method === "PUT" && path === "/v1/portal/account/billing") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const body = parseJson<ClientBillingPatch>(await readBody(req));
+      try {
+        const client = await updateClientBilling(clientId, body ?? {});
+        json(res, client ? 200 : 404, { ok: Boolean(client), client });
+      } catch (e) {
+        json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "invalid" });
+      }
+      return;
+    }
+
+    if (method === "PUT" && path === "/v1/portal/account/business") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const body = parseJson<ClientBizProfilePatch>(await readBody(req));
+      try {
+        const client = await updateClientBizProfile(clientId, body ?? {});
+        json(res, client ? 200 : 404, { ok: Boolean(client), client });
+      } catch (e) {
+        json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "invalid" });
+      }
       return;
     }
 

@@ -131,6 +131,15 @@ export async function updatePassword(userId: string, next: string, clearTemp = t
   `;
 }
 
+/** Nome do usuário logado — e-mail fica só-leitura (tratado como verificado). */
+export async function updateProfile(userId: string, name: string): Promise<UserRecord | null> {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("nome obrigatório");
+  if (!hasDatabase()) throw new Error("Postgres obrigatório");
+  await db()`UPDATE users SET name = ${trimmed} WHERE id = ${userId}`;
+  return getUserById(userId);
+}
+
 export async function login(
   email: string,
   password: string
