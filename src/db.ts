@@ -62,6 +62,19 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_audience TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_source TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_profile_updated_at TIMESTAMPTZ;
 
+-- Integração Google Calendar por cliente (OAuth) — 1 conexão por cliente por enquanto.
+-- refresh_token_enc fica cifrado (AES-256-GCM, ver tokenEncryptionKey() em config.ts),
+-- nunca gravado em texto puro.
+CREATE TABLE IF NOT EXISTS google_calendar_links (
+  client_id TEXT PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+  google_email TEXT NOT NULL,
+  calendar_id TEXT NOT NULL DEFAULT 'primary',
+  refresh_token_enc TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  connected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,

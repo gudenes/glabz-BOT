@@ -617,7 +617,58 @@ function loadAccount() {
   $("biz-segment").value = c.bizSegment || "";
   $("biz-audience").value = c.bizAudience || "";
   $("biz-source").value = c.bizSource || "";
+
+  void loadIntegrationsStatus();
 }
+
+async function loadIntegrationsStatus() {
+  try {
+    const data = await api("/v1/integrations/google-calendar/status");
+    renderIntegrationsStatus(data);
+  } catch (e) {
+    $("gcal-status").textContent = e.message;
+  }
+}
+
+function renderIntegrationsStatus(data) {
+  const statusEl = $("gcal-status");
+  const connectBtn = $("btn-gcal-connect");
+  const disconnectBtn = $("btn-gcal-disconnect");
+  if (!statusEl || !connectBtn || !disconnectBtn) return;
+
+  if (!data.configured) {
+    statusEl.textContent = t("portal.account.integrations.notConfigured");
+    connectBtn.classList.add("hidden");
+    disconnectBtn.classList.add("hidden");
+    return;
+  }
+  if (data.connected) {
+    statusEl.textContent = t("portal.account.integrations.connectedAs", { email: data.email });
+    connectBtn.classList.add("hidden");
+    disconnectBtn.classList.remove("hidden");
+  } else {
+    statusEl.textContent = t("portal.account.integrations.notConnected");
+    connectBtn.classList.remove("hidden");
+    disconnectBtn.classList.add("hidden");
+  }
+}
+
+$("btn-gcal-connect")?.addEventListener("click", () => {
+  const clientId = state.portal?.client?.id;
+  if (!clientId) return;
+  location.href = `/v1/integrations/google-calendar/connect?clientId=${encodeURIComponent(clientId)}`;
+});
+
+$("btn-gcal-disconnect")?.addEventListener("click", async () => {
+  if (!confirm(t("portal.account.integrations.confirmDisconnect"))) return;
+  try {
+    await api("/v1/integrations/google-calendar", { method: "DELETE" });
+    toast(t("portal.account.integrations.disconnected"));
+    void loadIntegrationsStatus();
+  } catch (e) {
+    toast(e.message, "err");
+  }
+});
 
 $("form-account-profile").addEventListener("submit", async (ev) => {
   ev.preventDefault();
@@ -1161,6 +1212,16 @@ try {
     location.replace("/admin/");
   } else {
     await refresh();
+
+    // Volta do redirect OAuth do Google Calendar (/v1/integrations/google-calendar/callback)
+    const qs = new URLSearchParams(location.search);
+    if (qs.get("view") === "account") setView("account");
+    if (qs.get("google_connected")) toast(t("portal.account.integrations.connected"));
+    if (qs.get("google_error")) toast(t("portal.account.integrations.connectError"), "err");
+    if (qs.has("view") || qs.has("google_connected") || qs.has("google_error")) {
+      history.replaceState(null, "", location.pathname);
+    }
+
     const clientName = state.portal?.client?.name || "";
     const person = asAdmin
       ? (me.user.name || me.user.email.split("@")[0] || "GLabs").split(" ")[0]

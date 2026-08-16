@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=25" />
+    <link rel="stylesheet" href="/admin/portal.css?v=26" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -362,6 +362,19 @@
             </div>
             <button class="btn-lime" type="submit" data-i18n="common.save">Salvar</button>
           </form>
+
+          <div class="card-form" id="card-integrations">
+            <h2 data-i18n="portal.account.integrations.title">Integrações</h2>
+            <div class="integration-row">
+              <div class="integration-info">
+                <strong data-i18n="portal.account.integrations.googleCalendar">Google Calendar</strong>
+                <p id="gcal-status" class="hint-muted" data-i18n="portal.account.integrations.checking">Verificando…</p>
+              </div>
+              <button type="button" id="btn-gcal-connect" class="btn-lime hidden" data-i18n="portal.account.integrations.connect">Conectar</button>
+              <button type="button" id="btn-gcal-disconnect" class="btn-ghost hidden" data-i18n="portal.account.integrations.disconnect">Desconectar</button>
+            </div>
+            <p class="hint-muted" data-i18n="portal.account.integrations.help">Conectando, o node de Ação do tipo Calendário pode listar horários livres e criar/cancelar eventos direto no seu Google Calendar.</p>
+          </div>
         </section>
       </main>
     </div>

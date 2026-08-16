@@ -112,9 +112,10 @@ function flattenVars(raw: unknown): Record<string, string> {
 }
 
 /**
- * Connector calendário.
- * - Se `webhookUrl` (ou CALENDAR_WEBHOOK_URL) → HTTP
- * - Senão → mock determinístico (demo + simulador)
+ * Connector calendário. Três modos, escolhidos por `config.provider`:
+ * - "google" → Google Calendar do próprio cliente (OAuth, ver google-oauth.ts)
+ * - "webhook" (padrão se webhookUrl setada) → HTTP genérico
+ * - senão → mock determinístico (demo + simulador)
  */
 export async function runCalendar(opts: {
   operation: CalendarOp | string;
@@ -125,14 +126,25 @@ export async function runCalendar(opts: {
   const op = String(opts.operation || "list_slots") as CalendarOp;
   const vars = opts.vars || {};
   const config = opts.config || {};
+  const provider = String(config.provider || "");
   const webhookUrl =
     String(config.webhookUrl || process.env.CALENDAR_WEBHOOK_URL || "").trim() ||
     null;
 
-  // Preferir HTTP se configurado (mesmo no simulador, se quiser real)
+  // No simulador, por padrão prefere mock (mesmo com integração real configurada) —
+  // a pessoa testando pode opt-in explicitamente com useMockInSim:false.
   const forceMock =
     config.forceMock === true ||
-    (opts.ctx?.simulate && config.useMockInSim !== false && !webhookUrl);
+    (opts.ctx?.simulate && config.useMockInSim !== false);
+
+  if (provider === "google" && !forceMock && opts.ctx?.clientId) {
+    const { googleCancelEvent, googleCreateEvent, googleListSlots } = await import(
+      "./google-calendar-provider.js"
+    );
+    if (op === "list_slots") return googleListSlots(opts.ctx.clientId, config);
+    if (op === "create_event") return googleCreateEvent(opts.ctx.clientId, vars, config);
+    if (op === "cancel_event") return googleCancelEvent(opts.ctx.clientId, vars);
+  }
 
   if (webhookUrl && !forceMock) {
     const remote = await callHttpWebhook(webhookUrl, {

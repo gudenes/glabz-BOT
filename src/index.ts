@@ -16,8 +16,11 @@
  *   POST /v1/flows/simulate · /v1/flows/:id/publish · /reset-state
  *   GET  /v1/portal · /v1/portal/dashboard
  *   PUT  /v1/portal/account/profile · /billing · /business
+ *   GET  /v1/integrations/google-calendar/connect · /callback · /status
+ *   DELETE /v1/integrations/google-calendar
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { randomBytes } from "node:crypto";
 import { mkdirSync, existsSync, readFileSync, statSync } from "node:fs";
 import { join, extname, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,10 +30,19 @@ import {
   botSecret,
   dataDir,
   gitInfo,
+  googleOAuthConfigured,
   isProduction,
   listenPort,
   llmApiKey,
 } from "./config.js";
+import {
+  buildAuthUrl,
+  deleteGoogleCalendarLink,
+  exchangeCodeForTokens,
+  fetchGoogleEmail,
+  getGoogleCalendarLink,
+  saveGoogleCalendarLink,
+} from "./google-oauth.js";
 import { hasDatabase, migrate } from "./db.js";
 import {
   SESSION_COOKIE,
@@ -577,6 +589,113 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "invalid" });
       }
+      return;
+    }
+
+    // ── Integração Google Calendar (OAuth) ────────────────
+    if (method === "GET" && path === "/v1/integrations/google-calendar/status") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const link = await getGoogleCalendarLink(clientId);
+      json(res, 200, {
+        ok: true,
+        configured: googleOAuthConfigured(),
+        connected: Boolean(link),
+        email: link?.googleEmail || null,
+        connectedAt: link?.connectedAt || null,
+      });
+      return;
+    }
+
+    if (method === "GET" && path === "/v1/integrations/google-calendar/connect") {
+      const clientId =
+        auth.kind === "user" && auth.user.role === "client"
+          ? auth.user.clientId
+          : auth.kind === "user" && auth.user.role === "glabs"
+            ? url.searchParams.get("clientId")
+            : null;
+      if (!clientId || !googleOAuthConfigured()) {
+        res.writeHead(302, { location: "/admin/portal.html?google_error=1" });
+        res.end();
+        return;
+      }
+      const nonce = randomBytes(16).toString("hex");
+      setCookie(
+        res,
+        [
+          `gcal_oauth_state=${nonce}:${clientId}`,
+          "Path=/",
+          "HttpOnly",
+          "SameSite=Lax",
+          "Max-Age=600",
+          isSecureReq(req) ? "Secure" : "",
+        ]
+          .filter(Boolean)
+          .join("; ")
+      );
+      res.writeHead(302, { location: buildAuthUrl(nonce) });
+      res.end();
+      return;
+    }
+
+    if (method === "GET" && path === "/v1/integrations/google-calendar/callback") {
+      const backTo = "/admin/portal.html?view=account";
+      const fail = (reason: string) => {
+        res.writeHead(302, { location: `${backTo}&google_error=${encodeURIComponent(reason)}` });
+        res.end();
+      };
+      const code = url.searchParams.get("code");
+      const returnedState = url.searchParams.get("state");
+      const cookieState = parseCookie(req.headers.cookie, "gcal_oauth_state");
+      setCookie(res, "gcal_oauth_state=; Path=/; Max-Age=0");
+
+      if (url.searchParams.get("error")) {
+        fail(url.searchParams.get("error") || "denied");
+        return;
+      }
+      if (!code || !returnedState || !cookieState || returnedState !== cookieState.split(":")[0]) {
+        fail("state_invalid");
+        return;
+      }
+      const clientId = cookieState.split(":").slice(1).join(":");
+      if (!clientId) {
+        fail("state_invalid");
+        return;
+      }
+      try {
+        const tokens = await exchangeCodeForTokens(code);
+        if (!tokens.refresh_token) {
+          // Já tinha conectado antes e o Google não reemitiu refresh_token
+          // (não deveria acontecer com prompt=consent, mas por segurança).
+          fail("no_refresh_token");
+          return;
+        }
+        const email = await fetchGoogleEmail(tokens.access_token);
+        await saveGoogleCalendarLink({
+          clientId,
+          googleEmail: email || "conta Google",
+          refreshToken: tokens.refresh_token,
+          scope: tokens.scope,
+        });
+        res.writeHead(302, { location: `${backTo}&google_connected=1` });
+        res.end();
+      } catch (e) {
+        fail(e instanceof Error ? e.message.slice(0, 60) : "unknown");
+      }
+      return;
+    }
+
+    if (method === "DELETE" && path === "/v1/integrations/google-calendar") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const ok = await deleteGoogleCalendarLink(clientId);
+      json(res, 200, { ok });
       return;
     }
 

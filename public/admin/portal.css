@@ -845,6 +845,21 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .verified-row input { width: 100%; padding-right: 34px; }
 .verified-check { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--ok); }
 
+.integration-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fafaf7;
+}
+.integration-info strong { display: block; font-size: 14px; }
+.hint-muted { margin: 0; font-size: 12.5px; color: var(--muted); font-weight: 500; }
+.integration-info .hint-muted { margin-top: 2px; }
+.integration-row .btn-ghost { border-color: var(--line); }
+
 .inbox {
   display: grid;
   grid-template-columns: 300px 1fr;

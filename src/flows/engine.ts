@@ -258,6 +258,7 @@ export async function runFlowStep(opts: {
         ctx: {
           product: flow.product,
           accountId: flow.accountId,
+          clientId: flow.clientId ?? null,
           simulate,
         },
       });

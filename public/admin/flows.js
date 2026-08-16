@@ -977,12 +977,18 @@ function renderProps() {
         <option value="create_event"${operation === "create_event" ? " selected" : ""}>Criar evento</option>
         <option value="cancel_event"${operation === "cancel_event" ? " selected" : ""}>Cancelar evento</option>
       </select></div>
-      <div class="field"><label>Webhook (opcional)</label>
+      <div class="field" id="p-provider-wrap"><label>Fonte dos horários</label>
+      <select id="p-provider">
+        <option value=""${cfg.provider !== "google" ? " selected" : ""}>Webhook / mock</option>
+        <option value="google"${cfg.provider === "google" ? " selected" : ""}>Google Calendar do cliente</option>
+      </select></div>
+      <div class="field" id="p-webhook-wrap"><label>Webhook (opcional)</label>
       <input id="p-webhook" value="${escapeHtml(String(cfg.webhookUrl || cfg.url || d.webhookUrl || ""))}" placeholder="https://… (vazio = mock)" /></div>
+      <p class="fb-hint" id="p-google-hint">O cliente precisa conectar o Google Calendar dele em <strong>Dados da conta → Integrações</strong> no portal antes de publicar um fluxo usando essa opção.</p>
       <div class="field"><label>Mock no simulador</label>
       <select id="p-force-mock">
         <option value="1"${cfg.forceMock !== false ? " selected" : ""}>Sim — sempre mock</option>
-        <option value="0"${cfg.forceMock === false ? " selected" : ""}>Não — usa webhook se houver</option>
+        <option value="0"${cfg.forceMock === false ? " selected" : ""}>Não — usa a integração de verdade</option>
       </select></div>
       <p class="fb-hint">Ligações: <code>ok</code> e <code>erro</code>. Vars: <code>slots_text</code>, <code>event_link</code>, <code>event_summary</code>.</p>`;
   }
@@ -998,22 +1004,34 @@ function renderProps() {
   if (node.type === "action") {
     const syncOp = () => {
       const wrap = $("p-op-wrap");
-      if (!wrap) return;
-      wrap.style.display = $("p-connector").value === "calendar" ? "" : "none";
+      const providerWrap = $("p-provider-wrap");
+      const isCalendar = $("p-connector").value === "calendar";
+      if (wrap) wrap.style.display = isCalendar ? "" : "none";
+      if (providerWrap) providerWrap.style.display = isCalendar ? "" : "none";
+      syncProvider();
+    };
+    const syncProvider = () => {
+      const isGoogle = $("p-provider")?.value === "google";
+      $("p-webhook-wrap") && ($("p-webhook-wrap").style.display = isGoogle ? "none" : "");
+      $("p-google-hint") && ($("p-google-hint").style.display = isGoogle ? "" : "none");
     };
     $("p-connector").onchange = syncOp;
+    $("p-provider")?.addEventListener("change", syncProvider);
     syncOp();
     $("p-apply").onclick = () => {
       const connector = $("p-connector").value;
       const webhook = $("p-webhook").value.trim();
       const forceMock = $("p-force-mock").value === "1";
+      const provider = connector === "calendar" ? $("p-provider").value : "";
       const config = {
         ...(node.data.config && typeof node.data.config === "object"
           ? node.data.config
           : {}),
         forceMock,
       };
-      if (webhook) {
+      if (provider) config.provider = provider;
+      else delete config.provider;
+      if (webhook && provider !== "google") {
         if (connector === "http") config.url = webhook;
         else config.webhookUrl = webhook;
       } else {
