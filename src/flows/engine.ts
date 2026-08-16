@@ -5,7 +5,7 @@ import {
   getFlow,
   upsertConversationState,
 } from "./store.js";
-import { classifyIntent } from "./llm.js";
+import { classifyIntent, extractDate } from "./llm.js";
 import { runAction } from "./connectors/index.js";
 
 function render(template: string, vars: Record<string, string>): string {
@@ -229,6 +229,20 @@ export async function runFlowStep(opts: {
         detail: `${result.intent} (${result.source})`,
       });
       node = nextNode(flow, node.id, result.intent);
+      continue;
+    }
+
+    if (node.type === "llm_extract") {
+      const result = await extractDate({ text });
+      const varName = String(node.data.varName || "data_confirmada");
+      if (result.date) vars[varName] = result.date;
+      vars.date_extract_status = result.status;
+      trace.push({
+        nodeId: node.id,
+        type: "llm_extract",
+        detail: `${result.status}${result.date ? " · " + result.date : ""} (${result.source})`,
+      });
+      node = nextNode(flow, node.id, result.status);
       continue;
     }
 

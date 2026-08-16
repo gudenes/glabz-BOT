@@ -86,6 +86,12 @@ function defaultData(type) {
           { slug: "outro", description: "outra dúvida" },
         ],
       };
+    case "llm_extract":
+      return {
+        label: "Extrair data",
+        prompt: "Data que o cliente prefere pra marcar o horário.",
+        varName: "data_confirmada",
+      };
     case "condition":
       return { field: "last", op: "contains", value: "sim" };
     case "action":
@@ -124,6 +130,7 @@ function nodeTitle(node) {
   if (node.type === "message") return prettyPreview(d.text || "Mensagem") || "Mensagem";
   if (node.type === "ask") return prettyPreview(d.prompt || "Pergunta") || "Pergunta";
   if (node.type === "llm_intent") return d.label || "Entender intenção";
+  if (node.type === "llm_extract") return d.label || "Extrair data";
   if (node.type === "condition")
     return `${d.field || "texto"} ${d.op || "contém"} “${d.value || ""}”`;
   if (node.type === "action") {
@@ -226,6 +233,8 @@ function friendlyEdgeLabel(label) {
     false: "não",
     ok: "ok",
     erro: "erro",
+    ambiguous: "ambíguo",
+    unclear: "não entendi",
   };
   return map[label] || label;
 }
@@ -237,6 +246,7 @@ function typeLabel(type) {
       message: t("builder.step.message"),
       ask: t("builder.step.ask"),
       llm_intent: t("builder.step.intent"),
+      llm_extract: t("builder.step.extract"),
       condition: t("builder.step.condition"),
       action: t("builder.step.action"),
       handoff: t("builder.step.handoff"),
@@ -703,6 +713,7 @@ const ADDABLE_TYPES = [
   { type: "message", label: t("builder.step.message"), ic: "msg" },
   { type: "ask", label: t("builder.step.ask"), ic: "ask" },
   { type: "llm_intent", label: t("builder.step.intent"), ic: "llm" },
+  { type: "llm_extract", label: t("builder.step.extract"), ic: "extract" },
   { type: "action", label: t("builder.step.action"), ic: "act" },
   { type: "condition", label: t("builder.step.condition"), ic: "cond" },
   { type: "handoff", label: t("builder.step.handoff"), ic: "hand" },
@@ -773,6 +784,8 @@ function addChildNode(parentNode, type) {
     edgeLabel = siblings === 0 ? "true" : "false";
   } else if (parentNode.type === "action") {
     edgeLabel = siblings === 0 ? "ok" : "erro";
+  } else if (parentNode.type === "llm_extract") {
+    edgeLabel = ["ok", "ambiguous", "unclear"][siblings] || "ok";
   }
 
   state.flow.edges.push({
@@ -959,6 +972,13 @@ function renderProps() {
       </div>
       <p class="fb-hint">Ao ligar o próximo passo, use o mesmo código (ex.: marcar_consulta) ou “default”.</p>`;
   }
+  if (node.type === "llm_extract") {
+    html += `<div class="field"><label>O que buscar (contexto pra IA)</label>
+      <textarea id="p-prompt">${escapeHtml(String(d.prompt || ""))}</textarea></div>
+      <div class="field"><label>Salvar em variável</label>
+      <input id="p-var" value="${escapeHtml(String(d.varName || "data_confirmada"))}" /></div>
+      <p class="fb-hint">Ligações: <code>ok</code> (extraiu certo) / <code>ambiguous</code> (faltou info) / <code>unclear</code> (não tinha data). Var extra: <code>date_extract_status</code>.</p>`;
+  }
 
   if (node.type === "action") {
     const cfg = d.config && typeof d.config === "object" ? d.config : {};
@@ -984,6 +1004,9 @@ function renderProps() {
       </select></div>
       <div class="field" id="p-webhook-wrap"><label>Webhook (opcional)</label>
       <input id="p-webhook" value="${escapeHtml(String(cfg.webhookUrl || cfg.url || d.webhookUrl || ""))}" placeholder="https://… (vazio = mock)" /></div>
+      <div class="field" id="p-target-date-wrap"><label>Data alvo (variável, opcional)</label>
+      <input id="p-target-date" value="${escapeHtml(String(cfg.targetDateVar || ""))}" placeholder="ex.: data_confirmada" />
+      <p class="fb-hint" style="margin-top:4px">Se vazio, lista os próximos dias corridos. Preenchido (ex.: com a variável de um passo "Extrair data" anterior), lista só aquele dia.</p></div>
       <p class="fb-hint" id="p-google-hint">O cliente precisa conectar o Google Calendar dele em <strong>Dados da conta → Integrações</strong> no portal antes de publicar um fluxo usando essa opção.</p>
       <div class="field"><label>Mock no simulador</label>
       <select id="p-force-mock">
@@ -1014,6 +1037,7 @@ function renderProps() {
       const isGoogle = $("p-provider")?.value === "google";
       $("p-webhook-wrap") && ($("p-webhook-wrap").style.display = isGoogle ? "none" : "");
       $("p-google-hint") && ($("p-google-hint").style.display = isGoogle ? "" : "none");
+      $("p-target-date-wrap") && ($("p-target-date-wrap").style.display = isGoogle ? "" : "none");
     };
     $("p-connector").onchange = syncOp;
     $("p-provider")?.addEventListener("change", syncProvider);
@@ -1031,6 +1055,9 @@ function renderProps() {
       };
       if (provider) config.provider = provider;
       else delete config.provider;
+      const targetDateVar = provider === "google" ? $("p-target-date").value.trim() : "";
+      if (targetDateVar) config.targetDateVar = targetDateVar;
+      else delete config.targetDateVar;
       if (webhook && provider !== "google") {
         if (connector === "http") config.url = webhook;
         else config.webhookUrl = webhook;
@@ -1122,6 +1149,12 @@ function renderProps() {
           op: $("p-op").value,
           value: $("p-value").value,
         };
+      } else if (node.type === "llm_extract") {
+        node.data = {
+          ...node.data,
+          prompt: $("p-prompt").value,
+          varName: $("p-var").value.trim() || "data_confirmada",
+        };
       }
       renderCanvas();
       toast(t("builder.toast.stepUpdated"));
@@ -1151,8 +1184,8 @@ function changeNodeType(node, newType) {
   const newField = MAIN_TEXT_FIELD[newType];
   const carryText = oldField && newField ? node.data?.[oldField] : null;
 
-  const wasBranching = ["llm_intent", "condition", "action"].includes(node.type);
-  const isBranching = ["llm_intent", "condition", "action"].includes(newType);
+  const wasBranching = ["llm_intent", "llm_extract", "condition", "action"].includes(node.type);
+  const isBranching = ["llm_intent", "llm_extract", "condition", "action"].includes(newType);
   const outEdges = state.flow.edges.filter((e) => e.from === node.id);
   const labeledOutEdges = outEdges.filter((e) => e.label);
 
@@ -1507,6 +1540,7 @@ function typeLabelPt(type) {
       message: t("builder.step.message"),
       ask: t("builder.sim.trace.ask"),
       llm_intent: t("builder.sim.trace.intent"),
+      llm_extract: t("builder.step.extract"),
       action: t("builder.step.action"),
       condition: t("builder.step.condition"),
       handoff: t("builder.step.handoff"),

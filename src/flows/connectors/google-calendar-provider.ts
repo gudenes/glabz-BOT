@@ -4,6 +4,7 @@
  * Sem SDK do Google, só fetch cru (mesmo estilo do resto do projeto).
  */
 import { getCalendarIdFor, getValidAccessToken } from "../../google-oauth.js";
+import { brLocalParts, brMidnightUtc, brWeekday } from "../../br-time.js";
 import type { ConnectorResult } from "./types.js";
 
 const TZ = "America/Sao_Paulo";
@@ -16,33 +17,38 @@ function isoAt(y: number, m: number, d: number, h: number, min: number): string 
   return `${y}-${pad(m + 1)}-${pad(d)}T${pad(h)}:${pad(min)}:00${TZ_OFFSET}`;
 }
 
-/** Dia da semana em horário de Brasília (0=domingo). */
-function brWeekday(d: Date): number {
-  return new Date(d.getTime() - 3 * 60 * 60 * 1000).getUTCDay();
-}
-
-function brDateParts(d: Date): { y: number; m: number; day: number } {
-  const shifted = new Date(d.getTime() - 3 * 60 * 60 * 1000);
-  return { y: shifted.getUTCFullYear(), m: shifted.getUTCMonth(), day: shifted.getUTCDate() };
-}
-
 /**
- * Slots candidatos: dias úteis, horário comercial, próximos `daysAhead` dias.
+ * Slots candidatos, com horário comercial + duração configuráveis.
+ * - `targetDate` setado → gera só pra aquele dia específico (o cliente já
+ *   confirmou a data, ex.: via node "Extrair data" — não filtra por dia
+ *   útil aqui, é uma data que ele pediu explicitamente).
+ * - senão → janela rolante dos próximos `daysAhead` dias úteis.
  * Depois filtrados pelos horários ocupados (freebusy) e pelos já passados.
  */
 function candidateSlots(opts: {
-  daysAhead: number;
   startHour: number;
   endHour: number;
   slotMin: number;
+  daysAhead?: number;
+  targetDate?: Date;
 }): Slot[] {
+  const days: Date[] = [];
+  if (opts.targetDate) {
+    days.push(opts.targetDate);
+  } else {
+    const now = new Date();
+    for (let d = 0; d < (opts.daysAhead ?? 14); d++) {
+      const day = new Date(now.getTime() + d * 24 * 60 * 60 * 1000);
+      const weekday = brWeekday(day);
+      if (weekday === 0 || weekday === 6) continue; // só dias úteis
+      days.push(day);
+    }
+  }
+
   const out: Slot[] = [];
-  const now = new Date();
-  for (let d = 0; d < opts.daysAhead; d++) {
-    const day = new Date(now.getTime() + d * 24 * 60 * 60 * 1000);
+  for (const day of days) {
     const weekday = brWeekday(day);
-    if (weekday === 0 || weekday === 6) continue; // só dias úteis
-    const { y, m, day: dNum } = brDateParts(day);
+    const { y, m, day: dNum } = brLocalParts(day);
     for (let mins = opts.startHour * 60; mins < opts.endHour * 60; mins += opts.slotMin) {
       const h = Math.floor(mins / 60);
       const min = mins % 60;
@@ -59,6 +65,13 @@ function candidateSlots(opts: {
     }
   }
   return out;
+}
+
+/** Converte "AAAA-MM-DD" num Date de meia-noite (Brasília) desse dia. */
+function parseIsoDateBR(iso: string): Date | null {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return brMidnightUtc(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
 }
 
 function overlapsBusy(slot: Slot, busy: { start: string; end: string }[]): boolean {
@@ -110,7 +123,8 @@ async function freeBusy(
 
 export async function googleListSlots(
   clientId: string,
-  config: Record<string, unknown>
+  config: Record<string, unknown>,
+  vars: Record<string, string> = {}
 ): Promise<ConnectorResult> {
   const accessToken = await getValidAccessToken(clientId);
   if (!accessToken) {
@@ -128,11 +142,29 @@ export async function googleListSlots(
   const slotMin = Number(config.slotMinutes) || 60;
   const maxResults = Number(config.maxResults) || 5;
 
+  // Se o node de Ação apontar pra uma variável com data já confirmada
+  // (ex.: preenchida pelo node "Extrair data"), lista só aquele dia.
+  const targetDateVar = String(config.targetDateVar || "").trim();
+  const targetDate = targetDateVar ? parseIsoDateBR(vars[targetDateVar] || "") : null;
+  if (targetDateVar && !targetDate) {
+    return {
+      ok: false,
+      error: "data_alvo_invalida",
+      message: `Variável "${targetDateVar}" não tem uma data válida (AAAA-MM-DD).`,
+      source: "google",
+    };
+  }
+
   try {
     const now = new Date();
-    const horizon = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
-    const busy = await freeBusy(accessToken, calendarId, now, horizon);
-    const candidates = candidateSlots({ daysAhead, startHour, endHour, slotMin });
+    const rangeFrom = targetDate ?? now;
+    const rangeTo = targetDate
+      ? new Date(targetDate.getTime() + 24 * 60 * 60 * 1000)
+      : new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+    const busy = await freeBusy(accessToken, calendarId, rangeFrom, rangeTo);
+    const candidates = targetDate
+      ? candidateSlots({ startHour, endHour, slotMin, targetDate })
+      : candidateSlots({ startHour, endHour, slotMin, daysAhead });
     const free = candidates
       .filter((s) => new Date(s.start).getTime() > now.getTime())
       .filter((s) => !overlapsBusy(s, busy))

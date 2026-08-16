@@ -141,7 +141,7 @@ export async function runCalendar(opts: {
     const { googleCancelEvent, googleCreateEvent, googleListSlots } = await import(
       "./google-calendar-provider.js"
     );
-    if (op === "list_slots") return googleListSlots(opts.ctx.clientId, config);
+    if (op === "list_slots") return googleListSlots(opts.ctx.clientId, config, vars);
     if (op === "create_event") return googleCreateEvent(opts.ctx.clientId, vars, config);
     if (op === "cancel_event") return googleCancelEvent(opts.ctx.clientId, vars);
   }

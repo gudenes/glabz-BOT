@@ -24,6 +24,7 @@ const TYPE_TO_ICON = {
   message: "message",
   ask: "ask",
   llm_intent: "intent",
+  llm_extract: "calendar",
   action: "action",
   condition: "branch",
   handoff: "headset",
