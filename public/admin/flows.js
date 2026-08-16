@@ -1239,6 +1239,27 @@ function initPanels() {
 }
 initPanels();
 
+// No portal, a coluna de canvas fica espremida (ou some) em iframes estreitos —
+// a grade de Passos(190px)+Detalhes(300px) fixos não sobra espaço nenhum pro
+// canvas quando o iframe fica abaixo de ~860px. Recolhe os dois automaticamente
+// nesse caso, pelo mesmo mecanismo de sempre (o botão continua liberando pra
+// expandir manualmente se o usuário preferir apertar mesmo assim).
+if (EMBED) {
+  const narrowMq = window.matchMedia("(max-width: 860px)");
+  const applyNarrowCollapse = () => {
+    for (const id of ["panel-palette", "panel-props"]) {
+      const panel = document.getElementById(id);
+      if (!panel) continue;
+      panel.classList.toggle("collapsed", narrowMq.matches);
+      const btn = document.querySelector(`[data-toggle="${id}"]`);
+      if (btn) syncToggleIcon(btn, panel);
+    }
+    if (state.flow) renderCanvas();
+  };
+  narrowMq.addEventListener("change", applyNarrowCollapse);
+  applyNarrowCollapse();
+}
+
 // ── Atalhos de teclado ───────────────────────────────────
 document.addEventListener("keydown", (e) => {
   // Delete (Windows/Linux) e Backspace (tecla "Delete" do Mac mandam "Backspace")
