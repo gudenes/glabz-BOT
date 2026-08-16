@@ -550,9 +550,21 @@ const server = createServer(async (req, res) => {
         json(res, 400, { ok: false, reason: "só usuários logados" });
         return;
       }
+      // Em modo impersonation (admin GLabs vendo o portal "como" um client),
+      // esse formulário edita o próprio login do admin por padrão — mas o que
+      // a tela mostra ali é o dono da conta do client sendo visualizado. Sem
+      // esse desvio, salvar aqui reescreveria o nome do admin, não do client
+      // (era exatamente o bug: o card sempre lia/gravava auth.user, nunca o
+      // usuário de fato dono do client em impersonation).
+      let targetUserId = auth.user.id;
+      if (auth.user.role === "glabs") {
+        const clientId = actingClientId(req, auth);
+        const clientUser = clientId ? (await listClientUsers(clientId))[0] : null;
+        if (clientUser) targetUserId = clientUser.id;
+      }
       const body = parseJson<{ name?: string }>(await readBody(req));
       try {
-        const user = await updateUserProfile(auth.user.id, body?.name || "");
+        const user = await updateUserProfile(targetUserId, body?.name || "");
         json(res, 200, { ok: true, user: user ? { name: user.name, email: user.email } : null });
       } catch (e) {
         json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "invalid" });

@@ -597,7 +597,13 @@ document.querySelectorAll("#dash-range .seg-btn").forEach((btn) => {
 /* ── Dados da conta ──────────────────────────────────────── */
 
 function loadAccount() {
-  const me = state.me;
+  // Em impersonation (admin GLabs vendo o portal como um client), esse card
+  // precisa mostrar o dono da conta do CLIENT sendo visualizado — não o login
+  // do admin (state.me). O client vem em state.portal.users[0] (mesmo dado já
+  // carregado por GET /v1/portal, sem fetch extra). Fora de impersonation
+  // (o próprio client logado), state.me já É o usuário certo.
+  const impersonating = Boolean(state.portal?.impersonating);
+  const me = impersonating ? state.portal?.users?.[0] || null : state.me;
   if (me) {
     $("acc-profile-name").value = me.name || "";
     $("acc-profile-email").value = me.email || "";
@@ -677,7 +683,13 @@ $("form-account-profile").addEventListener("submit", async (ev) => {
       method: "PUT",
       body: JSON.stringify({ name: $("acc-profile-name").value }),
     });
-    if (state.me) state.me.name = $("acc-profile-name").value.trim();
+    const name = $("acc-profile-name").value.trim();
+    const impersonating = Boolean(state.portal?.impersonating);
+    if (impersonating && state.portal?.users?.[0]) {
+      state.portal.users[0].name = name;
+    } else if (state.me) {
+      state.me.name = name;
+    }
     toast(t("portal.account.saved"));
   } catch (e) {
     toast(e.message, "err");
