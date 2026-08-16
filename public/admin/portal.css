@@ -181,6 +181,13 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
   color: #f4f4f0;
   padding: 22px 14px 16px;
   display: flex; flex-direction: column; gap: 4px;
+  /* Fixa na tela — sem isso, o grid (.app) cresce junto com o conteúdo
+     de .main (ex.: os formulários de Dados da conta) e o rodapé com o
+     perfil do usuário fica empurrado pra fora da área visível. */
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
 }
 .side .brand-word { color: #fff; }
 .side .brand-mark { background: var(--gold); color: var(--gold-ink); }
