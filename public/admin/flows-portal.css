@@ -194,6 +194,22 @@ body.portal-embed .pal-item:hover {
 }
 body.portal-embed .pal-text small { color: var(--muted); }
 
+/* Painel Passos recolhido: a regra genérica de flows.css (.collapsed > *) some
+   com tudo, deixando a tira em branco — mostra só os ícones (com title como
+   tooltip) em vez de nada. */
+body.portal-embed #panel-palette.collapsed > .pal-item {
+  display: flex !important;
+  justify-content: center;
+  padding: 10px 0;
+  margin: 0;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+}
+body.portal-embed #panel-palette.collapsed .pal-text {
+  display: none;
+}
+
 body.portal-embed .fb-canvas-wrap {
   background:
     radial-gradient(circle at 1px 1px, rgba(0,0,0,0.07) 1px, transparent 0) 0 0 / 22px 22px,

@@ -12,7 +12,7 @@
     />
     <link rel="stylesheet" href="/admin/styles.css?v=15" />
     <link rel="stylesheet" href="/admin/flows.css?v=16" />
-    <link rel="stylesheet" href="/admin/flows-portal.css?v=17" />
+    <link rel="stylesheet" href="/admin/flows-portal.css?v=18" />
   </head>
   <body class="flows-body">
     <div id="login-gate" class="fb-login">
@@ -92,49 +92,49 @@
             <button type="button" class="fb-aside-toggle" data-toggle="panel-palette" data-side="left" title="Recolher/expandir"></button>
           </div>
           <p class="fb-palette-hint">Ou use o <strong>+</strong> em cada cartão</p>
-          <button type="button" class="pal-item" data-type="message">
+          <button type="button" class="pal-item" data-type="message" data-i18n-title="builder.step.message">
             <span class="pal-icon msg" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </span>
             <span class="pal-text"><strong data-i18n="builder.step.message">Mensagem</strong><small data-i18n="builder.step.messageHint">Enviar texto</small></span>
           </button>
-          <button type="button" class="pal-item" data-type="ask">
+          <button type="button" class="pal-item" data-type="ask" data-i18n-title="builder.step.ask">
             <span class="pal-icon ask" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
             </span>
             <span class="pal-text"><strong data-i18n="builder.step.ask">Perguntar</strong><small data-i18n="builder.step.askHint">Guardar resposta</small></span>
           </button>
-          <button type="button" class="pal-item" data-type="llm_intent">
+          <button type="button" class="pal-item" data-type="llm_intent" data-i18n-title="builder.step.intent">
             <span class="pal-icon llm" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/><path d="m16 16-1.9-1.9"/></svg>
             </span>
             <span class="pal-text"><strong data-i18n="builder.step.intent">Entender intenção</strong><small data-i18n="builder.step.intentHint">IA classifica o pedido</small></span>
           </button>
-          <button type="button" class="pal-item" data-type="llm_extract">
+          <button type="button" class="pal-item" data-type="llm_extract" data-i18n-title="builder.step.extract">
             <span class="pal-icon extract" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
             </span>
             <span class="pal-text"><strong data-i18n="builder.step.extract">Extrair data</strong><small data-i18n="builder.step.extractHint">IA entende a data que o cliente disse</small></span>
           </button>
-          <button type="button" class="pal-item" data-type="action">
+          <button type="button" class="pal-item" data-type="action" data-i18n-title="builder.step.action">
             <span class="pal-icon act" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a6 6 0 0 1-12 0V8Z"/></svg>
             </span>
             <span class="pal-text"><strong data-i18n="builder.step.action">Ação</strong><small data-i18n="builder.step.actionHint">Calendário, HTTP…</small></span>
           </button>
-          <button type="button" class="pal-item" data-type="condition">
+          <button type="button" class="pal-item" data-type="condition" data-i18n-title="builder.step.condition">
             <span class="pal-icon cond" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
             </span>
             <span class="pal-text"><strong data-i18n="builder.step.condition">Se / senão</strong><small data-i18n="builder.step.conditionHint">Caminho condicional</small></span>
           </button>
-          <button type="button" class="pal-item" data-type="handoff">
+          <button type="button" class="pal-item" data-type="handoff" data-i18n-title="builder.step.handoff">
             <span class="pal-icon hand" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>
             </span>
             <span class="pal-text"><strong data-i18n="builder.step.handoff">Atendente</strong><small data-i18n="builder.step.handoffHint">Passar para humano</small></span>
           </button>
-          <button type="button" class="pal-item" data-type="end">
+          <button type="button" class="pal-item" data-type="end" data-i18n-title="builder.step.end">
             <span class="pal-icon end" aria-hidden="true">
               <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
             </span>

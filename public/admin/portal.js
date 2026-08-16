@@ -73,6 +73,7 @@ const TITLES = {
   pubs: ["portal.nav.pubs", "portal.pubsStageSub"],
   dashboard: ["portal.nav.dashboard", "portal.dashboardStageSub"],
   account: ["portal.nav.account", "portal.accountStageSub"],
+  integrations: ["portal.nav.integrations", "portal.integrationsStageSub"],
 };
 
 /**
@@ -86,7 +87,7 @@ function setView(view) {
     b.classList.toggle("on", b.dataset.view === view);
   });
   const shownSection = view === "test" ? "flow" : view;
-  for (const id of ["status", "inbox", "flow", "pubs", "dashboard", "account"]) {
+  for (const id of ["status", "inbox", "flow", "pubs", "dashboard", "account", "integrations"]) {
     $(`view-${id}`)?.classList.toggle("hidden", id !== shownSection);
   }
   $("hello").textContent = state.firstName ? t("portal.helloName", { name: state.firstName }) : t(TITLES[view][0]);
@@ -105,6 +106,7 @@ function setView(view) {
   if (view === "inbox") void loadInbox();
   if (view === "dashboard") void loadDashboard();
   if (view === "account") loadAccount();
+  if (view === "integrations") void loadIntegrationsStatus();
 }
 
 /**
@@ -617,8 +619,6 @@ function loadAccount() {
   $("biz-segment").value = c.bizSegment || "";
   $("biz-audience").value = c.bizAudience || "";
   $("biz-source").value = c.bizSource || "";
-
-  void loadIntegrationsStatus();
 }
 
 async function loadIntegrationsStatus() {
@@ -1215,7 +1215,7 @@ try {
 
     // Volta do redirect OAuth do Google Calendar (/v1/integrations/google-calendar/callback)
     const qs = new URLSearchParams(location.search);
-    if (qs.get("view") === "account") setView("account");
+    if (qs.get("view") && TITLES[qs.get("view")]) setView(qs.get("view"));
     if (qs.get("google_connected")) toast(t("portal.account.integrations.connected"));
     if (qs.get("google_error")) toast(t("portal.account.integrations.connectError"), "err");
     if (qs.has("view") || qs.has("google_connected") || qs.has("google_error")) {

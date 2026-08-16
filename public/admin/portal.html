@@ -60,6 +60,10 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
             <span data-i18n="portal.nav.account">Dados da conta</span>
           </button>
+          <button type="button" class="nav-link" data-view="integrations">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <span data-i18n="portal.nav.integrations">Integrações</span>
+          </button>
         </nav>
 
         <div class="side-foot">
@@ -362,7 +366,10 @@
             </div>
             <button class="btn-lime" type="submit" data-i18n="common.save">Salvar</button>
           </form>
+        </section>
 
+        <!-- Integrações -->
+        <section id="view-integrations" class="view hidden">
           <div class="card-form" id="card-integrations">
             <h2 data-i18n="portal.account.integrations.title">Integrações</h2>
             <div class="integration-row">
@@ -387,6 +394,7 @@
       <button type="button" data-view="pubs" data-i18n="portal.nav.pubs">Publicações</button>
       <button type="button" data-view="dashboard" data-i18n="portal.nav.dashboard">Dashboards</button>
       <button type="button" data-view="account" data-i18n="portal.nav.account">Dados da conta</button>
+      <button type="button" data-view="integrations" data-i18n="portal.nav.integrations">Integrações</button>
     </nav>
 
     <script src="/admin/portal.js?v=25" type="module"></script>
