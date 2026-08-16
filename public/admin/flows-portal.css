@@ -147,50 +147,42 @@ body.portal-embed .lang-flag.active {
   border-color: #d8d8d2;
 }
 
-body.portal-embed .fb-body,
-body.portal-embed .fb-body:has(#panel-list.collapsed),
-body.portal-embed .fb-body:has(#panel-palette.collapsed),
-body.portal-embed .fb-body:has(#panel-props.collapsed),
-body.portal-embed .fb-body:has(#panel-list.collapsed):has(#panel-palette.collapsed),
-body.portal-embed .fb-body:has(#panel-list.collapsed):has(#panel-props.collapsed),
-body.portal-embed .fb-body:has(#panel-palette.collapsed):has(#panel-props.collapsed),
-body.portal-embed .fb-body:has(#panel-list.collapsed):has(#panel-palette.collapsed):has(#panel-props.collapsed) {
+/* Layout igual ao admin: paleta fixa à esquerda + canvas + Detalhes fixo à
+   direita, cada um com seu botão de recolher/expandir (mesmo mecanismo do
+   admin — só "Seus fluxos" some no portal, o cliente não precisa navegar
+   entre outros fluxos aqui, essa tela já é o fluxo dele). Nada de coluna
+   que aparece/some sozinha ao clicar num passo — igual admin, é sempre uma
+   coluna presente, só a largura muda entre aberta e recolhida. */
+body.portal-embed .fb-body {
   display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: 58px 1fr;
-  grid-template-areas:
-    "pal"
-    "can";
+  grid-template-columns: 190px 1fr 300px;
+  min-height: 0;
+  transition: grid-template-columns 0.18s ease;
 }
-body.portal-embed .fb-body.has-props {
-  grid-template-columns: 1fr 320px;
-  grid-template-areas:
-    "pal props"
-    "can props";
+body.portal-embed .fb-body:has(#panel-palette.collapsed) {
+  grid-template-columns: 48px 1fr 300px;
 }
-body.portal-embed .fb-list,
-body.portal-embed .fb-aside-toggle { display: none !important; }
-body.portal-embed .fb-palette {
-  grid-area: pal;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 8px 14px;
+body.portal-embed .fb-body:has(#panel-props.collapsed) {
+  grid-template-columns: 190px 1fr 48px;
+}
+body.portal-embed .fb-body:has(#panel-palette.collapsed):has(#panel-props.collapsed) {
+  grid-template-columns: 48px 1fr 48px;
+}
+
+body.portal-embed .fb-list { display: none !important; }
+
+body.portal-embed .fb-palette,
+body.portal-embed .fb-props {
   background: #fff;
-  border: 0;
-  border-bottom: 1px solid var(--line);
 }
-body.portal-embed .fb-palette .fb-aside-head,
-body.portal-embed .fb-palette-hint { display: none; }
+body.portal-embed .fb-palette { border-right: 1px solid var(--line); }
+body.portal-embed .fb-props { border-left: 1px solid var(--line); border-right: 0; }
+body.portal-embed .fb-aside-head { color: var(--muted); }
+body.portal-embed .fb-aside-toggle { color: var(--muted); }
+body.portal-embed .fb-aside-toggle:hover { color: var(--ink); background: #f3f3ef; }
+body.portal-embed .fb-palette-hint { color: var(--muted); }
+
 body.portal-embed .pal-item {
-  flex: 0 0 auto;
-  width: auto;
-  margin: 0;
-  padding: 7px 12px;
-  gap: 8px;
-  border-radius: 999px;
   background: #fff;
   border: 1px solid var(--line);
   color: var(--ink);
@@ -198,17 +190,11 @@ body.portal-embed .pal-item {
 body.portal-embed .pal-item:hover {
   border-color: var(--gold);
   background: #fffbeb;
+  transform: none;
 }
-body.portal-embed .pal-icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-}
-body.portal-embed .pal-text small { display: none; }
-body.portal-embed .pal-text strong { font-size: 13px; font-weight: 600; }
+body.portal-embed .pal-text small { color: var(--muted); }
 
 body.portal-embed .fb-canvas-wrap {
-  grid-area: can;
   background:
     radial-gradient(circle at 1px 1px, rgba(0,0,0,0.07) 1px, transparent 0) 0 0 / 22px 22px,
     var(--paper);
@@ -216,18 +202,6 @@ body.portal-embed .fb-canvas-wrap {
 body.portal-embed .fb-canvas-label {
   display: none;
 }
-body.portal-embed .fb-props {
-  display: none;
-  grid-area: props;
-  background: #fff;
-  border: 0;
-  border-left: 1px solid var(--line);
-}
-body.portal-embed .fb-body.has-props .fb-props {
-  display: flex;
-  flex-direction: column;
-}
-body.portal-embed .fb-aside-head { color: var(--muted); }
 
 body.portal-embed .fb-node {
   background: #fff;
@@ -309,22 +283,13 @@ body.portal-embed .node-add-menu {
 }
 body.portal-embed .fb-toast { color: #fff; }
 
-/* Com Detalhes (coluna de 320px) e Testar abertos juntos num iframe estreito,
-   o simulador flutuante (position:fixed, ancorado no canto) sobrepõe a coluna
-   de Detalhes e some com o canvas. Desloca o simulador pra não invadir essa
-   coluna quando ela está visível. */
-body.portal-embed .fb-body.has-props ~ #sim-panel {
-  right: calc(320px + 18px);
-  width: max(200px, min(340px, calc(100vw - 320px - 36px)));
+/* Detalhes é coluna fixa (300px aberta / 48px recolhida) — desloca o
+   simulador flutuante pra nunca invadir essa coluna, nos dois estados. */
+body.portal-embed .fb-body ~ #sim-panel {
+  right: calc(300px + 18px);
+  width: max(200px, min(340px, calc(100vw - 300px - 36px)));
 }
-
-/* Colapsar/expandir painel é conceito só do admin standalone — o botão de
-   alternar já vem escondido no portal (client não deveria mexer nisso). Mas
-   o estado "colapsado" fica salvo num localStorage compartilhado com o admin
-   (mesma origem), e a regra genérica de flows.css que esconde o conteúdo de
-   um painel colapsado não é ciente do embed — se alguém colapsar a paleta ou
-   o corpo de Detalhes no admin (ou em teste automatizado), some no portal
-   também, sem nenhuma forma de o cliente reverter. Neutraliza isso aqui. */
-body.portal-embed .collapsed > *:not(.fb-aside-head) {
-  display: revert !important;
+body.portal-embed .fb-body:has(#panel-props.collapsed) ~ #sim-panel {
+  right: calc(48px + 18px);
+  width: min(340px, calc(100vw - 48px - 36px));
 }
