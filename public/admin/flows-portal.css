@@ -317,3 +317,14 @@ body.portal-embed .fb-body.has-props ~ #sim-panel {
   right: calc(320px + 18px);
   width: max(200px, min(340px, calc(100vw - 320px - 36px)));
 }
+
+/* Colapsar/expandir painel é conceito só do admin standalone — o botão de
+   alternar já vem escondido no portal (client não deveria mexer nisso). Mas
+   o estado "colapsado" fica salvo num localStorage compartilhado com o admin
+   (mesma origem), e a regra genérica de flows.css que esconde o conteúdo de
+   um painel colapsado não é ciente do embed — se alguém colapsar a paleta ou
+   o corpo de Detalhes no admin (ou em teste automatizado), some no portal
+   também, sem nenhuma forma de o cliente reverter. Neutraliza isso aqui. */
+body.portal-embed .collapsed > *:not(.fb-aside-head) {
+  display: revert !important;
+}
