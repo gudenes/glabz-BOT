@@ -904,7 +904,9 @@ function renderProps() {
     body.classList.add("hidden");
     return;
   }
-  propsPanel?.classList.remove("collapsed");
+  // Se o painel estiver recolhido, permanece recolhido — só o pulse acima
+  // (ícone piscando) avisa que o conteúdo mudou. Forçar a expansão aqui
+  // anulava esse aviso, abrindo o painel em toda seleção de passo.
   empty.classList.add("hidden");
   body.classList.remove("hidden");
 
