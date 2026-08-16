@@ -1,6 +1,8 @@
 /**
  * Glabs Bot admin SPA — controla products, accounts e sessões WhatsApp.
  */
+import { applyStaticTranslations, mountLangToggle, t } from "./i18n.js";
+
 const STORAGE_KEY = "glabs_bot_secret";
 
 const state = {
@@ -26,6 +28,9 @@ const drawerBackdrop = $("drawer-backdrop");
 const drawerBody = $("drawer-body");
 const modalAccount = $("modal-account");
 const modalProduct = $("modal-product");
+
+applyStaticTranslations();
+mountLangToggle($("lang-toggle-slot"));
 
 // ── API ──────────────────────────────────────────────────
 async function api(path, opts = {}) {
@@ -97,7 +102,7 @@ async function loadDashboard() {
     if (e.status === 401) {
       state.secret = "";
       localStorage.removeItem(STORAGE_KEY);
-      showLogin("Secret inválido.");
+      showLogin(t("admin.login.invalidSecret"));
       return;
     }
     globalError.textContent = e.message || "Falha ao carregar";
@@ -119,10 +124,10 @@ function counts() {
 function statusPill(status) {
   const s = status || "disconnected";
   const labels = {
-    connected: "Conectado",
+    connected: t("admin.accounts.status.connected"),
     pending_qr: "QR",
-    disconnected: "Desconectado",
-    error: "Erro",
+    disconnected: t("admin.accounts.status.disconnected"),
+    error: t("admin.accounts.status.error"),
   };
   return `<span class="pill ${s}">${labels[s] || s}</span>`;
 }
@@ -149,15 +154,15 @@ function accountRow(item) {
 function renderOverview() {
   const c = counts();
   $("stats-row").innerHTML = `
-    <div class="stat"><div class="label">Contas</div><div class="value">${c.total}</div></div>
-    <div class="stat"><div class="label">Conectadas</div><div class="value" style="color:var(--wa)">${c.connected}</div></div>
-    <div class="stat"><div class="label">Aguardando QR</div><div class="value" style="color:var(--warn)">${c.pending}</div></div>
-    <div class="stat"><div class="label">Products</div><div class="value">${c.products}</div></div>
+    <div class="stat"><div class="label">${t("admin.overview.stat.accounts")}</div><div class="value">${c.total}</div></div>
+    <div class="stat"><div class="label">${t("admin.overview.stat.connected")}</div><div class="value" style="color:var(--wa)">${c.connected}</div></div>
+    <div class="stat"><div class="label">${t("admin.overview.stat.pendingQr")}</div><div class="value" style="color:var(--warn)">${c.pending}</div></div>
+    <div class="stat"><div class="label">${t("admin.overview.stat.products")}</div><div class="value">${c.products}</div></div>
   `;
   const list = state.accounts.slice(0, 12);
   $("overview-accounts").innerHTML = list.length
     ? list.map(accountRow).join("")
-    : `<div class="empty">Nenhuma conta ainda. Crie a primeira em Contas.</div>`;
+    : `<div class="empty">${t("admin.overview.empty")}</div>`;
 }
 
 function filteredAccounts() {
@@ -176,30 +181,52 @@ function renderAccounts() {
   const list = filteredAccounts();
   $("accounts-list").innerHTML = list.length
     ? list.map(accountRow).join("")
-    : `<div class="panel"><div class="empty">Nenhuma conta com esse filtro.</div></div>`;
+    : `<div class="panel"><div class="empty">${t("admin.accounts.emptyFiltered")}</div></div>`;
 }
+
+const DEFAULT_PRODUCT_SLUGS = ["gestor", "prontuario"];
 
 function renderProducts() {
   const html = state.products.length
     ? state.products
         .map((p) => {
           const n = state.accounts.filter((a) => a.account.product === p.slug).length;
+          const isDefault = DEFAULT_PRODUCT_SLUGS.includes(p.slug);
           return `
             <div class="row" style="cursor:default">
               <div>
                 <div class="row-title">${escapeHtml(p.name)}</div>
                 <div class="row-meta">
                   <span class="pill product">${escapeHtml(p.slug)}</span>
-                  <span>${n} conta(s)</span>
-                  ${p.defaultWebhookUrl ? `<span class="mono dim">${escapeHtml(p.defaultWebhookUrl)}</span>` : `<span class="dim">sem webhook default</span>`}
+                  <span>${t("admin.products.accountsCount", { n })}</span>
+                  ${p.defaultWebhookUrl ? `<span class="mono dim">${escapeHtml(p.defaultWebhookUrl)}</span>` : `<span class="dim">${t("admin.products.noDefaultWebhook")}</span>`}
                 </div>
               </div>
+              ${
+                isDefault
+                  ? ""
+                  : `<button type="button" class="btn danger sm" data-del-product="${escapeAttr(p.slug)}" title="${t("admin.products.remove")}">${t("admin.products.remove")}</button>`
+              }
             </div>
           `;
         })
         .join("")
-    : `<div class="empty">Nenhum product.</div>`;
+    : `<div class="empty">${t("admin.products.empty")}</div>`;
   $("products-list").innerHTML = html;
+
+  $("products-list").querySelectorAll("[data-del-product]").forEach((btn) => {
+    btn.onclick = async () => {
+      const slug = btn.dataset.delProduct;
+      if (!confirm(t("admin.products.confirmRemove", { slug }))) return;
+      try {
+        await api(`/v1/products/${encodeURIComponent(slug)}`, { method: "DELETE" });
+        toast(t("admin.products.toast.removed"));
+        await loadDashboard();
+      } catch (e) {
+        toast(e.message, "err");
+      }
+    };
+  });
 
   // fill account modal select
   const sel = $("acc-product");
@@ -223,10 +250,10 @@ function render() {
     $(`tab-${t}`)?.classList.toggle("hidden", t !== state.tab);
   });
   const titles = {
-    overview: ["Overview", "Sessões e saúde do canal"],
-    accounts: ["Contas", "Uma conta = um número WhatsApp"],
-    products: ["Products", "Apps GLabs que consomem o bot"],
-    clients: ["Clientes", "Onboarding e acesso ao portal"],
+    overview: [t("admin.title.overview"), t("admin.sub.overview")],
+    accounts: [t("admin.title.accounts"), t("admin.sub.accounts")],
+    products: [t("admin.title.products"), t("admin.sub.products")],
+    clients: [t("admin.title.clients"), t("admin.sub.clients")],
   };
   $("page-title").textContent = titles[state.tab][0];
   $("page-sub").textContent = titles[state.tab][1];
@@ -246,75 +273,75 @@ function renderDrawer(item) {
     st === "pending_qr" && session?.qrDataUrl
       ? `<div class="qr-box">
            <img src="${session.qrDataUrl}" alt="QR Code WhatsApp" />
-           <p class="muted sm">WhatsApp → Dispositivos conectados → Conectar dispositivo</p>
+           <p class="muted sm">${t("admin.drawer.qrHint")}</p>
          </div>`
       : "";
 
   drawerBody.innerHTML = `
     <div class="drawer-section">
-      <h4>Status</h4>
+      <h4>${t("admin.drawer.status")}</h4>
       <div style="margin-bottom:10px">${statusPill(st)}</div>
       <dl class="kv">
-        <dt>Telefone</dt><dd>${escapeHtml(session?.phoneDisplay || session?.phoneE164 || "—")}</dd>
-        <dt>Nome WA</dt><dd>${escapeHtml(session?.displayName || "—")}</dd>
-        <dt>Desde</dt><dd>${session?.connectedAt ? new Date(session.connectedAt).toLocaleString("pt-BR") : "—"}</dd>
-        <dt>Erro</dt><dd>${escapeHtml(session?.lastError || "—")}</dd>
+        <dt>${t("admin.drawer.phone")}</dt><dd>${escapeHtml(session?.phoneDisplay || session?.phoneE164 || "—")}</dd>
+        <dt>${t("admin.drawer.waName")}</dt><dd>${escapeHtml(session?.displayName || "—")}</dd>
+        <dt>${t("admin.drawer.since")}</dt><dd>${session?.connectedAt ? new Date(session.connectedAt).toLocaleString("pt-BR") : "—"}</dd>
+        <dt>${t("admin.drawer.error")}</dt><dd>${escapeHtml(session?.lastError || "—")}</dd>
       </dl>
       ${qr}
       <div class="actions-row" style="margin-top:12px">
         ${
           st !== "connected"
-            ? `<button type="button" class="btn wa sm" data-act="connect">Conectar / QR</button>`
-            : `<button type="button" class="btn danger sm" data-act="disconnect">Desconectar</button>`
+            ? `<button type="button" class="btn wa sm" data-act="connect">${t("admin.drawer.connectQr")}</button>`
+            : `<button type="button" class="btn danger sm" data-act="disconnect">${t("admin.drawer.disconnect")}</button>`
         }
-        <button type="button" class="btn secondary sm" data-act="refresh-one">Atualizar</button>
+        <button type="button" class="btn secondary sm" data-act="refresh-one">${t("admin.drawer.refresh")}</button>
       </div>
     </div>
 
     <div class="drawer-section">
-      <h4>Account</h4>
+      <h4>${t("admin.drawer.accountSection")}</h4>
       <dl class="kv">
-        <dt>Product</dt><dd><span class="pill product">${escapeHtml(account.product)}</span></dd>
-        <dt>Tenant</dt><dd class="mono">${escapeHtml(account.externalTenantId)}</dd>
-        <dt>Webhook</dt><dd class="mono">${escapeHtml(account.webhookUrl)}</dd>
-        <dt>Label</dt><dd>${escapeHtml(account.label || "—")}</dd>
+        <dt>${t("admin.drawer.product")}</dt><dd><span class="pill product">${escapeHtml(account.product)}</span></dd>
+        <dt>${t("admin.drawer.tenant")}</dt><dd class="mono">${escapeHtml(account.externalTenantId)}</dd>
+        <dt>${t("admin.drawer.webhook")}</dt><dd class="mono">${escapeHtml(account.webhookUrl)}</dd>
+        <dt>${t("admin.drawer.label")}</dt><dd>${escapeHtml(account.label || "—")}</dd>
       </dl>
       <label class="field" style="margin-top:12px">
-        <span>Webhook URL</span>
+        <span>${t("admin.drawer.webhookUrl")}</span>
         <input id="edit-webhook" class="input" value="${escapeAttr(account.webhookUrl)}" />
       </label>
       <label class="field">
-        <span>Label</span>
+        <span>${t("admin.drawer.label")}</span>
         <input id="edit-label" class="input" value="${escapeAttr(account.label || "")}" />
       </label>
-      <button type="button" class="btn secondary sm" data-act="save-meta">Salvar metadados</button>
+      <button type="button" class="btn secondary sm" data-act="save-meta">${t("admin.drawer.saveMeta")}</button>
     </div>
 
     ${
       st === "connected"
         ? `
     <div class="drawer-section">
-      <h4>Enviar teste</h4>
-      <label class="field"><span>Telefone (DDI)</span><input id="send-to" class="input" placeholder="+34 612 345 678" /></label>
-      <label class="field"><span>Mensagem</span><textarea id="send-body" class="input" rows="3">Olá! Teste Glabs Bot.</textarea></label>
-      <button type="button" class="btn primary sm" data-act="send">Enviar</button>
+      <h4>${t("admin.drawer.sendTest")}</h4>
+      <label class="field"><span>${t("admin.drawer.phoneDdi")}</span><input id="send-to" class="input" placeholder="+34 612 345 678" /></label>
+      <label class="field"><span>${t("admin.drawer.message")}</span><textarea id="send-body" class="input" rows="3">Olá! Teste Glabz.</textarea></label>
+      <button type="button" class="btn primary sm" data-act="send">${t("admin.drawer.send")}</button>
     </div>
     <div class="drawer-section">
-      <h4>Perfil do número</h4>
-      <label class="field"><span>Nome</span><input id="prof-name" class="input" value="${escapeAttr(session?.displayName || account.label || "")}" /></label>
-      <label class="field"><span>Recado</span><input id="prof-status" class="input" placeholder="Atendimento" /></label>
-      <label class="field"><span>Foto (JPEG/PNG)</span><input id="prof-pic" type="file" accept="image/*" /></label>
+      <h4>${t("admin.drawer.profile")}</h4>
+      <label class="field"><span>${t("admin.drawer.name")}</span><input id="prof-name" class="input" value="${escapeAttr(session?.displayName || account.label || "")}" /></label>
+      <label class="field"><span>${t("admin.drawer.statusMsg")}</span><input id="prof-status" class="input" placeholder="Atendimento" /></label>
+      <label class="field"><span>${t("admin.drawer.photo")}</span><input id="prof-pic" type="file" accept="image/*" /></label>
       <div class="actions-row">
-        <button type="button" class="btn secondary sm" data-act="profile">Salvar perfil</button>
-        <button type="button" class="btn ghost sm" data-act="remove-pic">Remover foto</button>
+        <button type="button" class="btn secondary sm" data-act="profile">${t("admin.drawer.saveProfile")}</button>
+        <button type="button" class="btn ghost sm" data-act="remove-pic">${t("admin.drawer.removePhoto")}</button>
       </div>
     </div>`
         : ""
     }
 
     <div class="drawer-section">
-      <h4>Perigo</h4>
-      <button type="button" class="btn danger sm" data-act="delete">Remover conta do bot</button>
+      <h4>${t("admin.drawer.danger")}</h4>
+      <button type="button" class="btn danger sm" data-act="delete">${t("admin.drawer.removeAccount")}</button>
     </div>
   `;
 }
@@ -375,11 +402,11 @@ async function handleDrawerAction(act) {
   try {
     if (act === "connect") {
       await api(`/v1/accounts/${id}/connect`, { method: "POST" });
-      toast("Conectando…");
+      toast(t("admin.drawer.toast.connecting"));
     } else if (act === "disconnect") {
-      if (!confirm("Desconectar e apagar credenciais desta sessão?")) return;
+      if (!confirm(t("admin.drawer.confirmDisconnect"))) return;
       await api(`/v1/accounts/${id}/disconnect`, { method: "POST" });
-      toast("Desconectado");
+      toast(t("admin.drawer.toast.disconnected"));
     } else if (act === "refresh-one") {
       /* fallthrough to load */
     } else if (act === "save-meta") {
@@ -389,7 +416,7 @@ async function handleDrawerAction(act) {
         method: "PATCH",
         body: JSON.stringify({ webhookUrl, label }),
       });
-      toast("Metadados salvos");
+      toast(t("admin.drawer.toast.metaSaved"));
     } else if (act === "send") {
       const to = $("send-to").value.trim();
       const body = $("send-body").value.trim();
@@ -397,7 +424,7 @@ async function handleDrawerAction(act) {
         method: "POST",
         body: JSON.stringify({ to, body }),
       });
-      toast(res.externalId ? `Enviado · ${res.externalId}` : "Enviado");
+      toast(res.externalId ? t("admin.drawer.toast.sentWithId", { id: res.externalId }) : t("admin.drawer.toast.sent"));
     } else if (act === "profile" || act === "remove-pic") {
       const payload = {
         displayName: $("prof-name")?.value?.trim() || undefined,
@@ -415,11 +442,11 @@ async function handleDrawerAction(act) {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      toast("Perfil atualizado");
+      toast(t("admin.drawer.toast.profileUpdated"));
     } else if (act === "delete") {
-      if (!confirm("Remover account do registry e desconectar sessão?")) return;
+      if (!confirm(t("admin.drawer.confirmDelete"))) return;
       await api(`/v1/accounts/${id}`, { method: "DELETE" });
-      toast("Conta removida");
+      toast(t("admin.drawer.toast.accountRemoved"));
       closeDrawer();
     }
     await loadDashboard();
@@ -458,7 +485,7 @@ function shortId(id) {
 $("login-btn").addEventListener("click", async () => {
   const secret = loginSecret.value.trim();
   if (!secret) {
-    loginError.textContent = "Informe o secret.";
+    loginError.textContent = t("admin.login.informSecret");
     loginError.classList.remove("hidden");
     return;
   }
@@ -471,7 +498,7 @@ $("login-btn").addEventListener("click", async () => {
     startPoll();
   } catch (e) {
     state.secret = "";
-    loginError.textContent = e.message === "unauthorized" ? "Secret inválido." : e.message;
+    loginError.textContent = e.message === "unauthorized" ? t("admin.login.invalidSecret") : e.message;
     loginError.classList.remove("hidden");
   }
 });
@@ -546,7 +573,7 @@ $("form-account").addEventListener("submit", async (e) => {
       }),
     });
     modalAccount.close();
-    toast("Conta criada / atualizada");
+    toast(t("admin.modal.newAccount.toast"));
     $("acc-tenant").value = "";
     $("acc-webhook").value = "";
     $("acc-label").value = "";
@@ -571,7 +598,7 @@ $("form-product").addEventListener("submit", async (e) => {
       }),
     });
     modalProduct.close();
-    toast("Product salvo");
+    toast(t("admin.products.toast.saved"));
     $("prod-slug").value = "";
     $("prod-name").value = "";
     $("prod-webhook").value = "";
@@ -589,7 +616,7 @@ async function loadClients() {
     const data = await api("/v1/clients");
     const clients = data.clients || [];
     if (!clients.length) {
-      list.innerHTML = `<p class="muted">Nenhum cliente ainda. Crie o primeiro para mandar o acesso.</p>`;
+      list.innerHTML = `<p class="muted">${t("admin.clients.empty")}</p>`;
       return;
     }
     list.innerHTML = clients
@@ -600,8 +627,8 @@ async function loadClients() {
             <div class="muted sm mono">${escapeHtml(c.slug)}</div>
           </div>
           <div class="row-actions">
-            <button type="button" class="btn secondary sm" data-open-portal="${escapeAttr(c.id)}">Abrir projeto</button>
-            <button type="button" class="btn secondary sm" data-del-client="${escapeAttr(c.id)}" data-del-name="${escapeAttr(c.name)}">Excluir</button>
+            <button type="button" class="btn secondary sm" data-open-portal="${escapeAttr(c.id)}">${t("admin.clients.openProject")}</button>
+            <button type="button" class="btn secondary sm" data-del-client="${escapeAttr(c.id)}" data-del-name="${escapeAttr(c.name)}">${t("admin.clients.delete")}</button>
           </div>
         </div>`
       )
@@ -620,10 +647,14 @@ document.addEventListener("click", (e) => {
 
 $("new-client-btn")?.addEventListener("click", () => $("modal-client")?.showModal());
 $("wipe-clients-btn")?.addEventListener("click", async () => {
-  if (!confirm("Apagar TODOS os clientes, fluxos e acessos? O admin GLabs permanece.")) return;
+  if (!confirm(t("admin.clients.confirmWipe"))) return;
   try {
     const data = await api("/v1/clients/wipe", { method: "POST", body: "{}" });
-    toast(data.deleted?.length ? `Apagados: ${data.deleted.join(", ")}` : "Nenhum cliente");
+    toast(
+      data.deleted?.length
+        ? t("admin.clients.toast.deleted", { names: data.deleted.join(", ") })
+        : t("admin.clients.toast.noneDeleted")
+    );
     await loadClients();
   } catch (e) {
     toast(e.message, "err");
@@ -632,10 +663,10 @@ $("wipe-clients-btn")?.addEventListener("click", async () => {
 document.addEventListener("click", async (e) => {
   const btn = e.target.closest?.("[data-del-client]");
   if (!btn) return;
-  if (!confirm(`Excluir “${btn.dataset.delName}”?`)) return;
+  if (!confirm(t("admin.clients.confirmDelete", { name: btn.dataset.delName }))) return;
   try {
     await api(`/v1/clients/${btn.dataset.delClient}`, { method: "DELETE" });
-    toast("Cliente excluído");
+    toast(t("admin.clients.toast.deletedOne"));
     await loadClients();
   } catch (ex) {
     toast(ex.message, "err");
@@ -657,9 +688,9 @@ $("form-client")?.addEventListener("submit", async (e) => {
     });
     $("modal-client").close();
     const pass = data.tempPassword;
-    toast(`Cliente criado. Senha temporária: ${pass}`);
+    toast(t("admin.clients.toast.created", { pass }));
     alert(
-      `Cliente: ${data.client.name}\nE-mail: ${data.user.email}\nSenha temporária: ${pass}\n\nMande isso para o cliente. Ele troca no primeiro acesso.`
+      t("admin.clients.alert.created", { name: data.client.name, email: data.user.email, pass })
     );
     $("cli-name").value = "";
     $("cli-email").value = "";

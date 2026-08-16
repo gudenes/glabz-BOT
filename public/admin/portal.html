@@ -14,8 +14,8 @@
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
-      <span>Você está no projeto do cliente como <b>admin GLabs</b> — não é o login dele.</span>
-      <a href="/admin/" id="back-admin">← Voltar ao admin</a>
+      <span data-i18n-html="portal.impersonate.html">Você está no projeto do cliente como <b>admin GLabs</b> — não é o login dele.</span>
+      <a href="/admin/" id="back-admin" data-i18n="portal.impersonate.back">← Voltar ao admin</a>
     </div>
 
     <div class="app">
@@ -23,33 +23,34 @@
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">GZ</span>
           <span class="brand-word">GLABZ</span>
+          <span id="lang-toggle-slot"></span>
           <button type="button" class="side-toggle" id="btn-collapse-side" title="Recolher menu">‹</button>
         </div>
 
-        <p class="side-kicker">Meu negócio</p>
+        <p class="side-kicker" data-i18n="portal.myBusiness">Meu negócio</p>
         <strong class="side-client" id="client-name">—</strong>
-        <span class="side-sub" id="client-sub">Portal do cliente</span>
+        <span class="side-sub" id="client-sub" data-i18n="portal.clientPortal">Portal do cliente</span>
 
         <nav class="side-nav">
           <button type="button" class="nav-link on" data-view="status">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a8 8 0 0 0-6.9 12l-1 3.8 3.9-1A8 8 0 1 0 12 3z"/></svg>
-            <span>WhatsApp</span>
+            <span data-i18n="portal.nav.whatsapp">WhatsApp</span>
           </button>
           <button type="button" class="nav-link" data-view="flow">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
-            <span>Fluxo</span>
+            <span data-i18n="portal.nav.flow">Fluxo</span>
           </button>
           <button type="button" class="nav-link" data-view="inbox">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            <span>Conversas</span>
+            <span data-i18n="portal.nav.inbox">Conversas</span>
           </button>
           <button type="button" class="nav-link" data-view="test">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
-            <span>Testar</span>
+            <span data-i18n="portal.nav.test">Testar</span>
           </button>
           <button type="button" class="nav-link" data-view="pubs">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="m6 14 6-6 6 6"/><path d="M4 4h16"/></svg>
-            <span>Publicações</span>
+            <span data-i18n="portal.nav.pubs">Publicações</span>
           </button>
         </nav>
 
@@ -58,23 +59,23 @@
             <span class="who-av" id="who-av">G</span>
             <div>
               <b id="who-name">—</b>
-              <small id="who-role">Cliente</small>
+              <small id="who-role" data-i18n="portal.role.client">Cliente</small>
             </div>
           </div>
-          <button type="button" class="btn-text" id="btn-logout">Sair</button>
+          <button type="button" class="btn-text" id="btn-logout" data-i18n="portal.logout">Sair</button>
         </div>
       </aside>
 
       <main class="main">
         <header class="top">
           <div>
-            <h1 id="hello">Olá!</h1>
-            <p id="stage-sub">Conecte seu número e veja o status</p>
+            <h1 id="hello" data-i18n="portal.hello">Olá!</h1>
+            <p id="stage-sub" data-i18n="portal.stageSub.default">Conecte seu número e veja o status</p>
           </div>
           <div class="top-actions">
-            <button type="button" class="btn-ghost hidden" id="btn-wizard">Montar na conversa</button>
-            <button type="button" class="btn-ghost hidden" id="btn-studio-expand" title="Expandir conversa">Expandir</button>
-            <button type="button" class="btn-ghost" id="btn-refresh">Atualizar</button>
+            <button type="button" class="btn-ghost hidden" id="btn-wizard" data-i18n="portal.buildInChat">Montar na conversa</button>
+            <button type="button" class="btn-ghost hidden" id="btn-studio-expand" title="Expandir conversa" data-i18n="portal.expand" data-i18n-title="portal.expand">Expandir</button>
+            <button type="button" class="btn-ghost" id="btn-refresh" data-i18n="portal.refresh">Atualizar</button>
             <span id="conn-pill" class="pill off">—</span>
           </div>
         </header>
@@ -83,52 +84,52 @@
         <section id="view-status" class="view">
           <aside id="wa-boot" class="wa-boot hidden" aria-live="polite">
             <ol class="wa-steps" id="wa-checks">
-              <li><i></i><span>QR</span></li>
-              <li><i></i><span>Sessão</span></li>
-              <li><i></i><span>Número</span></li>
-              <li><i></i><span>Conversas</span></li>
-              <li><i></i><span>Pronto</span></li>
+              <li><i></i><span data-i18n="portal.boot.check.qr">QR</span></li>
+              <li><i></i><span data-i18n="portal.boot.check.session">Sessão</span></li>
+              <li><i></i><span data-i18n="portal.boot.check.number">Número</span></li>
+              <li><i></i><span data-i18n="portal.boot.check.conversations">Conversas</span></li>
+              <li><i></i><span data-i18n="portal.boot.check.ready">Pronto</span></li>
             </ol>
             <div class="wa-boot-stage" id="wa-boot-stage">
               <p class="wa-boot-kicker" id="wa-boot-kicker">Fase 1 de 5</p>
-              <h2 id="wa-boot-title">QR reconhecido</h2>
-              <p id="wa-boot-sub">O sistema está ligando o número. Isso leva cerca de 5 segundos.</p>
+              <h2 id="wa-boot-title" data-i18n="portal.boot.phase1.title">QR reconhecido</h2>
+              <p id="wa-boot-sub" data-i18n="portal.boot.phase1.sub">O sistema está ligando o número. Isso leva cerca de 5 segundos.</p>
               <div class="wa-boot-bar" aria-hidden="true"><i id="wa-boot-fill"></i></div>
             </div>
             <div class="wa-boot-cta hidden" id="wa-boot-done">
-              <p class="wa-boot-kicker">Pronto</p>
-              <h2 id="wa-boot-done-title">Tudo certo. Ponto para começar?</h2>
-              <p id="wa-boot-done-sub">Número ligado — pode montar o atendimento.</p>
+              <p class="wa-boot-kicker" data-i18n="portal.boot.check.ready">Pronto</p>
+              <h2 id="wa-boot-done-title" data-i18n="portal.boot.done.title">Tudo certo. Ponto para começar?</h2>
+              <p id="wa-boot-done-sub" data-i18n="portal.boot.done.sub">Número ligado — pode montar o atendimento.</p>
               <div class="wa-boot-actions">
-                <button type="button" class="btn-lime" id="btn-go-flow-boot">Configurar o fluxo</button>
-                <button type="button" class="btn-ghost light" id="btn-wa-later">Agora não</button>
+                <button type="button" class="btn-lime" id="btn-go-flow-boot" data-i18n="portal.boot.configureFlow">Configurar o fluxo</button>
+                <button type="button" class="btn-ghost light" id="btn-wa-later" data-i18n="portal.boot.notNow">Agora não</button>
               </div>
             </div>
           </aside>
           <div class="hero-card qr-only" id="wa-hero">
             <div class="hero-copy">
-              <p class="hero-kicker" id="qr-kicker">Ainda não conectado</p>
-              <h2 id="qr-title">Conecte o WhatsApp do negócio</h2>
-              <p class="hero-lead" id="qr-hint">Clique em Gerar QR e aponte a câmera: WhatsApp → Aparelhos conectados → Conectar um aparelho.</p>
+              <p class="hero-kicker" id="qr-kicker" data-i18n="portal.qr.notConnected">Ainda não conectado</p>
+              <h2 id="qr-title" data-i18n="portal.qr.title">Conecte o WhatsApp do negócio</h2>
+              <p class="hero-lead" id="qr-hint" data-i18n="portal.qr.hint">Clique em Gerar QR e aponte a câmera: WhatsApp → Aparelhos conectados → Conectar um aparelho.</p>
               <p class="phone" id="st-phone"></p>
               <div class="hero-actions">
-                <button class="btn-lime hidden" id="btn-go-flow" type="button">Configurar o fluxo</button>
-                <button class="btn-lime" id="btn-connect" type="button">Gerar QR</button>
-                <button class="btn-ghost" id="btn-disconnect" type="button">Desconectar</button>
+                <button class="btn-lime hidden" id="btn-go-flow" type="button" data-i18n="portal.qr.configureFlow">Configurar o fluxo</button>
+                <button class="btn-lime" id="btn-connect" type="button" data-i18n="portal.qr.generate">Gerar QR</button>
+                <button class="btn-ghost" id="btn-disconnect" type="button" data-i18n="portal.qr.disconnect">Desconectar</button>
               </div>
             </div>
             <div class="hero-visual" id="qr-box"></div>
           </div>
 
           <div class="stat-row">
-            <article class="stat"><span>Status</span><b id="st-status">—</b></article>
-            <article class="stat"><span>Fluxo no ar</span><b id="st-live">Nenhum publicado</b></article>
-            <article class="stat"><span>Publicado</span><b id="st-updated">—</b></article>
+            <article class="stat"><span data-i18n="portal.stat.status">Status</span><b id="st-status">—</b></article>
+            <article class="stat"><span data-i18n="portal.stat.liveFlow">Fluxo no ar</span><b id="st-live" data-i18n="portal.stat.nonePublished">Nenhum publicado</b></article>
+            <article class="stat"><span data-i18n="portal.stat.published">Publicado</span><b id="st-updated">—</b></article>
           </div>
 
           <aside class="tip">
-            <strong>Dica</strong>
-            <p>Depois de conectar, abra <button type="button" class="inline" data-view="test">Testar</button> e fale como o cliente. O fluxo responde na hora, sem gastar o WhatsApp real.</p>
+            <strong data-i18n="portal.tip.title">Dica</strong>
+            <p data-i18n-html="portal.tip.html">Depois de conectar, abra <button type="button" class="inline" data-view="test">Testar</button> e fale como o cliente. O fluxo responde na hora, sem gastar o WhatsApp real.</p>
           </aside>
         </section>
 
@@ -137,68 +138,45 @@
           <div id="flow-studio" class="studio hidden" aria-label="Montar fluxo na conversa">
             <header class="studio-head">
               <div>
-                <span class="studio-kicker" id="studio-kicker">Briefing</span>
-                <strong id="studio-title">Montar o atendimento</strong>
-                <p id="studio-sub">Ainda não é o bot no ar. A gente combina o que ele deve fazer; um ensaio curto e depois montamos o fluxo para revisar.</p>
+                <span class="studio-kicker" id="studio-kicker" data-i18n="portal.studio.kicker.briefing">Briefing</span>
+                <strong id="studio-title" data-i18n="portal.studio.title.default">Montar o atendimento</strong>
+                <p id="studio-sub" data-i18n="portal.studio.sub.default">Ainda não é o bot no ar. A gente combina o que ele deve fazer; um ensaio curto e depois montamos o fluxo para revisar.</p>
               </div>
               <div class="studio-head-actions">
-                <button type="button" class="btn-text" id="studio-expand">Expandir</button>
-                <button type="button" class="btn-text hidden" id="studio-close">Ver fluxo</button>
+                <button type="button" class="btn-text" id="studio-expand" data-i18n="portal.expand">Expandir</button>
+                <button type="button" class="btn-text hidden" id="studio-close" data-i18n="portal.studio.viewFlow">Ver fluxo</button>
               </div>
             </header>
             <div class="studio-log" id="studio-log"></div>
             <div class="studio-cta hidden" id="studio-offer">
-              <button type="button" class="btn-lime" id="studio-test">Vamos testar agora</button>
-              <span>ou continua o briefing se faltar algo</span>
+              <button type="button" class="btn-lime" id="studio-test" data-i18n="portal.studio.testNow">Vamos testar agora</button>
+              <span data-i18n="portal.studio.orContinue">ou continua o briefing se faltar algo</span>
             </div>
             <div class="studio-cta hidden" id="studio-ready">
-              <button type="button" class="btn-lime" id="studio-build">Montar o fluxo</button>
-              <span>o ensaio acabou — agora o feedback vale</span>
+              <button type="button" class="btn-lime" id="studio-build" data-i18n="portal.studio.buildFlow">Montar o fluxo</button>
+              <span data-i18n="portal.studio.feedbackHint">o ensaio acabou — agora o feedback vale</span>
             </div>
-            <p class="studio-listen hidden" id="studio-listen">Ouvindo… toca em Falar de novo para enviar</p>
+            <p class="studio-listen hidden" id="studio-listen" data-i18n="portal.studio.listening">Ouvindo… toca em Falar de novo para enviar</p>
             <form class="studio-form" id="studio-form">
               <button type="button" class="btn-mic" id="studio-mic" title="Construir por áudio">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-                <span id="studio-mic-label">Falar</span>
+                <span id="studio-mic-label" data-i18n="portal.studio.talk">Falar</span>
               </button>
-              <textarea id="studio-input" rows="1" placeholder="Fala o atendimento ou escreve…" autocomplete="off"></textarea>
-              <button class="btn-lime" type="submit">Enviar</button>
+              <textarea id="studio-input" rows="1" placeholder="Fala o atendimento ou escreve…" data-i18n-placeholder="portal.studio.inputPh" autocomplete="off"></textarea>
+              <button class="btn-lime" type="submit" data-i18n="portal.studio.send">Enviar</button>
             </form>
             <div class="studio-alts" id="studio-alts">
-              <button type="button" class="btn-text" id="start-tpl">usar um template</button>
+              <button type="button" class="btn-text" id="start-tpl" data-i18n="portal.studio.useTemplate">usar um template</button>
               <span>·</span>
-              <button type="button" class="btn-text" id="start-blank">começar do zero</button>
+              <button type="button" class="btn-text" id="start-blank" data-i18n="portal.studio.startBlank">começar do zero</button>
               <div id="tpl-pick" class="tpl-pick hidden">
-                <button type="button" data-tpl="pilates">Marcar sessão</button>
-                <button type="button" data-tpl="consulta">Marcar consulta</button>
-                <button type="button" data-tpl="blank">Em branco mesmo</button>
+                <button type="button" data-tpl="pilates" data-i18n="portal.studio.tpl.pilates">Marcar sessão</button>
+                <button type="button" data-tpl="consulta" data-i18n="portal.studio.tpl.consulta">Marcar consulta</button>
+                <button type="button" data-tpl="blank" data-i18n="portal.studio.tpl.blank">Em branco mesmo</button>
               </div>
             </div>
           </div>
           <iframe id="flow-frame" class="hidden" title="Editor de fluxo"></iframe>
-        </section>
-
-        <!-- Testar -->
-        <section id="view-test" class="view hidden">
-          <div class="test-shell">
-            <div class="test-meta">
-              <h2 id="test-flow-name">Simule uma conversa</h2>
-              <p id="test-flow-sub">O bot responde com o fluxo atual (rascunho ou no ar).</p>
-              <p class="now" id="test-now">Pronto para a primeira mensagem</p>
-              <button type="button" class="btn-ghost" id="test-reset">Recomeçar</button>
-            </div>
-            <div class="chat">
-              <div class="chat-log" id="chat-log">
-                <div class="chat-empty" id="chat-empty">
-                  <p>Digite como o cliente. Ex.: “Oi, quero marcar uma sessão”.</p>
-                </div>
-              </div>
-              <form class="chat-form" id="chat-form">
-                <input id="chat-input" type="text" placeholder="Digite sua mensagem…" autocomplete="off" maxlength="500" />
-                <button class="btn-lime" type="submit">Enviar</button>
-              </form>
-            </div>
-          </div>
         </section>
 
         <!-- Conversas -->
@@ -207,37 +185,37 @@
             <aside class="inbox-list">
               <div class="inbox-tools">
                 <form id="new-chat" class="new-chat-slim">
-                  <input id="new-phone" type="tel" required placeholder="+55 51 9…" />
-                  <button class="btn-lime" type="submit">Nova</button>
+                  <input id="new-phone" type="tel" required placeholder="+55 51 9…" data-i18n-placeholder="portal.inbox.newPhonePh" />
+                  <button class="btn-lime" type="submit" data-i18n="portal.inbox.new">Nova</button>
                 </form>
-                <input id="inbox-q" class="inbox-search" type="search" placeholder="Buscar…" />
+                <input id="inbox-q" class="inbox-search" type="search" placeholder="Buscar…" data-i18n-placeholder="portal.inbox.search" />
               </div>
               <div id="thread-list" class="thread-list"></div>
             </aside>
             <div class="inbox-chat">
               <header class="inbox-head">
                 <div>
-                  <strong id="inbox-title">Selecione uma conversa</strong>
-                  <p id="inbox-sub">As mensagens reais do WhatsApp aparecem aqui.</p>
+                  <strong id="inbox-title" data-i18n="portal.inbox.selectThread">Selecione uma conversa</strong>
+                  <p id="inbox-sub" data-i18n="portal.inbox.sub">As mensagens reais do WhatsApp aparecem aqui.</p>
                 </div>
-                <button type="button" class="btn-ghost hidden" id="btn-bot-mode">Devolver ao bot</button>
+                <button type="button" class="btn-ghost hidden" id="btn-bot-mode" data-i18n="portal.inbox.returnToBot">Devolver ao bot</button>
               </header>
               <div class="chat inbox-log" id="inbox-log">
                 <div class="chat-empty" id="inbox-empty">
-                  <p>Quando alguém falar no WhatsApp, a conversa entra nesta lista. Você responde daqui — o bot para nesse contato.</p>
+                  <p data-i18n="portal.inbox.emptyHint">Quando alguém falar no WhatsApp, a conversa entra nesta lista. Você responde daqui — o bot para nesse contato.</p>
                 </div>
               </div>
               <form class="chat-form hidden" id="inbox-form">
                 <div class="fmt">
-                  <button type="button" data-fmt="bold" title="Negrito">B</button>
-                  <button type="button" data-fmt="italic" title="Itálico"><i>I</i></button>
-                  <label class="fmt-file" title="Arquivo">
+                  <button type="button" data-fmt="bold" title="Negrito" data-i18n-title="portal.inbox.bold">B</button>
+                  <button type="button" data-fmt="italic" title="Itálico" data-i18n-title="portal.inbox.italic"><i>I</i></button>
+                  <label class="fmt-file" title="Arquivo" data-i18n-title="portal.inbox.file">
                     +
                     <input id="inbox-file" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.ogg,.mp4" hidden />
                   </label>
                 </div>
-                <input id="inbox-input" type="text" placeholder="Mensagem…  *negrito*  _itálico_" autocomplete="off" maxlength="4000" />
-                <button class="btn-lime" type="submit">Enviar</button>
+                <input id="inbox-input" type="text" placeholder="Mensagem…  *negrito*  _itálico_" data-i18n-placeholder="portal.inbox.messagePh" autocomplete="off" maxlength="4000" />
+                <button class="btn-lime" type="submit" data-i18n="portal.inbox.send">Enviar</button>
               </form>
             </div>
           </div>
@@ -251,12 +229,12 @@
     </div>
 
     <nav class="mobile-nav" aria-label="Principal">
-      <button type="button" data-view="status" class="on">WhatsApp</button>
-      <button type="button" data-view="inbox">Conversas</button>
-      <button type="button" data-view="flow">Fluxo</button>
-      <button type="button" data-view="test">Testar</button>
+      <button type="button" data-view="status" class="on" data-i18n="portal.nav.whatsapp">WhatsApp</button>
+      <button type="button" data-view="inbox" data-i18n="portal.nav.inbox">Conversas</button>
+      <button type="button" data-view="flow" data-i18n="portal.nav.flow">Fluxo</button>
+      <button type="button" data-view="test" data-i18n="portal.nav.test">Testar</button>
     </nav>
 
-    <script src="/admin/portal.js?v=23" type="module"></script>
+    <script src="/admin/portal.js?v=24" type="module"></script>
   </body>
 </html>

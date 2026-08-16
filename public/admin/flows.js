@@ -2,6 +2,13 @@
  * Glabs Bot · Workflow Builder (visual)
  */
 import { typeIcon } from "./icons.js";
+import { applyStaticTranslations, mountLangToggle, t } from "./i18n.js";
+
+applyStaticTranslations();
+document.getElementById("lang-toggle-slot-login") &&
+  mountLangToggle(document.getElementById("lang-toggle-slot-login"));
+document.getElementById("lang-toggle-slot-header") &&
+  mountLangToggle(document.getElementById("lang-toggle-slot-header"));
 
 const STORAGE_KEY = "glabs_bot_secret";
 const qs = new URLSearchParams(location.search);
@@ -226,20 +233,20 @@ function friendlyEdgeLabel(label) {
 function typeLabel(type) {
   return (
     {
-      trigger: "Início",
-      message: "Mensagem",
-      ask: "Perguntar",
-      llm_intent: "Entender intenção",
-      condition: "Se / senão",
-      action: "Ação",
-      handoff: "Atendente",
-      end: "Encerrar",
+      trigger: t("builder.step.trigger"),
+      message: t("builder.step.message"),
+      ask: t("builder.step.ask"),
+      llm_intent: t("builder.step.intent"),
+      condition: t("builder.step.condition"),
+      action: t("builder.step.action"),
+      handoff: t("builder.step.handoff"),
+      end: t("builder.step.end"),
     }[type] || type
   );
 }
 
 function statusLabel(status) {
-  return status === "live" ? "No ar" : "Rascunho";
+  return status === "live" ? t("builder.status.live") : t("builder.status.draft");
 }
 
 // ── Login ────────────────────────────────────────────────
@@ -266,7 +273,7 @@ $("login-btn").onclick = async () => {
     await loadAll();
     showBuilder();
   } catch (e) {
-    showLogin(e.message === "unauthorized" ? "Secret inválido" : e.message);
+    showLogin(e.message === "unauthorized" ? t("builder.login.invalidSecret") : e.message);
   }
 };
 
@@ -281,7 +288,7 @@ if (state.secret) {
     .catch((e) => {
       if (new URLSearchParams(location.search).has("embed")) {
         showBuilder();
-        toast(e.message || "Não deu para abrir o fluxo", "err");
+        toast(e.message || t("builder.toast.flowOpenFailed"), "err");
       } else {
         showLogin();
       }
@@ -345,7 +352,7 @@ function renderProductSelect() {
   if (current && !state.products.some((p) => p.slug === current)) {
     const opt = document.createElement("option");
     opt.value = current;
-    opt.textContent = `${current} (não cadastrado)`;
+    opt.textContent = t("builder.products.notRegistered", { slug: current });
     sel.appendChild(opt);
   }
   if (current) sel.value = current;
@@ -401,7 +408,7 @@ function selectFlow(id) {
 function newBlankFlow() {
   state.flow = {
     id: "",
-    name: "Novo fluxo",
+    name: t("builder.newFlow.defaultName"),
     product: state.flows[0]?.product || $("flow-product")?.value || "gestor",
     accountId: state.flows[0]?.accountId || null,
     clientId: URL_CLIENT || sessionStorage.getItem("glabs_client_id") || state.flows[0]?.clientId || null,
@@ -460,16 +467,16 @@ function updateSaveBadge() {
   }
   if (!state.flow.id) {
     el.className = "fb-save-state";
-    text.textContent = "Novo · ainda não salvo";
+    text.textContent = t("builder.saveState.new");
     return;
   }
   if (isDirty()) {
     el.className = "fb-save-state dirty";
-    text.textContent = "Alterações não salvas";
+    text.textContent = t("builder.saveState.dirty");
   } else {
     el.className = "fb-save-state saved";
     const when = state.flow.updatedAt ? formatDateTime(state.flow.updatedAt) : "";
-    text.textContent = when ? `Salvo às ${when}` : "Salvo";
+    text.textContent = when ? t("builder.saveState.saved", { when }) : t("builder.toast.saved");
   }
 }
 
@@ -568,8 +575,8 @@ function renderCanvas() {
       const plus = document.createElement("button");
       plus.type = "button";
       plus.className = "node-plus";
-      plus.title = "Adicionar próximo passo";
-      plus.setAttribute("aria-label", "Adicionar próximo passo");
+      plus.title = t("builder.addNextStep");
+      plus.setAttribute("aria-label", t("builder.addNextStep"));
       plus.textContent = "+";
       plus.addEventListener("mousedown", (ev) => {
         ev.stopPropagation();
@@ -693,13 +700,13 @@ function renderCanvas() {
 }
 
 const ADDABLE_TYPES = [
-  { type: "message", label: "Mensagem", ic: "msg" },
-  { type: "ask", label: "Perguntar", ic: "ask" },
-  { type: "llm_intent", label: "Entender intenção", ic: "llm" },
-  { type: "action", label: "Ação", ic: "act" },
-  { type: "condition", label: "Se / senão", ic: "cond" },
-  { type: "handoff", label: "Atendente", ic: "hand" },
-  { type: "end", label: "Encerrar", ic: "end" },
+  { type: "message", label: t("builder.step.message"), ic: "msg" },
+  { type: "ask", label: t("builder.step.ask"), ic: "ask" },
+  { type: "llm_intent", label: t("builder.step.intent"), ic: "llm" },
+  { type: "action", label: t("builder.step.action"), ic: "act" },
+  { type: "condition", label: t("builder.step.condition"), ic: "cond" },
+  { type: "handoff", label: t("builder.step.handoff"), ic: "hand" },
+  { type: "end", label: t("builder.step.end"), ic: "end" },
 ];
 
 function closeAddMenu() {
@@ -711,7 +718,7 @@ function openAddMenu(parentNode, anchorBtn) {
   const canvas = $("canvas");
   const menu = document.createElement("div");
   menu.className = "node-add-menu";
-  menu.innerHTML = `<div class="m-title">Próximo passo</div>`;
+  menu.innerHTML = `<div class="m-title">${t("builder.nextStep")}</div>`;
 
   for (const item of ADDABLE_TYPES) {
     const b = document.createElement("button");
@@ -759,7 +766,7 @@ function addChildNode(parentNode, type) {
   if (parentNode.type === "llm_intent") {
     edgeLabel =
       prompt(
-        "Rótulo da intenção (slug, ex.: marcar_consulta) — vazio = default",
+        t("builder.prompt.intentLabel"),
         siblings === 0 ? "marcar_consulta" : "default"
       )?.trim() || "default";
   } else if (parentNode.type === "condition") {
@@ -779,7 +786,7 @@ function addChildNode(parentNode, type) {
   state.linkFrom = null;
   renderCanvas();
   renderProps();
-  toast("Passo adicionado");
+  toast(t("builder.toast.stepAdded"));
 }
 
 function onNodeDown(ev, node) {
@@ -833,10 +840,7 @@ function onNodeClick(ev, node) {
     return;
   }
   if (state.linkFrom && state.linkFrom !== node.id) {
-    const label = prompt(
-      "Rótulo da ligação (ex.: marcar_consulta, true, false) — vazio = default",
-      ""
-    );
+    const label = prompt(t("builder.prompt.edgeLabel"), "");
     state.flow.edges.push({
       id: uid("e"),
       from: state.linkFrom,
@@ -847,12 +851,12 @@ function onNodeClick(ev, node) {
     state.selectedNodeId = node.id;
     renderCanvas();
     renderProps();
-    toast("Ligação criada");
+    toast(t("builder.toast.linkCreated"));
     return;
   }
   if (state.linkFrom === node.id) {
     state.linkFrom = null;
-    toast("Ligação cancelada");
+    toast(t("builder.toast.linkCanceled"));
     return;
   }
   // start link mode on double-click? use button in props
@@ -865,7 +869,7 @@ function onNodeClick(ev, node) {
 function deleteNode(node) {
   if (!node || !state.flow) return;
   if (node.type === "trigger") {
-    toast("O início do fluxo não pode ser removido", "err");
+    toast(t("builder.toast.triggerCantDelete"), "err");
     return;
   }
   state.flow.nodes = state.flow.nodes.filter((n) => n.id !== node.id);
@@ -1018,7 +1022,7 @@ function renderProps() {
         config,
       };
       renderCanvas();
-      toast("Ação atualizada");
+      toast(t("builder.toast.actionUpdated"));
     };
   } else if (node.type === "llm_intent") {
     const box = $("p-intents");
@@ -1066,7 +1070,7 @@ function renderProps() {
         })),
       };
       renderCanvas();
-      toast("Passo atualizado");
+      toast(t("builder.toast.stepUpdated"));
     };
   } else {
     $("p-apply").onclick = () => {
@@ -1093,13 +1097,13 @@ function renderProps() {
         };
       }
       renderCanvas();
-      toast("Passo atualizado");
+      toast(t("builder.toast.stepUpdated"));
     };
   }
 
   $("p-link").onclick = () => {
     state.linkFrom = node.id;
-    toast("Clique no próximo cartão para ligar");
+    toast(t("builder.toast.clickNextCard"));
   };
   $("p-del").onclick = () => deleteNode(node);
 }
@@ -1271,19 +1275,19 @@ $("btn-unpublish").onclick = async () => {
 
 $("btn-delete").onclick = async () => {
   if (!state.flow?.id) {
-    toast("Este fluxo ainda não foi salvo", "err");
+    toast(t("builder.toast.flowNotSaved"), "err");
     return;
   }
   const live = state.flow.status === "live";
   const ok = confirm(
     live
-      ? `Excluir “${state.flow.name}”? Ele está no ar e o WhatsApp para de seguir este fluxo.`
-      : `Excluir “${state.flow.name}”? Não dá para desfazer.`
+      ? t("builder.confirmDeleteLive", { name: state.flow.name })
+      : t("builder.confirmDelete", { name: state.flow.name })
   );
   if (!ok) return;
   try {
     await api(`/v1/flows/${state.flow.id}`, { method: "DELETE" });
-    toast("Fluxo excluído");
+    toast(t("builder.toast.flowDeleted"));
     state.flow = null;
     state.selectedNodeId = null;
     if (EMBED) window.parent.postMessage({ type: "glabs-flows-changed" }, "*");
@@ -1315,14 +1319,14 @@ $("flow-product").onchange = () => {
 
 $("btn-revert").onclick = () => {
   if (!state.flow?.id) {
-    toast("Fluxo novo — não há versão salva pra reverter", "err");
+    toast(t("builder.toast.newFlowNoVersion"), "err");
     return;
   }
-  if (isDirty() && !confirm("Descartar as edições não salvas e voltar pra última versão salva?")) {
+  if (isDirty() && !confirm(t("builder.confirmRevert"))) {
     return;
   }
   selectFlow(state.flow.id);
-  toast("Revertido para a última versão salva");
+  toast(t("builder.toast.reverted"));
 };
 
 // ── Simulador ────────────────────────────────────────────
@@ -1351,16 +1355,16 @@ function resetSim() {
   const empty = document.createElement("div");
   empty.className = "sim-empty";
   empty.id = "sim-empty";
-  empty.innerHTML = `<p>Simule o WhatsApp do cliente.<br/>A primeira mensagem inicia o fluxo.</p>
+  empty.innerHTML = `<p>${t("builder.sim.emptyHint")}</p>
     <div class="sim-chips">
-      <button type="button" class="sim-chip" data-text="Oi, quero marcar uma sessão">marcar sessão</button>
-      <button type="button" class="sim-chip" data-text="Quanto custa?">dúvida</button>
-      <button type="button" class="sim-chip" data-text="Preciso da nota fiscal">admin</button>
+      <button type="button" class="sim-chip" data-text="Oi, quero marcar uma sessão">${t("builder.sim.chip.book")}</button>
+      <button type="button" class="sim-chip" data-text="Quanto custa?">${t("builder.sim.chip.doubt")}</button>
+      <button type="button" class="sim-chip" data-text="Preciso da nota fiscal">${t("builder.sim.chip.admin")}</button>
     </div>`;
   chat.appendChild(empty);
   bindSimChips();
   $("sim-meta").textContent = "";
-  updateSimStatus("Conversas reiniciada");
+  updateSimStatus(t("builder.sim.status.restarted"));
   renderCanvas();
 }
 
@@ -1378,18 +1382,18 @@ function updateSimStatus(extra) {
   const el = $("sim-status");
   if (!el) return;
   if (state.simState?.mode === "human") {
-    el.textContent = extra || "Em atendimento humano";
+    el.textContent = extra || t("builder.sim.status.human");
     return;
   }
   if (state.simState?.waitingFor) {
-    el.textContent = extra || `Aguardando: ${state.simState.waitingFor}`;
+    el.textContent = extra || t("builder.sim.status.waiting", { field: state.simState.waitingFor });
     return;
   }
   if (state.simState?.finished) {
-    el.textContent = extra || "Fluxo terminou — mande outra msg";
+    el.textContent = extra || t("builder.sim.status.finished");
     return;
   }
-  el.textContent = extra || "Digite como o cliente";
+  el.textContent = extra || t("builder.sim.status");
 }
 
 function appendSimBubble(kind, text, nodeId) {
@@ -1414,14 +1418,14 @@ function appendSimBubble(kind, text, nodeId) {
 function typeLabelPt(type) {
   return (
     {
-      trigger: "Início",
-      message: "Mensagem",
-      ask: "Pergunta",
-      llm_intent: "Intenção",
-      action: "Ação",
-      condition: "Condição",
-      handoff: "Atendente",
-      end: "Fim",
+      trigger: t("builder.step.trigger"),
+      message: t("builder.step.message"),
+      ask: t("builder.sim.trace.ask"),
+      llm_intent: t("builder.sim.trace.intent"),
+      action: t("builder.step.action"),
+      condition: t("builder.step.condition"),
+      handoff: t("builder.step.handoff"),
+      end: t("builder.sim.trace.end"),
     }[type] || type
   );
 }
@@ -1440,7 +1444,7 @@ async function playTrace(trace) {
     const label = typeLabelPt(step.type);
     const detail = step.detail ? ` · ${step.detail}` : "";
     appendSimBubble("sys", `${label}${detail}`, step.nodeId);
-    updateSimStatus(`Agora: ${label}`);
+    updateSimStatus(t("builder.sim.nowAt", { label }));
     await sleep(420);
   }
 }
@@ -1449,12 +1453,12 @@ function renderSimMeta(data) {
   const parts = [];
   if (data.lastIntent) {
     parts.push(
-      `intenção: <b>${escapeHtml(data.lastIntent)}</b>` +
+      `${t("builder.sim.meta.intent")}: <b>${escapeHtml(data.lastIntent)}</b>` +
         (data.intentSource ? ` · ${escapeHtml(data.intentSource)}` : "")
     );
   }
   if (data.state?.waitingFor) {
-    parts.push(`salva em <b>${escapeHtml(data.state.waitingFor)}</b>`);
+    parts.push(`${t("builder.sim.meta.savedIn")} <b>${escapeHtml(data.state.waitingFor)}</b>`);
   }
   if (data.handoff) {
     parts.push(`handoff · ${escapeHtml(data.handoffReason || "")}`);
@@ -1465,7 +1469,7 @@ function renderSimMeta(data) {
   );
   if (keys.length) {
     parts.push(
-      "vars: " +
+      `${t("builder.sim.meta.vars")}: ` +
         keys
           .map((k) => `<b>${escapeHtml(k)}</b>=${escapeHtml(String(vars[k]).slice(0, 24))}`)
           .join(", ")
@@ -1524,19 +1528,19 @@ async function sendSimMessage() {
     if (data.handoff) {
       appendSimBubble(
         "handoff",
-        "→ Passou para atendente humano" +
+        t("builder.sim.handoffMsg") +
           (data.handoffReason ? ` (${data.handoffReason})` : ""),
         state.simActiveNodeId
       );
     } else if (!data.replies?.length && !trace.length) {
-      appendSimBubble("sys", "Sem resposta do fluxo");
+      appendSimBubble("sys", t("builder.sim.noReply"));
     }
 
     renderSimMeta(data);
     updateSimStatus();
     renderCanvas();
   } catch (e) {
-    appendSimBubble("sys", "Erro: " + e.message);
+    appendSimBubble("sys", t("builder.sim.errorPrefix") + e.message);
     toast(e.message, "err");
     updateSimStatus("Erro");
   } finally {
@@ -1561,7 +1565,7 @@ bindSimChips();
 // ── Histórico de versões ────────────────────────────────
 function openHistory() {
   if (!state.flow?.id) {
-    toast("Salve o fluxo antes de ver o histórico", "err");
+    toast(t("builder.history.toast.loadFirst"), "err");
     return;
   }
   state.historyOpen = true;
@@ -1577,13 +1581,13 @@ function closeHistory() {
 async function loadHistory() {
   const list = $("history-list");
   $("history-sub").textContent = state.flow?.name || "";
-  list.innerHTML = `<div class="history-empty">Carregando…</div>`;
+  list.innerHTML = `<div class="history-empty">${t("common.loading")}</div>`;
   try {
     const data = await api(`/v1/flows/${state.flow.id}/versions`);
     state.historyVersions = data.versions || [];
     renderHistoryList();
   } catch (e) {
-    list.innerHTML = `<div class="history-empty">Erro ao carregar: ${escapeHtml(e.message)}</div>`;
+    list.innerHTML = `<div class="history-empty">${t("builder.history.loadError", { message: e.message })}</div>`;
   }
 }
 
@@ -1596,18 +1600,18 @@ function renderHistoryList() {
   current.className = "history-item current";
   current.innerHTML = `
     <div class="history-item-top">
-      <span class="history-item-when">Versão atual</span>
-      <span class="history-badge">agora</span>
+      <span class="history-item-when">${t("builder.history.current")}</span>
+      <span class="history-badge">${t("builder.history.now")}</span>
     </div>
-    <div class="history-item-meta">${escapeHtml(state.flow.name)} · ${state.flow.nodes.length} passos${
-      isDirty() ? " · com edições não salvas" : ""
+    <div class="history-item-meta">${escapeHtml(state.flow.name)} · ${t("builder.history.stepsCount", { n: state.flow.nodes.length })}${
+      isDirty() ? ` · ${t("builder.history.unsavedSuffix")}` : ""
     }</div>`;
   list.appendChild(current);
 
   if (!state.historyVersions.length) {
     const empty = document.createElement("div");
     empty.className = "history-empty";
-    empty.textContent = "Ainda não há versões anteriores salvas deste fluxo.";
+    empty.textContent = t("builder.history.empty");
     list.appendChild(empty);
     return;
   }
@@ -1619,19 +1623,19 @@ function renderHistoryList() {
       <div class="history-item-top">
         <span class="history-item-when">${escapeHtml(formatDateTime(v.savedAt))}</span>
       </div>
-      <div class="history-item-meta">${escapeHtml(v.name)} · ${escapeHtml(productLabel(v.product))} · ${v.nodeCount} passos</div>
-      <button type="button" class="fb-btn fb-btn-secondary" data-restore="${v.id}">Restaurar esta versão</button>`;
+      <div class="history-item-meta">${escapeHtml(v.name)} · ${escapeHtml(productLabel(v.product))} · ${t("builder.history.stepsCount", { n: v.nodeCount })}</div>
+      <button type="button" class="fb-btn fb-btn-secondary" data-restore="${v.id}">${t("builder.history.restore")}</button>`;
     list.appendChild(el);
   }
 
   list.querySelectorAll("[data-restore]").forEach((btn) => {
     btn.onclick = async () => {
-      if (!confirm("Restaurar esta versão? O estado atual também fica guardado no histórico.")) return;
+      if (!confirm(t("builder.history.confirmRestore"))) return;
       try {
         const data = await api(`/v1/flows/${state.flow.id}/versions/${btn.dataset.restore}/restore`, {
           method: "POST",
         });
-        toast("Versão restaurada");
+        toast(t("builder.history.toast.restored"));
         await loadAll();
         closeHistory();
       } catch (e) {

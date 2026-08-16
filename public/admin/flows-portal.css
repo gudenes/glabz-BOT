@@ -41,11 +41,41 @@ body.portal-embed .fb-brand-chip,
 body.portal-embed .fb-icon-btn,
 body.portal-embed #build-badge,
 body.portal-embed .fb-select-wrap,
-body.portal-embed #btn-new,
-body.portal-embed #btn-history,
-body.portal-embed #btn-revert {
+body.portal-embed #btn-new {
   display: none !important;
 }
+/* Reverter e Histórico ficam visíveis: cliente também usa o mesmo builder de verdade */
+body.portal-embed #btn-revert,
+body.portal-embed #btn-history {
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+body.portal-embed #btn-revert:hover,
+body.portal-embed #btn-history:hover {
+  color: var(--ink);
+  background: #f3f3ef;
+}
+/* Painel de histórico usa cores do tema escuro por padrão — adapta pro claro do portal */
+body.portal-embed .history-panel {
+  background: #fff;
+  border-color: var(--line);
+  color: var(--ink);
+}
+body.portal-embed .history-head { border-color: var(--line); }
+body.portal-embed .history-head-left small { color: var(--muted); }
+body.portal-embed .history-list { background: var(--paper); }
+body.portal-embed .history-item {
+  background: #fff;
+  border-color: var(--line);
+}
+body.portal-embed .history-item.current {
+  border-color: #bfe6c8;
+  background: #f3fbf4;
+}
+body.portal-embed .history-item-when { color: var(--ink); }
+body.portal-embed .history-item-meta { color: var(--muted); }
+body.portal-embed .history-empty { color: var(--muted); }
 body.portal-embed .fb-name {
   font-family: Syne, Figtree, sans-serif;
   font-size: 18px;
@@ -102,6 +132,15 @@ body.portal-embed .fb-btn-ghost { color: var(--muted); }
 body.portal-embed .fb-btn-ghost:hover {
   color: var(--ink);
   background: #f3f3ef;
+}
+body.portal-embed .lang-flag {
+  border-color: var(--line);
+  background: #fff;
+}
+body.portal-embed .lang-flag:hover { background: #f3f3ef; }
+body.portal-embed .lang-flag.active {
+  background: #fafafa;
+  border-color: #d8d8d2;
 }
 
 body.portal-embed .fb-body,

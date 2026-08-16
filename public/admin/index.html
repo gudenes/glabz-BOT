@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Glabs Bot</title>
+    <title>Glabz</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -20,12 +20,12 @@
           <div class="brand-row">
             <div class="logo-mark" aria-hidden="true">G</div>
             <div>
-              <h1>Glabs Bot</h1>
+              <h1>Glabz</h1>
               <p class="muted">Canal WhatsApp multi-product</p>
             </div>
           </div>
           <label class="field">
-            <span>Secret do bot</span>
+            <span data-i18n="admin.login.secretLabel">Secret do bot</span>
             <input
               id="login-secret"
               type="password"
@@ -34,8 +34,8 @@
             />
           </label>
           <p id="login-error" class="err hidden"></p>
-          <button id="login-btn" class="btn primary block" type="button">Entrar</button>
-          <p class="hint">
+          <button id="login-btn" class="btn primary block" type="button" data-i18n="admin.login.enter">Entrar</button>
+          <p class="hint" id="login-hint" data-i18n-html="admin.login.hint">
             Mesmo valor de <code>GLABS_BOT_SECRET</code> no Railway. Fica só neste navegador.
           </p>
         </div>
@@ -47,31 +47,32 @@
           <div class="brand-row compact">
             <div class="logo-mark sm" aria-hidden="true">G</div>
             <div>
-              <div class="brand-title">Glabs Bot</div>
+              <div class="brand-title">Glabz</div>
               <div class="brand-sub muted" id="health-label">—</div>
             </div>
+            <span id="lang-toggle-slot" style="margin-left:auto"></span>
           </div>
           <nav class="nav">
-            <button type="button" class="nav-item active" data-tab="overview">Overview</button>
-            <button type="button" class="nav-item" data-tab="accounts">Contas</button>
-            <button type="button" class="nav-item" data-tab="products">Products</button>
-            <button type="button" class="nav-item" data-tab="clients">Clientes</button>
-            <a class="nav-item" href="/admin/flows.html" style="text-decoration:none">Fluxos</a>
+            <button type="button" class="nav-item active" data-tab="overview" data-i18n="admin.nav.overview">Overview</button>
+            <button type="button" class="nav-item" data-tab="accounts" data-i18n="admin.nav.accounts">Contas</button>
+            <button type="button" class="nav-item" data-tab="products" data-i18n="admin.nav.products">Products</button>
+            <button type="button" class="nav-item" data-tab="clients" data-i18n="admin.nav.clients">Clientes</button>
+            <a class="nav-item" href="/admin/flows.html" style="text-decoration:none" data-i18n="admin.nav.flows">Fluxos</a>
           </nav>
           <div class="sidebar-foot">
-            <button type="button" id="logout-btn" class="btn ghost block sm">Sair</button>
+            <button type="button" id="logout-btn" class="btn ghost block sm" data-i18n="admin.logout">Sair</button>
           </div>
         </aside>
 
         <main class="main">
           <header class="topbar">
             <div>
-              <h2 id="page-title">Overview</h2>
-              <p class="muted" id="page-sub">Sessões e saúde do canal</p>
+              <h2 id="page-title" data-i18n="admin.title.overview">Overview</h2>
+              <p class="muted" id="page-sub" data-i18n="admin.sub.overview">Sessões e saúde do canal</p>
             </div>
             <div class="topbar-actions">
-              <button type="button" id="refresh-btn" class="btn secondary sm">Atualizar</button>
-              <button type="button" id="new-account-btn" class="btn primary sm">Nova conta</button>
+              <button type="button" id="refresh-btn" class="btn secondary sm" data-i18n="admin.refresh">Atualizar</button>
+              <button type="button" id="new-account-btn" class="btn primary sm" data-i18n="admin.newAccount">Nova conta</button>
             </div>
           </header>
 
@@ -83,7 +84,7 @@
             <div class="stats" id="stats-row"></div>
             <div class="panel">
               <div class="panel-head">
-                <h3>Contas recentes</h3>
+                <h3 data-i18n="admin.overview.recentAccounts">Contas recentes</h3>
               </div>
               <div id="overview-accounts" class="account-list"></div>
             </div>
@@ -92,13 +93,13 @@
           <!-- Accounts -->
           <div id="tab-accounts" class="tab hidden">
             <div class="toolbar">
-              <input id="filter-product" class="input" placeholder="Filtrar product…" />
+              <input id="filter-product" class="input" data-i18n-placeholder="admin.accounts.filterProduct" placeholder="Filtrar product…" />
               <select id="filter-status" class="input select">
-                <option value="">Todos os status</option>
-                <option value="connected">Conectado</option>
-                <option value="pending_qr">Aguardando QR</option>
-                <option value="disconnected">Desconectado</option>
-                <option value="error">Erro</option>
+                <option value="" data-i18n="admin.accounts.allStatus">Todos os status</option>
+                <option value="connected" data-i18n="admin.accounts.status.connected">Conectado</option>
+                <option value="pending_qr" data-i18n="admin.accounts.status.pendingQr">Aguardando QR</option>
+                <option value="disconnected" data-i18n="admin.accounts.status.disconnected">Desconectado</option>
+                <option value="error" data-i18n="admin.accounts.status.error">Erro</option>
               </select>
             </div>
             <div id="accounts-list" class="account-list"></div>
@@ -108,9 +109,9 @@
           <div id="tab-clients" class="tab hidden">
             <div class="panel">
               <div class="panel-head">
-                <h3>Clientes (portal)</h3>
-                <button type="button" id="new-client-btn" class="btn primary sm">Novo cliente</button>
-                <button type="button" id="wipe-clients-btn" class="btn secondary sm">Apagar todos</button>
+                <h3 data-i18n="admin.clients.panelTitle">Clientes (portal)</h3>
+                <button type="button" id="new-client-btn" class="btn primary sm" data-i18n="admin.clients.new">Novo cliente</button>
+                <button type="button" id="wipe-clients-btn" class="btn secondary sm" data-i18n="admin.clients.wipeAll">Apagar todos</button>
               </div>
               <div id="clients-list" class="account-list"></div>
             </div>
@@ -120,8 +121,8 @@
           <div id="tab-products" class="tab hidden">
             <div class="panel">
               <div class="panel-head">
-                <h3>Products (apps GLabs)</h3>
-                <button type="button" id="new-product-btn" class="btn secondary sm">Novo product</button>
+                <h3 data-i18n="admin.products.panelTitle">Products (apps GLabs)</h3>
+                <button type="button" id="new-product-btn" class="btn secondary sm" data-i18n="admin.products.new">Novo product</button>
               </div>
               <div id="products-list" class="product-list"></div>
             </div>
@@ -132,10 +133,10 @@
           <aside id="account-drawer" class="drawer hidden" aria-hidden="true">
             <div class="drawer-head">
               <div>
-                <h3 id="drawer-title">Conta</h3>
+                <h3 id="drawer-title" data-i18n="admin.drawer.account">Conta</h3>
                 <p class="muted mono sm" id="drawer-id"></p>
               </div>
-              <button type="button" id="drawer-close" class="btn ghost sm">Fechar</button>
+              <button type="button" id="drawer-close" class="btn ghost sm" data-i18n="common.close">Fechar</button>
             </div>
             <div class="drawer-body" id="drawer-body"></div>
           </aside>
@@ -146,18 +147,18 @@
     <!-- Modals -->
     <dialog id="modal-account" class="modal">
       <form method="dialog" id="form-account" class="modal-card">
-        <h3>Nova conta WhatsApp</h3>
-        <p class="muted">1 account = 1 número. Product + tenant do app cliente.</p>
+        <h3 data-i18n="admin.modal.newAccount.title">Nova conta WhatsApp</h3>
+        <p class="muted" data-i18n="admin.modal.newAccount.sub">1 account = 1 número. Product + tenant do app cliente.</p>
         <label class="field">
-          <span>Product</span>
+          <span data-i18n="admin.modal.newAccount.product">Product</span>
           <select id="acc-product" class="input" required></select>
         </label>
         <label class="field">
-          <span>externalTenantId</span>
-          <input id="acc-tenant" class="input" required placeholder="id do tenant no app" />
+          <span data-i18n="admin.modal.newAccount.tenant">externalTenantId</span>
+          <input id="acc-tenant" class="input" required data-i18n-placeholder="admin.modal.newAccount.tenantPh" placeholder="id do tenant no app" />
         </label>
         <label class="field">
-          <span>Webhook URL</span>
+          <span data-i18n="admin.modal.newAccount.webhook">Webhook URL</span>
           <input
             id="acc-webhook"
             class="input"
@@ -166,69 +167,69 @@
           />
         </label>
         <label class="field">
-          <span>Label (opcional)</span>
-          <input id="acc-label" class="input" placeholder="Corretora XPTO" />
+          <span data-i18n="admin.modal.newAccount.label">Label (opcional)</span>
+          <input id="acc-label" class="input" data-i18n-placeholder="admin.modal.newAccount.labelPh" placeholder="Corretora XPTO" />
         </label>
         <p id="acc-form-err" class="err hidden"></p>
         <div class="modal-actions">
-          <button type="button" class="btn secondary" data-close>Cancelar</button>
-          <button type="submit" class="btn primary">Criar / atualizar</button>
+          <button type="button" class="btn secondary" data-close data-i18n="common.cancel">Cancelar</button>
+          <button type="submit" class="btn primary" data-i18n="admin.modal.newAccount.submit">Criar / atualizar</button>
         </div>
       </form>
     </dialog>
 
     <dialog id="modal-product" class="modal">
       <form method="dialog" id="form-product" class="modal-card">
-        <h3>Novo product</h3>
-        <p class="muted">Registra um app GLabs que vai consumir o bot.</p>
+        <h3 data-i18n="admin.modal.newProduct.title">Novo product</h3>
+        <p class="muted" data-i18n="admin.modal.newProduct.sub">Registra um app GLabs que vai consumir o bot.</p>
         <label class="field">
-          <span>Slug</span>
+          <span data-i18n="admin.modal.newProduct.slug">Slug</span>
           <input id="prod-slug" class="input" required placeholder="gestor" pattern="[a-z0-9_-]+" />
         </label>
         <label class="field">
-          <span>Nome</span>
+          <span data-i18n="admin.modal.newProduct.name">Nome</span>
           <input id="prod-name" class="input" placeholder="Gestor de Seguros" />
         </label>
         <label class="field">
-          <span>Webhook default (opcional)</span>
+          <span data-i18n="admin.modal.newProduct.webhook">Webhook default (opcional)</span>
           <input id="prod-webhook" class="input" placeholder="https://…" />
         </label>
         <p id="prod-form-err" class="err hidden"></p>
         <div class="modal-actions">
-          <button type="button" class="btn secondary" data-close>Cancelar</button>
-          <button type="submit" class="btn primary">Salvar</button>
+          <button type="button" class="btn secondary" data-close data-i18n="common.cancel">Cancelar</button>
+          <button type="submit" class="btn primary" data-i18n="admin.modal.newProduct.submit">Salvar</button>
         </div>
       </form>
     </dialog>
 
     <dialog id="modal-client" class="modal">
       <form method="dialog" id="form-client" class="modal-card">
-        <h3>Novo cliente</h3>
-        <p class="muted">Cria o projeto, um fluxo e o usuário com senha temporária.</p>
+        <h3 data-i18n="admin.modal.newClient.title">Novo cliente</h3>
+        <p class="muted" data-i18n="admin.modal.newClient.sub">Cria o projeto, um fluxo e o usuário com senha temporária.</p>
         <label class="field">
-          <span>Nome do negócio</span>
-          <input id="cli-name" class="input" required placeholder="Estúdio Ana" />
+          <span data-i18n="admin.modal.newClient.name">Nome do negócio</span>
+          <input id="cli-name" class="input" required data-i18n-placeholder="admin.modal.newClient.namePh" placeholder="Estúdio Ana" />
         </label>
         <label class="field">
-          <span>E-mail de quem vai entrar</span>
+          <span data-i18n="admin.modal.newClient.email">E-mail de quem vai entrar</span>
           <input id="cli-email" class="input" type="email" required placeholder="ana@estudio.com" />
         </label>
         <label class="field">
-          <span>Template do fluxo</span>
+          <span data-i18n="admin.modal.newClient.template">Template do fluxo</span>
           <select id="cli-template" class="input">
-            <option value="pilates">Marcar sessão</option>
-            <option value="consulta">Marcar consulta</option>
-            <option value="blank">Em branco</option>
+            <option value="pilates" data-i18n="admin.modal.newClient.tplPilates">Marcar sessão</option>
+            <option value="consulta" data-i18n="admin.modal.newClient.tplConsulta">Marcar consulta</option>
+            <option value="blank" data-i18n="admin.modal.newClient.tplBlank">Em branco</option>
           </select>
         </label>
         <p id="client-form-err" class="err hidden"></p>
         <div class="modal-actions">
-          <button type="button" class="btn secondary" data-close>Cancelar</button>
-          <button type="submit" class="btn primary">Criar e gerar senha</button>
+          <button type="button" class="btn secondary" data-close data-i18n="common.cancel">Cancelar</button>
+          <button type="submit" class="btn primary" data-i18n="admin.modal.newClient.submit">Criar e gerar senha</button>
         </div>
       </form>
     </dialog>
 
-    <script src="/admin/app.js" type="module"></script>
+    <script src="/admin/app.js?v=2" type="module"></script>
   </body>
 </html>
