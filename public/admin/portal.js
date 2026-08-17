@@ -1235,8 +1235,14 @@ try {
     }
 
     const clientName = state.portal?.client?.name || "";
+    // Mesmo caso do card de perfil (ver loadAccount): em impersonation, a
+    // saudação precisa ser sobre o NEGÓCIO sendo visualizado, não sobre o
+    // login do admin — senão vira "Olá, zabateste44!" pro cliente errado.
+    // O badge who-name/who-role no canto (+ o banner amarelo) já deixam
+    // claro que quem está logado é o admin; aqui é só o "oi" da tela.
+    const clientUser = state.portal?.users?.[0] || null;
     const person = asAdmin
-      ? (me.user.name || me.user.email.split("@")[0] || "GLabs").split(" ")[0]
+      ? (clientUser?.name || clientName || "").split(" ")[0]
       : me.user.name && me.user.name !== clientName
         ? me.user.name.split(" ")[0]
         : "";
