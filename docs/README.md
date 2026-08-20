@@ -9,9 +9,12 @@ documentos primeiro.
 - **[arquitetura-as-is.md](./arquitetura-as-is.md)** — estado técnico da arquitetura na data do
   levantamento (17/08/2026): stack, dados, sessão WhatsApp/Baileys, processo, fila, reconexão,
   notificação. Diagnóstico, sem recomendação.
-- **[arquitetura-to-be-roadmap.md](./arquitetura-to-be-roadmap.md)** — diagnóstico de riscos
-  priorizados, roadmap em fases (0–3), estratégia de ambientes dev/staging vs. produção,
-  decisões estratégicas em aberto. Atualizado com status de execução de cada fase.
+- **[arquitetura-to-be-roadmap_v2.md](./arquitetura-to-be-roadmap_v2.md)** *(versão vigente)* —
+  diagnóstico de riscos priorizados, roadmap em fases (0–4), estratégia de ambientes
+  dev/staging vs. produção, decisões estratégicas em aberto. v2 separa a Fase 3 em partes com
+  gatilhos independentes (guard de erro barato vs. separar processo vs. sharding completo) e
+  adiciona a Fase 4 (IP dedicado por cliente, estudo futuro).
+  ([v1](./arquitetura-to-be-roadmap.md) preservada como histórico — não é mais a referência.)
 - **[diagrama-ambientes-dev-vs-prod.png](./diagrama-ambientes-dev-vs-prod.png)** — diagrama
   comparativo dos dois ambientes Railway (staging/`develop` vs. production/`main`).
 - **[teste-de-carga-fase3-gate.md](./teste-de-carga-fase3-gate.md)** — resultado do teste de
