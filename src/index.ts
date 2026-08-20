@@ -89,6 +89,7 @@ import {
 import {
   connect,
   disconnect,
+  resetConnectionStatusOnBoot,
   restoreSessionsFromDisk,
   sendText,
   snapshot,
@@ -1520,6 +1521,10 @@ void (async () => {
   try {
     await migrate();
     await seedAdmin();
+    // Normaliza status persistido ANTES de reconectar de verdade — sem isso, uma
+    // conta que tenha morrido num crash duro (sem passar pelo evento `close`)
+    // continuaria "connected" na tabela até a próxima transição real.
+    await resetConnectionStatusOnBoot();
   } catch (e) {
     console.error("[glabs-bot] migrate/seed:", e);
   }

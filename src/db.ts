@@ -153,6 +153,39 @@ CREATE TABLE IF NOT EXISTS wa_messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Status de conexão WhatsApp por account, persistido (Fase 1 do roadmap de infra).
+-- Espelha o SessionSnapshot que já existe em memória em session.ts — sobrevive a
+-- restart do processo, vira fonte de verdade pro painel logo após o boot (antes
+-- de restoreSessionsFromDisk() reconectar de fato) e alimenta o alerta no Telegram.
+CREATE TABLE IF NOT EXISTS account_connection_status (
+  account_id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  phone_e164 TEXT,
+  display_name TEXT,
+  last_error TEXT,
+  connected_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Fila de reenvio (Fase 2) — só recebe linha quando um envio síncrono falha;
+-- o caminho feliz continua indo direto por sendText(), sem passar por aqui.
+CREATE TABLE IF NOT EXISTS outbox (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL,
+  phone_e164 TEXT NOT NULL,
+  body TEXT NOT NULL,
+  media JSONB,
+  quoted JSONB,
+  meta JSONB,
+  status TEXT NOT NULL DEFAULT 'pending',
+  attempts INT NOT NULL DEFAULT 0,
+  last_error TEXT,
+  next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_outbox_pending ON outbox(status, next_attempt_at);
+
 CREATE INDEX IF NOT EXISTS idx_users_client ON users(client_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_client ON accounts(client_id);
 CREATE INDEX IF NOT EXISTS idx_flows_client ON flows(client_id);
