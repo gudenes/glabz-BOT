@@ -132,6 +132,20 @@ export function googleOAuthConfigured(): boolean {
  * Em produção precisa vir de TOKEN_ENCRYPTION_KEY (ou reaproveita botSecret());
  * sem nenhuma das duas, sobe só em dev com uma chave fixa — nunca em produção.
  */
+/** Bot do Telegram pra alerta operacional (Fase 1 do roadmap de infra). Opcional —
+ * sem essas duas vars, sendTelegramAlert() (src/notify.ts) vira no-op silencioso. */
+export function telegramBotToken(): string {
+  return process.env.TELEGRAM_BOT_TOKEN?.trim() || "";
+}
+
+export function telegramChatId(): string {
+  return process.env.TELEGRAM_CHAT_ID?.trim() || "";
+}
+
+export function telegramConfigured(): boolean {
+  return Boolean(telegramBotToken() && telegramChatId());
+}
+
 export function tokenEncryptionKey(): string {
   const key = process.env.TOKEN_ENCRYPTION_KEY?.trim() || botSecret();
   if (key) return key;

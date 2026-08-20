@@ -113,3 +113,4 @@ Admin visual: **`/admin/flows.html`**
 | `XAI_API_KEY` ou `GLABS_LLM_API_KEY` | LLM para nó de intenção (opcional) |
 | `GLABS_LLM_BASE_URL` | Default `https://api.x.ai/v1` |
 | `GLABS_LLM_MODEL` | Default `grok-4-1-fast-non-reasoning` |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Alerta operacional quando uma sessão WhatsApp cai (opcional — sem as duas, alerta vira no-op) |
