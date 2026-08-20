@@ -308,6 +308,54 @@ function serveStatic(res: ServerResponse, urlPath: string): boolean {
 const UUID_RE =
   "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
+/**
+ * Guard de "raio de impacto" (registrado em docs/arquitetura-to-be-roadmap_v2.md).
+ * Hoje é 1 processo só segurando as sessões WhatsApp de todos os clientes — um
+ * erro não tratado que escape dos try/catch locais (ex.: um bug disparado pela
+ * mensagem de UM cliente específico) derrubaria o processo inteiro, ou seja,
+ * TODAS as contas de TODOS os clientes ao mesmo tempo, não só a que causou o
+ * problema.
+ *
+ * Log + alerta, sem derrubar o processo — na maioria dos casos (erro isolado
+ * de uma conta específica), as outras contas seguem rodando sem impacto,
+ * porque cada uma vive no seu próprio LiveSession (session.ts), sem estado
+ * global compartilhado entre elas além do Map de lookup.
+ *
+ * Rajada de erros (não um caso isolado) é sinal de corrupção real — aí sim é
+ * mais seguro deixar o Railway reiniciar limpo (restartPolicyType: ON_FAILURE,
+ * railway.json) do que continuar rodando quebrado.
+ */
+const FATAL_ERROR_WINDOW_MS = 60_000;
+const FATAL_ERROR_THRESHOLD = 5;
+let recentFatalErrors: number[] = [];
+
+function handleFatalError(kind: string, err: unknown): void {
+  const detail = err instanceof Error ? err.stack || err.message : String(err);
+  console.error(`[glabs-bot] ${kind} não tratado:`, detail);
+
+  void import("./notify.js")
+    .then(({ sendTelegramAlert }) =>
+      sendTelegramAlert(
+        `🔴 <b>Erro fatal não tratado</b> (${kind})\n<code>${detail.slice(0, 500)}</code>`
+      )
+    )
+    .catch(() => undefined);
+
+  const now = Date.now();
+  recentFatalErrors = recentFatalErrors.filter((t) => now - t < FATAL_ERROR_WINDOW_MS);
+  recentFatalErrors.push(now);
+  if (recentFatalErrors.length >= FATAL_ERROR_THRESHOLD) {
+    console.error(
+      `[glabs-bot] ${recentFatalErrors.length} erros fatais em ${FATAL_ERROR_WINDOW_MS / 1000}s — ` +
+        `reiniciando processo (Railway restartPolicy cuida do resto)`
+    );
+    process.exit(1);
+  }
+}
+
+process.on("uncaughtException", (err) => handleFatalError("uncaughtException", err));
+process.on("unhandledRejection", (reason) => handleFatalError("unhandledRejection", reason));
+
 const server = createServer(async (req, res) => {
   try {
     const method = req.method ?? "GET";
