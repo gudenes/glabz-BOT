@@ -495,7 +495,12 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
       if (flowResult) {
         for (const reply of flowResult.replies) {
           try {
-            await sendText(accountId, phone, reply);
+            // sendTextWithRetry (não sendText direto): se a sessão estiver
+            // instável na hora, a resposta do bot cai na fila (Fase 2) em vez
+            // de simplesmente sumir — era exatamente esse o risco identificado
+            // no diagnóstico ("mensagem que falha no envio some silenciosamente").
+            const { sendTextWithRetry } = await import("./outbox.js");
+            await sendTextWithRetry(accountId, phone, reply);
           } catch (e) {
             console.warn(`[wa:${accountId}] flow reply failed:`, (e as Error).message);
           }
@@ -829,10 +834,19 @@ export async function sendText(
   media?: SendMediaInput | null,
   quoted?: QuotedMessageInput | null,
   meta?: { source?: "bot" | "human"; authorName?: string | null }
-): Promise<{ ok: true; externalId: string | null } | { ok: false; reason: string }> {
+): Promise<
+  { ok: true; externalId: string | null } | { ok: false; reason: string; retryable?: boolean }
+> {
   const s = getOrCreate(accountId);
   if (s.status !== "connected" || !s.sock) {
-    return { ok: false, reason: "WhatsApp desconectado. Conecte e escaneie o QR." };
+    // Desconexão é tipicamente transitória (reconecta sozinha, ver bootSocket) —
+    // vale a pena a fila (Fase 2) tentar de novo mais tarde em vez de perder a
+    // mensagem na hora.
+    return {
+      ok: false,
+      reason: "WhatsApp desconectado. Conecte e escaneie o QR.",
+      retryable: true,
+    };
   }
   const text = (body ?? "").trim();
   if (!media && !text) return { ok: false, reason: "Mensagem vazia." };
@@ -932,7 +946,10 @@ export async function sendText(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "falha no envio";
     console.error(`[wa:${accountId}] send failed:`, msg);
-    return { ok: false, reason: msg };
+    // Falha na chamada em si (rede, socket instável) — transitória, vale retry.
+    // Erros de validação acima (mensagem vazia, telefone inválido, arquivo
+    // grande demais) não passam por aqui — retry não mudaria o resultado.
+    return { ok: false, reason: msg, retryable: true };
   }
 }
 
