@@ -1534,5 +1534,6 @@ void (async () => {
     );
     console.log(`[glabs-bot] admin UI → http://0.0.0.0:${PORT}/admin`);
     void restoreSessionsFromDisk();
+    void import("./outbox.js").then(({ startOutboxWorker }) => startOutboxWorker());
   });
 })();
