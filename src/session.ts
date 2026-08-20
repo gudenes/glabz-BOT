@@ -15,6 +15,12 @@ import QRCode from "qrcode";
 import { authDir, botSecret, logLevel } from "./config.js";
 import { formatPhoneDisplay, toWhatsAppJid } from "./phone.js";
 import { getAccount, type AccountRecord } from "./registry.js";
+import { db, hasDatabase } from "./db.js";
+import { sendTelegramAlert } from "./notify.js";
+
+/** Reconexões seguidas antes de considerar a queda "persistente" o bastante pra alertar
+ * (evita spam de alerta em blips curtos de rede que já se resolvem sozinhos). */
+const RECONNECT_ALERT_THRESHOLD = 5;
 
 const makeWASocket: any = (baileysDefault as any)?.default ?? baileysDefault;
 const logger = pino({ level: logLevel() });
@@ -98,6 +104,51 @@ export function snapshot(accountId: string): SessionSnapshot {
 
 function accountAuthPath(accountId: string) {
   return join(AUTH_ROOT, accountId);
+}
+
+/**
+ * Persiste o status de conexão (Fase 1 do roadmap de infra) — sobrevive a restart do
+ * processo. Fire-and-forget de propósito: uma falha aqui nunca pode derrubar o fluxo
+ * de WhatsApp em si (mesmo espírito de postWebhook).
+ */
+async function persistStatus(s: LiveSession): Promise<void> {
+  if (!hasDatabase()) return;
+  try {
+    await db()`
+      INSERT INTO account_connection_status
+        (account_id, status, phone_e164, display_name, last_error, connected_at, updated_at)
+      VALUES
+        (${s.accountId}, ${s.status}, ${s.phoneE164}, ${s.displayName}, ${s.lastError},
+         ${s.connectedAt}, now())
+      ON CONFLICT (account_id) DO UPDATE SET
+        status = excluded.status,
+        phone_e164 = excluded.phone_e164,
+        display_name = excluded.display_name,
+        last_error = excluded.last_error,
+        connected_at = excluded.connected_at,
+        updated_at = now()
+    `;
+  } catch (e) {
+    console.error(`[wa:${s.accountId}] persistStatus failed:`, (e as Error).message);
+  }
+}
+
+/**
+ * Normaliza status persistido no boot, antes de restoreSessionsFromDisk() reconectar
+ * de fato — sem isso, uma conta que ficasse "connected" na tabela num crash duro
+ * (processo morto sem passar pelo evento `close`) continuaria aparecendo conectada
+ * até a próxima transição real, mesmo já estando órfã.
+ */
+export async function resetConnectionStatusOnBoot(): Promise<void> {
+  if (!hasDatabase()) return;
+  try {
+    await db()`
+      UPDATE account_connection_status SET status = 'disconnected', updated_at = now()
+      WHERE status <> 'disconnected'
+    `;
+  } catch (e) {
+    console.error("[glabs-bot] resetConnectionStatusOnBoot failed:", (e as Error).message);
+  }
 }
 
 /**
@@ -260,6 +311,7 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
       s.displayName = null;
       s.connectedAt = null;
       console.log(`[wa:${accountId}] QR gerado`);
+      void persistStatus(s);
     }
 
     if (u.connection === "open") {
@@ -273,6 +325,7 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
       s.lastError = null;
       s.starting = false;
       console.log(`[wa:${accountId}] conectado como ${phone ?? me}`);
+      void persistStatus(s);
     }
 
     if (u.connection === "close") {
@@ -289,6 +342,11 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
         s.displayName = null;
         s.connectedAt = null;
         s.lastError = "Sessão encerrada no celular. Conecte de novo e escaneie o QR.";
+        void persistStatus(s);
+        void sendTelegramAlert(
+          `🔴 <b>WhatsApp desconectado</b> (account <code>${accountId}</code>)\n` +
+            `Sessão encerrada no celular — precisa escanear um novo QR code.`
+        );
         try {
           rmSync(dir, { recursive: true, force: true });
         } catch {
@@ -299,6 +357,13 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
 
       s.status = "disconnected";
       s.lastError = `Conexão caiu (código ${code ?? "?"}). Reconectando…`;
+      void persistStatus(s);
+      if (attempt + 1 === RECONNECT_ALERT_THRESHOLD) {
+        void sendTelegramAlert(
+          `🟡 <b>WhatsApp instável</b> (account <code>${accountId}</code>)\n` +
+            `Já são ${RECONNECT_ALERT_THRESHOLD} tentativas de reconexão seguidas (código ${code ?? "?"}).`
+        );
+      }
       const delay = Math.min(30_000, 1000 * 2 ** attempt);
       setTimeout(() => {
         void bootSocket(accountId, s, attempt + 1);
@@ -328,6 +393,7 @@ export async function disconnect(accountId: string): Promise<SessionSnapshot> {
   } catch {
     /* ignore */
   }
+  void persistStatus(s);
   return snapshot(accountId);
 }
 
