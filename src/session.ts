@@ -16,7 +16,7 @@ import { authDir, botSecret, logLevel } from "./config.js";
 import { formatPhoneDisplay, toWhatsAppJid } from "./phone.js";
 import { getAccount, type AccountRecord } from "./registry.js";
 import { db, hasDatabase } from "./db.js";
-import { sendTelegramAlert } from "./notify.js";
+import { sendEmailAlert, sendTelegramAlert } from "./notify.js";
 
 /** Reconexões seguidas antes de considerar a queda "persistente" o bastante pra alertar
  * (evita spam de alerta em blips curtos de rede que já se resolvem sozinhos). */
@@ -347,6 +347,11 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
           `🔴 <b>WhatsApp desconectado</b> (account <code>${accountId}</code>)\n` +
             `Sessão encerrada no celular — precisa escanear um novo QR code.`
         );
+        void sendEmailAlert(
+          accountId,
+          "WhatsApp desconectado",
+          `A sessão do WhatsApp (account ${accountId}) foi encerrada no celular — precisa escanear um novo QR code pra reconectar.`
+        );
         try {
           rmSync(dir, { recursive: true, force: true });
         } catch {
@@ -362,6 +367,11 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
         void sendTelegramAlert(
           `🟡 <b>WhatsApp instável</b> (account <code>${accountId}</code>)\n` +
             `Já são ${RECONNECT_ALERT_THRESHOLD} tentativas de reconexão seguidas (código ${code ?? "?"}).`
+        );
+        void sendEmailAlert(
+          accountId,
+          "WhatsApp instável",
+          `A sessão do WhatsApp (account ${accountId}) já tentou reconectar ${RECONNECT_ALERT_THRESHOLD} vezes seguidas (código ${code ?? "?"}).`
         );
       }
       const delay = Math.min(30_000, 1000 * 2 ** attempt);
