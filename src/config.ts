@@ -132,6 +132,26 @@ export function googleOAuthConfigured(): boolean {
  * Em produção precisa vir de TOKEN_ENCRYPTION_KEY (ou reaproveita botSecret());
  * sem nenhuma das duas, sobe só em dev com uma chave fixa — nunca em produção.
  */
+/**
+ * Embeddings (busca semântica no histórico — ver docs/rag-desenho.md).
+ *
+ * Chave SEPARADA da chave do LLM de propósito: xAI/Grok gera as respostas mas
+ * não tem API de embeddings, então esta aponta pra outro provedor (OpenAI).
+ * Sem ela, o RAG simplesmente não roda — o card de IA segue funcionando só com
+ * o contexto escrito à mão.
+ */
+export function embeddingApiKey(): string {
+  return (
+    process.env.EMBEDDING_API_KEY?.trim() ||
+    process.env.OPENAI_API_KEY?.trim() ||
+    ""
+  );
+}
+
+export function embeddingModel(): string {
+  return process.env.EMBEDDING_MODEL?.trim() || "text-embedding-3-small";
+}
+
 /** Bot do Telegram pra alerta operacional (Fase 1 do roadmap de infra). Opcional —
  * sem essas duas vars, sendTelegramAlert() (src/notify.ts) vira no-op silencioso. */
 export function telegramBotToken(): string {
