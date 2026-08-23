@@ -260,13 +260,31 @@ export async function runFlowStep(opts: {
       // Falha aqui nunca pode derrubar a resposta: sem RAG, o card volta a
       // funcionar exatamente como antes, só com o texto manual.
       let context = manualContext;
-      if (flow.clientId && node.data.useKnowledge !== false) {
+      // Log estruturado: sem isso, "por que a IA respondeu isso?" vira
+      // adivinhação. Registra por que o RAG rodou ou não, e o que a busca
+      // trouxe — foi a falta dele que fez um bug de clientId ausente passar
+      // despercebido no simulador do builder.
+      const ragLog: Record<string, unknown> = { node: node.id, flowId: flow.id };
+
+      if (!flow.clientId) {
+        ragLog.rag = "pulado";
+        ragLog.motivo = "fluxo sem clientId";
+      } else if (node.data.useKnowledge === false) {
+        ragLog.rag = "pulado";
+        ragLog.motivo = "desligado no passo";
+      } else {
         try {
           const { embedTexts } = await import("./../rag/embeddings.js");
           const { searchKnowledge } = await import("./../rag/index-store.js");
           const emb = await embedTexts([text]);
-          if (emb.ok) {
+          if (!emb.ok) {
+            ragLog.rag = "falhou";
+            ragLog.motivo = emb.reason;
+          } else {
             const hits = await searchKnowledge(flow.clientId, emb.vectors[0], { topK: 4 });
+            ragLog.rag = "ok";
+            ragLog.trechos = hits.length;
+            ragLog.scores = hits.map((h) => Number(h.score).toFixed(3));
             if (hits.length) {
               const trechos = hits
                 .map((h) => `- Pergunta parecida: ${h.question}\n  Resposta dada pela equipe: ${h.answer}`)
@@ -281,9 +299,11 @@ export async function runFlowStep(opts: {
             }
           }
         } catch (e) {
-          console.warn("[flow] RAG indisponível, seguindo só com contexto manual:", e instanceof Error ? e.message : e);
+          ragLog.rag = "erro";
+          ragLog.motivo = e instanceof Error ? e.message : String(e);
         }
       }
+      console.log(`[ia] ${JSON.stringify({ ...ragLog, pergunta: text.slice(0, 80) })}`);
 
       const result = await answerFreeform({
         question: text,
