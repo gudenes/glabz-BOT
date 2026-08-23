@@ -835,7 +835,7 @@ const server = createServer(async (req, res) => {
           base64?: string;
           mimetype?: string;
           fileName?: string;
-          kind?: "image" | "document";
+          kind?: "image" | "document" | "audio" | "video";
         } | null;
       }>(await readBody(req));
       const author =
@@ -1531,7 +1531,7 @@ const server = createServer(async (req, res) => {
             base64?: string;
             mimetype?: string;
             fileName?: string;
-            kind?: "image" | "document";
+            kind?: "image" | "document" | "audio" | "video";
           } | null;
           quoted?: {
             id?: string;

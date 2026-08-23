@@ -709,7 +709,7 @@ function unwrapMessageContent(msg: any): any {
 }
 
 type InboundMedia = {
-  kind: "audio" | "image" | "document";
+  kind: "audio" | "image" | "document" | "video";
   mimetype: string;
   base64: string;
   fileName?: string;
@@ -749,8 +749,7 @@ async function downloadInboundMedia(
     mimetype = content.documentMessage.mimetype || "application/octet-stream";
     fileName = content.documentMessage.fileName || "document";
   } else if (content.videoMessage) {
-    // vídeo: trata como documento para download/reprodução simples
-    kind = "document";
+    kind = "video";
     mimetype = content.videoMessage.mimetype || "video/mp4";
     fileName = "video.mp4";
   } else {
@@ -802,6 +801,7 @@ function mediaLabel(media: InboundMedia | null): string {
   if (!media) return "";
   if (media.kind === "audio") return media.ptt ? "🎤 Áudio" : "🔊 Áudio";
   if (media.kind === "image") return "🖼 Imagem";
+  if (media.kind === "video") return "🎬 Vídeo";
   return `📎 ${media.fileName || "Documento"}`;
 }
 
@@ -937,8 +937,8 @@ export type SendMediaInput = {
   base64: string;
   mimetype: string;
   fileName?: string;
-  /** image | document (default: infere pelo mime) */
-  kind?: "image" | "document";
+  /** image | video | audio | document (default: infere pelo mime) */
+  kind?: "image" | "video" | "audio" | "document";
 };
 
 /** Citação WhatsApp (reply-to): key da mensagem original. */
@@ -1020,6 +1020,8 @@ export async function sendText(
         mime = guessMimeFromName(fileName);
       }
       const isImage = media.kind === "image" || mime.startsWith("image/");
+      const isVideo = media.kind === "video" || mime.startsWith("video/");
+      const isAudio = media.kind === "audio" || mime.startsWith("audio/");
 
       if (isImage) {
         result = await s.sock.sendMessage(
@@ -1028,6 +1030,26 @@ export async function sendText(
             image: buf,
             caption: text || undefined,
             mimetype: mime.startsWith("image/") ? mime : "image/jpeg",
+          },
+          sendOpts
+        );
+      } else if (isVideo) {
+        result = await s.sock.sendMessage(
+          jid,
+          {
+            video: buf,
+            caption: text || undefined,
+            mimetype: mime.startsWith("video/") ? mime : "video/mp4",
+          },
+          sendOpts
+        );
+      } else if (isAudio) {
+        result = await s.sock.sendMessage(
+          jid,
+          {
+            audio: buf,
+            mimetype: mime || "audio/ogg",
+            ptt: false,
           },
           sendOpts
         );
@@ -1043,8 +1065,9 @@ export async function sendText(
           sendOpts
         );
       }
+      const sentKind = isImage ? "image" : isVideo ? "video" : isAudio ? "audio" : "document";
       console.log(
-        `[wa:${accountId}] enviou ${isImage ? "image" : "document"} → ${jid} name=${fileName} mime=${mime} bytes=${buf.length}${quoted?.id ? " quoted" : ""}`
+        `[wa:${accountId}] enviou ${sentKind} → ${jid} name=${fileName} mime=${mime} bytes=${buf.length}${quoted?.id ? " quoted" : ""}`
       );
     } else {
       result = await s.sock.sendMessage(jid, { text }, sendOpts);
@@ -1144,7 +1167,9 @@ function guessMimeFromName(name: string): string {
     return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   if (n.endsWith(".txt")) return "text/plain";
   if (n.endsWith(".csv")) return "text/csv";
-  if (n.endsWith(".mp4")) return "video/mp4";
+  if (n.endsWith(".mp4") || n.endsWith(".m4v")) return "video/mp4";
+  if (n.endsWith(".webm")) return "video/webm";
+  if (n.endsWith(".mov")) return "video/quicktime";
   if (n.endsWith(".ogg") || n.endsWith(".opus")) return "audio/ogg";
   return "application/octet-stream";
 }
