@@ -99,7 +99,9 @@ function setView(view) {
     } else if (view === "test") {
       openBuilderSimulator();
     }
+    maybeOnboard();
   } else {
+    dismissOnboard(false);
     hideStudioChrome();
   }
   if (view === "pubs") renderPubs();
@@ -143,6 +145,59 @@ function hasOwnFlows() {
   return (state.portal?.flows || []).length > 0;
 }
 
+/**
+ * Fluxo "de verdade" = mais do que só o gatilho. provisionClient cria um
+ * fluxo inicial vazio no onboarding, então contar fluxos (hasOwnFlows) não
+ * distingue "acabei de entrar" de "já montei algo" — é essa diferença que
+ * decide se vale oferecer o onboarding.
+ */
+function hasRealFlow() {
+  return (state.portal?.flows || []).some((f) => (f.nodes || []).length > 1);
+}
+
+/**
+ * Oferece os dois caminhos de partida (modelo pronto x montar com IA) na
+ * primeira vez que o cliente abre a aba Fluxo sem ter nada montado. Some
+ * assim que existir um fluxo real, e pode ser dispensado — a escolha fica
+ * guardada por cliente, pra não reaparecer a cada visita.
+ */
+function onboardKey() {
+  const cid = state.portal?.client?.id || "anon";
+  return `glabs_onboard_done_${cid}`;
+}
+
+function maybeOnboard() {
+  if (state.view !== "flow") return;
+  if (hasRealFlow()) return;
+  if (localStorage.getItem(onboardKey()) === "1") return;
+  $("onboard")?.classList.remove("hidden");
+}
+
+function dismissOnboard(remember = true) {
+  if (remember) localStorage.setItem(onboardKey(), "1");
+  $("onboard")?.classList.add("hidden");
+}
+
+$("onboard-skip")?.addEventListener("click", () => dismissOnboard());
+$("onboard-ia")?.addEventListener("click", () => {
+  dismissOnboard();
+  openStudio({ expand: true });
+});
+$("onboard-tpl")?.addEventListener("click", async () => {
+  dismissOnboard();
+  openStudio({ expand: true });
+  const box = $("tpl-pick");
+  if (box) {
+    box.classList.remove("hidden");
+    await renderTemplatePicker();
+    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+});
+// Clicar fora fecha, mas sem marcar como "já resolvi" — volta na próxima visita.
+$("onboard")?.addEventListener("click", (ev) => {
+  if (ev.target === $("onboard")) dismissOnboard(false);
+});
+
 function openBuilder() {
   const frame = $("flow-frame");
   frame?.classList.remove("hidden");
@@ -163,7 +218,10 @@ function studioLayout() {
   const studio = $("flow-studio");
   const frame = $("flow-frame");
   const first = !hasOwnFlows();
-  const open = first || state.studio.open;
+  // `open` era `first || state.studio.open`, o que travava o Studio aberto pra
+  // sempre em quem ainda não tinha fluxo — sem botão de fechar e sem como ver
+  // o resto. Agora quem decide é o modal de onboarding (ver maybeOnboard).
+  const open = state.studio.open;
   const expanded = first || state.studio.expanded;
 
   studio?.classList.toggle("hidden", !open);
@@ -182,6 +240,7 @@ function studioLayout() {
   }
 
   $("studio-close")?.classList.toggle("hidden", first || !open);
+  $("studio-dismiss")?.classList.toggle("hidden", !open);
   $("studio-expand")?.classList.toggle("hidden", first);
   // "usar um template · começar do zero" fica disponível SEMPRE que o Studio
   // estiver aberto. Antes sumia assim que o cliente tivesse qualquer fluxo — e
@@ -229,11 +288,10 @@ function studioLayout() {
 }
 
 function syncFlowPane() {
-  if (!hasOwnFlows()) {
-    state.studio.open = true;
-    state.studio.expanded = true;
-    ensureStudioWelcome();
-  }
+  // Sem fluxo nenhum, quem convida a começar é o modal de onboarding
+  // (maybeOnboard) — abrir o Studio à força aqui tirava a escolha do usuário
+  // e o deixava sem saída.
+  if (!hasOwnFlows()) ensureStudioWelcome();
   studioLayout();
 }
 
@@ -956,13 +1014,15 @@ function openStudio({ expand = true } = {}) {
 }
 
 function closeStudio() {
-  if (!hasOwnFlows()) return;
+  // Antes tinha um `if (!hasOwnFlows()) return;` aqui: sem nenhum fluxo, o
+  // Studio ficava sem saída nenhuma (o botão "Ver fluxo" também some nesse
+  // estado). Fechar tem que funcionar sempre — quem não quer montar agora
+  // pode explorar o resto do portal.
   state.studio.open = false;
   studioLayout();
 }
 
 function toggleStudioExpand() {
-  if (!hasOwnFlows()) return;
   state.studio.expanded = !state.studio.expanded;
   studioLayout();
 }
@@ -1056,6 +1116,7 @@ $("btn-wizard")?.addEventListener("click", () => openStudio({ expand: false }));
 $("btn-studio-expand")?.addEventListener("click", toggleStudioExpand);
 $("studio-expand")?.addEventListener("click", toggleStudioExpand);
 $("studio-close")?.addEventListener("click", closeStudio);
+$("studio-dismiss")?.addEventListener("click", closeStudio);
 $("start-tpl")?.addEventListener("click", async () => {
   const box = $("tpl-pick");
   if (!box) return;
@@ -1256,8 +1317,6 @@ window.addEventListener("message", async (ev) => {
   if (ev.data?.type !== "glabs-flows-changed") return;
   await refresh();
   if (!hasOwnFlows()) {
-    state.studio.open = true;
-    state.studio.expanded = true;
     const frame = $("flow-frame");
     if (frame) {
       frame.dataset.loaded = "";

@@ -568,8 +568,47 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
   letter-spacing: -0.03em;
 }
 .studio-head p { margin: 6px 0 0; color: #9a9a94; font-size: 12.5px; max-width: 48ch; }
-.studio-head-actions { display: flex; gap: 12px; flex-shrink: 0; padding-top: 18px; }
+.studio-head-actions { display: flex; gap: 12px; flex-shrink: 0; padding-top: 18px; align-items: center; }
 .studio-head .btn-text { color: #8a8a86; }
+/* Fechar explícito — "Ver fluxo" sozinho não lia como saída do Studio. */
+.studio-x {
+  border: 0; background: transparent; color: #8a8a86;
+  font-size: 16px; line-height: 1; cursor: pointer; padding: 4px 6px;
+  border-radius: 8px;
+}
+.studio-x:hover { background: rgba(255,255,255,0.08); color: #f4f4f0; }
+
+/* Onboarding — dois caminhos de partida na primeira visita à aba Fluxo */
+.onboard {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(12,12,12,0.62);
+  display: grid; place-items: center; padding: 20px;
+}
+.onboard.hidden { display: none; }
+.onboard-card {
+  background: var(--card, #fff); border-radius: 20px;
+  padding: 28px; max-width: 640px; width: 100%;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.3);
+  text-align: center;
+}
+.onboard-card h2 { margin: 0 0 6px; font-size: 22px; }
+.onboard-card > p { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+.onboard-opts {
+  display: grid; gap: 12px; grid-template-columns: 1fr 1fr; margin-bottom: 16px;
+}
+.onboard-opt {
+  display: grid; gap: 6px; justify-items: center; text-align: center;
+  border: 1px solid var(--line); background: #fff; border-radius: 16px;
+  padding: 20px 16px; font: inherit; cursor: pointer;
+  transition: border-color .15s, transform .15s;
+}
+.onboard-opt:hover { border-color: var(--gold); transform: translateY(-2px); }
+.onboard-ic { font-size: 26px; }
+.onboard-opt b { font-size: 15px; }
+.onboard-opt small { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+@media (max-width: 620px) {
+  .onboard-opts { grid-template-columns: 1fr; }
+}
 .studio-head .btn-text:hover { color: var(--gold); }
 .studio-log {
   flex: 1;
