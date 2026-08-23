@@ -51,7 +51,7 @@ export async function logAiAnswer(input: {
         ${randomUUID()}, ${input.clientId}, ${input.flowId ?? null}, ${input.nodeId ?? null},
         ${input.question.slice(0, 2000)}, ${input.answer?.slice(0, 4000) ?? null},
         ${input.ragStatus ?? null}, ${input.ragReason ?? null},
-        ${JSON.stringify(input.ragHits ?? [])}::jsonb, ${Boolean(input.simulated)}
+        ${db().json(input.ragHits ?? [])}, ${Boolean(input.simulated)}
       )
     `;
     // Poda os antigos — mantém a tabela útil sem crescer sem limite.
