@@ -248,6 +248,8 @@ function studioLayout() {
   // o catálogo justamente de quem ainda não montou nada.
   $("studio-alts")?.classList.toggle("hidden", !open);
   $("btn-wizard")?.classList.toggle("hidden", state.view !== "flow" || first || open);
+  // Trocar de modelo é ação válida a qualquer momento — não só no onboarding.
+  $("btn-templates")?.classList.toggle("hidden", state.view !== "flow" || open);
   $("btn-studio-expand")?.classList.toggle("hidden", state.view !== "flow" || !open || first);
   $("btn-studio-expand").textContent = expanded ? t("portal.collapse") : t("portal.expand");
   $("studio-expand").textContent = expanded && !first ? t("portal.collapse") : t("portal.expand");
@@ -1113,6 +1115,14 @@ if (localStorage.getItem("glabs_side_collapsed") === "1") {
 }
 
 $("btn-wizard")?.addEventListener("click", () => openStudio({ expand: false }));
+$("btn-templates")?.addEventListener("click", async () => {
+  openStudio({ expand: true });
+  const box = $("tpl-pick");
+  if (!box) return;
+  box.classList.remove("hidden");
+  await renderTemplatePicker();
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
 $("btn-studio-expand")?.addEventListener("click", toggleStudioExpand);
 $("studio-expand")?.addEventListener("click", toggleStudioExpand);
 $("studio-close")?.addEventListener("click", closeStudio);
