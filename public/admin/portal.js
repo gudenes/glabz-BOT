@@ -748,6 +748,14 @@ function renderKnowledge(chunks) {
   });
 }
 
+// Abaixo disso o score é ruído de domínio (ex.: perguntas do mesmo negócio,
+// mas sobre outro assunto) — a busca ainda traz como candidato pro prompt
+// (proteção contra resposta ruim fica na geração, não no filtro, ver
+// docs/rag-desenho.md §4.3), mas exibir como "usou a base" nesses casos
+// engana quem está lendo o log. Só a TAG usa esse corte; "ver fontes"
+// continua mostrando tudo, fraco incluso, porque é aí que se descobre ruído.
+const RAG_TAG_MIN_SCORE = 0.4;
+
 /**
  * Rastro das respostas da IA. Mostra em que ela se baseou — inclusive quando
  * NÃO usou a base (e por quê), que é o caso mais difícil de diagnosticar
@@ -767,11 +775,12 @@ async function loadAiAnswers() {
       .map((a) => {
         const quando = new Date(a.createdAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
         const ragHits = Array.isArray(a.ragHits) ? a.ragHits : [];
-        const usou = a.ragStatus === "ok" && ragHits.length;
+        const strongHits = ragHits.filter((h) => Number(h.score) >= RAG_TAG_MIN_SCORE);
+        const usou = a.ragStatus === "ok" && strongHits.length > 0;
         const tag = usou
-          ? `<span class="ai-tag ok">${t("portal.answers.usedBase", { n: ragHits.length })}</span>`
+          ? `<span class="ai-tag ok">${t("portal.answers.usedBase", { n: strongHits.length })}</span>`
           : `<span class="ai-tag off">${t("portal.answers.noBase")}${a.ragReason ? ` · ${escapeHtml(a.ragReason)}` : ""}</span>`;
-        const base = usou
+        const base = ragHits.length
           ? `<details class="ai-src"><summary>${t("portal.answers.seeSources")}</summary><ul>${ragHits
               .map((h) => `<li>${escapeHtml(h.question)} <em>(${Number(h.score).toFixed(2)})</em></li>`)
               .join("")}</ul></details>`
