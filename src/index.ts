@@ -117,6 +117,7 @@ import {
   type StudioMsg,
 } from "./flows/studio.js";
 import { blankFlow, pickCatalogFlow, templateCatalog } from "./flows/catalog.js";
+import { connectorCatalog } from "./flows/connectors/index.js";
 import type { Flow, FlowEdge, FlowNode } from "./flows/types.js";
 import type { FlowSimState } from "./flows/engine.js";
 
@@ -1091,6 +1092,13 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "ia" });
       }
+      return;
+    }
+
+    // Integrações disponíveis no nó Ação — a UI monta os selects a partir daqui
+    // em vez de repetir a lista em HTML.
+    if (method === "GET" && path === "/v1/flows/connectors") {
+      json(res, 200, { ok: true, connectors: connectorCatalog() });
       return;
     }
 
