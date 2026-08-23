@@ -1328,11 +1328,19 @@ const server = createServer(async (req, res) => {
 
       let flow: Flow | null = null;
       if (body?.nodes && body?.edges) {
+        // O builder manda nodes/edges do canvas pra permitir testar sem salvar.
+        // O clientId PRECISA vir junto: sem ele o card de IA não consulta a base
+        // de conhecimento (o RAG exige saber de qual cliente é a base), e o
+        // "Testar" respondia sem o que a equipe ensinou — parecendo que o RAG
+        // não funcionava. Preferimos o clientId do fluxo salvo, caindo pro
+        // contexto da requisição quando o fluxo ainda não existe.
+        const saved = body.flowId ? getFlow(body.flowId) : null;
         flow = {
           id: body.flowId || "sim",
           name: body.name || "Simulação",
           product: body.product || "gestor",
           accountId: null,
+          clientId: saved?.clientId ?? actingClientId(req, auth),
           status: "draft",
           nodes: body.nodes,
           edges: body.edges,
