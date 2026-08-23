@@ -27,6 +27,9 @@ documentos primeiro.
   (23/08/2026) de 8 casos de uso reais por segmento, catálogo proposto de 10 templates
   (5 simples + 5 complexos), matriz de integrações priorizada e lacunas técnicas que os cenários
   revelam. Base pra decidir o que construir no builder/connectors.
+- **[rag-desenho.md](./rag-desenho.md)** — desenho da busca semântica no histórico de
+  atendimento (23/08/2026): o que indexar, qual modelo de embedding, como filtrar, privacidade
+  e qualidade da fonte. Decisões com base em teste empírico. Desenhado, não implementado.
 - **[roadmap-ux-builder.md](./roadmap-ux-builder.md)** — frente de usabilidade do builder
   (registrada, não iniciada): variáveis visíveis/sugeridas, teste de trecho isolado, blocos
   reutilizáveis, transcrição de áudio, histórico de versões. Motivada pelo objetivo de o usuário
