@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Flow } from "./types.js";
+import { catalogFlows } from "./catalog.js";
 
 /** Fluxo demo: capturar intenção + marcar consulta ou handoff. */
 export function demoConsultationFlow(): Flow {
@@ -422,7 +423,15 @@ export function demoPilatesFlow(): Flow {
   };
 }
 
-/** Templates oficiais para seed / botão “Usar modelo”. */
+/**
+ * Templates oficiais para seed / botão "Usar modelo".
+ *
+ * Desde 23/08/2026 vem do catálogo (catalog.ts), com 10 templates baseados nos
+ * casos de uso de docs/estudo-casos-de-uso-e-integracoes.md. Os dois demos
+ * antigos (demoConsultationFlow/demoPilatesFlow, acima) saíram do seed mas
+ * continuam exportados: quem já os tem em disco não perde nada — o
+ * ensureSeedTemplates nunca remove fluxo existente, só deixa de atualizá-los.
+ */
 export function allSeedTemplates(): Flow[] {
-  return [demoConsultationFlow(), demoPilatesFlow()];
+  return catalogFlows();
 }

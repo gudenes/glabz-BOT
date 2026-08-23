@@ -53,6 +53,19 @@ export type Flow = {
   createdAt: string;
   updatedAt: string;
   publishedAt?: string | null;
+  /**
+   * Identifica um fluxo que nasceu de um template de demo do catálogo
+   * (ver templates.ts). Usado pra localizar o seed no disco sem depender do
+   * nome, que o usuário pode renomear.
+   */
+  seedSlug?: string;
+  /**
+   * Revisão do template de origem. Só é mantida enquanto o fluxo continua
+   * idêntico ao catálogo: assim que o usuário salva uma edição pelo builder,
+   * some (ver saveFlow), e o fluxo passa a ser tratado como customizado —
+   * é isso que impede o boot seguinte de sobrescrever o trabalho dele.
+   */
+  seedRevision?: number | null;
 };
 
 /** Estado por conversa (account + telefone). */

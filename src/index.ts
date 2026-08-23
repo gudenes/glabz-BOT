@@ -116,7 +116,7 @@ import {
   wantsTest,
   type StudioMsg,
 } from "./flows/studio.js";
-import { allSeedTemplates } from "./flows/templates.js";
+import { blankFlow, pickCatalogFlow, templateCatalog } from "./flows/catalog.js";
 import type { Flow, FlowEdge, FlowNode } from "./flows/types.js";
 import type { FlowSimState } from "./flows/engine.js";
 
@@ -1094,33 +1094,29 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // Catálogo de templates (metadados só — sem nodes/edges), pra tela de escolha.
+    if (method === "GET" && path === "/v1/flows/templates") {
+      json(res, 200, { ok: true, templates: templateCatalog() });
+      return;
+    }
+
     if (method === "POST" && path === "/v1/flows/from-template") {
       const clientId = actingClientId(req, auth);
       const client = clientId ? await getClient(clientId) : null;
       const body = parseJson<{ template?: string }>(await readBody(req));
-      const kind = body?.template || "pilates";
-      const seeds = allSeedTemplates();
-      const seed =
-        kind === "consulta"
-          ? seeds.find((f) => /consulta/i.test(f.name)) || seeds[0]
-          : kind === "blank"
-            ? null
-            : seeds.find((f) => /pilates|sess/i.test(f.name)) || seeds[0];
-      const blank = {
-        name: "Novo fluxo",
-        nodes: [{ id: "n_trigger", type: "trigger" as const, x: 80, y: 60, data: { label: "Mensagem recebida" } }],
-        edges: [] as Flow["edges"],
-      };
-      const src = seed || blank;
+      // Seleção vive em catalog.ts — antes esta rota reimplementava a mesma
+      // lógica de clients.ts, com default diferente (aqui "pilates", lá o
+      // primeiro do array).
+      const seed = pickCatalogFlow(body?.template);
       try {
         const flow = saveFlow({
-          name: seed ? seed.name.replace(/^Demo ·\s*/i, "") : "Novo fluxo",
+          name: seed ? seed.name : "Novo fluxo",
           product: client?.slug || "gestor",
           accountId: clientId ? listAccounts({ clientId })[0]?.id ?? null : null,
           clientId,
           status: "draft",
-          nodes: src.nodes,
-          edges: src.edges,
+          nodes: seed ? seed.nodes : blankFlow().nodes,
+          edges: seed ? seed.edges : blankFlow().edges,
         });
         json(res, 200, { ok: true, flow });
       } catch (e) {

@@ -22,22 +22,47 @@ type HistoryFile = { version: 1; entries: FlowVersion[] };
 const MAX_VERSIONS_PER_FLOW = 30;
 
 /**
- * Garante templates de demo por nome.
- * Se já existir com o mesmo nome, atualiza nodes/edges (layout) mantendo id/status.
+ * Garante os templates do catálogo em disco.
+ *
+ * Casa por `seedSlug` (não por nome — o usuário pode renomear) e só reescreve
+ * nodes/edges quando o fluxo AINDA é o template original: `seedRevision` é
+ * apagado no primeiro save feito pelo builder (ver saveFlow), então um fluxo
+ * customizado nunca é sobrescrito. Sem isso, qualquer edição num demo era
+ * perdida no boot seguinte.
+ *
+ * Migração: fluxos antigos (anteriores ao seedSlug) são reconhecidos pelo nome
+ * exato do seed uma única vez e ganham o slug — a partir daí seguem a regra
+ * nova. Como nunca tiveram seedRevision, são tratados como customizados, ou
+ * seja: no pior caso mantemos o conteúdo que está lá, nunca destruímos.
  */
 function ensureSeedTemplates(file: FlowsFile): boolean {
   let changed = false;
   for (const seed of allSeedTemplates()) {
-    const existing = file.flows.find((f) => f.name === seed.name);
+    let existing = file.flows.find((f) => f.seedSlug && f.seedSlug === seed.seedSlug);
+    if (!existing) {
+      const legacy = file.flows.find((f) => !f.seedSlug && f.name === seed.name);
+      if (legacy) {
+        legacy.seedSlug = seed.seedSlug;
+        changed = true;
+        existing = legacy;
+      }
+    }
+
     if (!existing) {
       file.flows.push(seed);
       changed = true;
       continue;
     }
-    // Atualiza layout/copy do seed (não mexe em status live/draft escolhido)
+
+    // Customizado pelo usuário — não tocar.
+    if (existing.seedRevision == null) continue;
+    // Já está na revisão atual do catálogo — nada a fazer.
+    if (existing.seedRevision === seed.seedRevision) continue;
+
     existing.nodes = seed.nodes;
     existing.edges = seed.edges;
     existing.product = seed.product;
+    existing.seedRevision = seed.seedRevision;
     existing.updatedAt = new Date().toISOString();
     changed = true;
   }
@@ -204,6 +229,9 @@ export function saveFlow(input: {
   status?: "draft" | "live";
   nodes: FlowNode[];
   edges: FlowEdge[];
+  /** Só o catálogo (templates.ts) preenche — ver ensureSeedTemplates. */
+  seedSlug?: string;
+  seedRevision?: number | null;
 }): Flow {
   const file = loadFlows();
   const now = new Date().toISOString();
@@ -240,6 +268,11 @@ export function saveFlow(input: {
     updatedAt: now,
     publishedAt:
       status === "live" ? now : status === "draft" ? existing?.publishedAt ?? null : existing?.publishedAt ?? null,
+    seedSlug: input.seedSlug ?? existing?.seedSlug,
+    // Qualquer save que não venha do próprio catálogo marca o fluxo como
+    // customizado (seedRevision = null) — é o que protege a edição do usuário
+    // de ser sobrescrita por ensureSeedTemplates no próximo boot.
+    seedRevision: input.seedRevision ?? null,
   };
 
   if (existing) {

@@ -9,7 +9,7 @@ import {
   type AccountRecord,
 } from "./registry.js";
 import { deleteFlowsForClient, saveFlow } from "./flows/store.js";
-import { allSeedTemplates } from "./flows/templates.js";
+import { blankFlow, pickCatalogFlow } from "./flows/catalog.js";
 import type { Flow } from "./flows/types.js";
 
 export type ClientRecord = {
@@ -237,33 +237,13 @@ export async function listClientUsers(clientId: string): Promise<UserRecord[]> {
   }));
 }
 
+/**
+ * Fluxo inicial do cliente novo. A escolha do template em si vive em
+ * catalog.ts (`pickCatalogFlow`) — antes essa lógica estava duplicada aqui e
+ * no endpoint /v1/flows/from-template, com defaults diferentes entre si.
+ */
 function pickTemplate(kind?: string): Flow {
-  const all = allSeedTemplates();
-  if (kind === "blank") {
-    const now = new Date().toISOString();
-    return {
-      id: randomUUID(),
-      name: "Atendimento",
-      product: "gestor",
-      accountId: null,
-      status: "draft",
-      createdAt: now,
-      updatedAt: now,
-      nodes: [
-        {
-          id: "n_trigger",
-          type: "trigger",
-          x: 80,
-          y: 60,
-          data: { label: "Mensagem recebida" },
-        },
-      ],
-      edges: [],
-    };
-  }
-  if (kind === "consulta") return all.find((f) => /consulta/i.test(f.name)) || all[0];
-  if (kind === "pilates") return all.find((f) => /pilates|sess[aã]o/i.test(f.name)) || all[0];
-  return all[0];
+  return pickCatalogFlow(kind) ?? blankFlow();
 }
 
 export async function provisionClient(input: {
