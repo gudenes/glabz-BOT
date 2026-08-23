@@ -250,7 +250,41 @@ export async function runFlowStep(opts: {
       // IA responde a pergunta do cliente com o contexto que o dono do negócio
       // escreveu. Sem chave de IA (ou se a chamada falhar) NÃO inventa resposta:
       // segue pelo ramo "erro", que normalmente leva a um handoff.
-      const context = String(node.data.context || "");
+      const manualContext = String(node.data.context || "");
+
+      // Camada extra: o que a equipe já respondeu no histórico (RAG).
+      // O contexto manual continua sendo a verdade oficial e vem PRIMEIRO —
+      // em conflito, ele vence, porque foi escrito de propósito enquanto o
+      // histórico é subproduto (docs/rag-desenho.md §5.3).
+      //
+      // Falha aqui nunca pode derrubar a resposta: sem RAG, o card volta a
+      // funcionar exatamente como antes, só com o texto manual.
+      let context = manualContext;
+      if (flow.clientId && node.data.useKnowledge !== false) {
+        try {
+          const { embedTexts } = await import("./../rag/embeddings.js");
+          const { searchKnowledge } = await import("./../rag/index-store.js");
+          const emb = await embedTexts([text]);
+          if (emb.ok) {
+            const hits = await searchKnowledge(flow.clientId, emb.vectors[0], { topK: 4 });
+            if (hits.length) {
+              const trechos = hits
+                .map((h) => `- Pergunta parecida: ${h.question}\n  Resposta dada pela equipe: ${h.answer}`)
+                .join("\n");
+              context = [
+                manualContext,
+                "",
+                "=== Respostas que a equipe já deu para perguntas parecidas ===",
+                "(use como referência; se conflitar com o contexto acima, o de cima vale)",
+                trechos,
+              ].join("\n");
+            }
+          }
+        } catch (e) {
+          console.warn("[flow] RAG indisponível, seguindo só com contexto manual:", e instanceof Error ? e.message : e);
+        }
+      }
+
       const result = await answerFreeform({
         question: text,
         context,

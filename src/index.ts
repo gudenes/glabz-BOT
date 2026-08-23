@@ -19,6 +19,7 @@
  *   GET  /v1/portal · /v1/portal/dashboard
  *   PUT  /v1/portal/account/profile · /billing · /business
  *   POST /v1/inbox/import (glabs-only)
+ *   GET  /v1/rag/search
  *   POST /v1/rag/reindex · GET /v1/rag/knowledge · POST /v1/rag/knowledge/:id/suppress
  *   GET  /v1/integrations/google-calendar/connect · /callback · /status
  *   DELETE /v1/integrations/google-calendar
@@ -1165,6 +1166,32 @@ const server = createServer(async (req, res) => {
       const { reindexClient } = await import("./rag/index-store.js");
       const result = await reindexClient(clientId);
       json(res, result.ok ? 200 : 400, result);
+      return;
+    }
+
+    // Busca na base — útil pra conferir o que a IA veria antes de responder.
+    if (method === "GET" && path === "/v1/rag/search") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const q = (url.searchParams.get("q") || "").trim();
+      if (!q) {
+        json(res, 400, { ok: false, reason: "parâmetro q obrigatório" });
+        return;
+      }
+      const { embedTexts } = await import("./rag/embeddings.js");
+      const { searchKnowledge } = await import("./rag/index-store.js");
+      const emb = await embedTexts([q]);
+      if (!emb.ok) {
+        json(res, 400, { ok: false, reason: emb.reason });
+        return;
+      }
+      const hits = await searchKnowledge(clientId, emb.vectors[0], {
+        topK: Number(url.searchParams.get("topK")) || 4,
+      });
+      json(res, 200, { ok: true, query: q, hits });
       return;
     }
 
