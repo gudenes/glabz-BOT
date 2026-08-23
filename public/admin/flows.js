@@ -3,6 +3,7 @@
  */
 import { typeIcon } from "./icons.js";
 import { applyStaticTranslations, mountLangToggle, t } from "./i18n.js";
+import { unknownVarsIn, varsAvailableAt } from "./vars.js";
 
 applyStaticTranslations();
 document.getElementById("lang-toggle-slot-login") &&
@@ -897,6 +898,120 @@ function deleteNode(node) {
 /** Último nó cujo conteúdo já foi mostrado no painel Detalhes (evita pulsar de novo à toa). */
 let lastSeenPropsNodeId = null;
 
+/**
+ * Painel "variáveis disponíveis aqui" — a lista real do que existe naquele
+ * ponto do fluxo, clicável pra inserir no texto. Antes o usuário precisava
+ * decorar/adivinhar os nomes; era o ponto onde um fluxo saía quebrado sem
+ * nenhum aviso (mensagem indo com "{{slots_text}}" cru pro cliente final).
+ */
+function renderVarsPanel(node) {
+  if (!node || node.type === "trigger" || node.type === "end") return "";
+  const vars = varsAvailableAt(state.flow, node.id);
+  const unknown = unknownVarsIn(state.flow, node);
+
+  const warn = unknown.length
+    ? `<p class="fb-vars-warn">⚠ ${unknown.map((v) => `<code>{{${escapeHtml(v)}}}</code>`).join(", ")}
+       ${unknown.length > 1 ? "não existem" : "não existe"} neste ponto do fluxo — vai aparecer sem preencher pro cliente.</p>`
+    : "";
+
+  const chips = vars
+    .map(
+      (v) => `<button type="button" class="fb-var" data-var="${escapeHtml(v.name)}"
+        title="${escapeHtml(v.hint)} · vem de: ${escapeHtml(v.from)}">{{${escapeHtml(v.name)}}}</button>`
+    )
+    .join("");
+
+  return `
+    <details class="fb-vars" ${unknown.length ? "open" : ""}>
+      <summary>Variáveis disponíveis aqui <span class="fb-vars-n">${vars.length}</span></summary>
+      ${warn}
+      <div class="fb-vars-list">${chips}</div>
+      <p class="fb-hint">Clique para inserir no campo de texto. Passe o mouse para ver o que cada uma guarda.</p>
+    </details>`;
+}
+
+/** Insere {{var}} no último campo de texto focado (ou no primeiro do painel). */
+function wireVarPanel(node) {
+  const body = $("props-body");
+  if (!body) return;
+
+  const textFields = () =>
+    [...body.querySelectorAll("textarea, input[type=text], input:not([type])")].filter(
+      (el) => !el.disabled && el.id !== "p-var" && el.id !== "p-field"
+    );
+
+  let lastFocused = null;
+  for (const el of textFields()) {
+    el.addEventListener("focus", () => {
+      lastFocused = el;
+    });
+    attachVarAutocomplete(el, node);
+  }
+
+  body.querySelectorAll(".fb-var").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = lastFocused || textFields()[0];
+      if (!target) return;
+      const token = `{{${btn.dataset.var}}}`;
+      const start = target.selectionStart ?? target.value.length;
+      const end = target.selectionEnd ?? target.value.length;
+      target.value = target.value.slice(0, start) + token + target.value.slice(end);
+      const pos = start + token.length;
+      target.focus();
+      target.setSelectionRange(pos, pos);
+    });
+  });
+}
+
+/**
+ * Autocomplete ao digitar "{{" — atalho pra quem já conhece os nomes, sem
+ * precisar tirar a mão do teclado.
+ */
+function attachVarAutocomplete(el, node) {
+  let menu = null;
+  const close = () => {
+    menu?.remove();
+    menu = null;
+  };
+
+  el.addEventListener("blur", () => setTimeout(close, 150));
+  el.addEventListener("input", () => {
+    const upto = el.value.slice(0, el.selectionStart ?? 0);
+    const m = upto.match(/\{\{\s*([\w.]*)$/);
+    close();
+    if (!m) return;
+
+    const term = (m[1] || "").toLowerCase();
+    const matches = varsAvailableAt(state.flow, node.id).filter((v) =>
+      v.name.toLowerCase().includes(term)
+    );
+    if (!matches.length) return;
+
+    menu = document.createElement("div");
+    menu.className = "fb-var-menu";
+    menu.innerHTML = matches
+      .map(
+        (v) => `<button type="button" data-var="${escapeHtml(v.name)}">
+          <b>${escapeHtml(v.name)}</b><small>${escapeHtml(v.hint)}</small></button>`
+      )
+      .join("");
+    el.parentElement?.appendChild(menu);
+
+    menu.querySelectorAll("button").forEach((b) => {
+      b.addEventListener("mousedown", (ev) => {
+        ev.preventDefault();
+        const cut = (el.selectionStart ?? 0) - m[0].length;
+        const token = `{{${b.dataset.var}}}`;
+        el.value = el.value.slice(0, cut) + token + el.value.slice(el.selectionStart ?? 0);
+        const pos = cut + token.length;
+        el.focus();
+        el.setSelectionRange(pos, pos);
+        close();
+      });
+    });
+  });
+}
+
 function renderProps() {
   const empty = $("props-empty");
   const body = $("props-body");
@@ -1022,7 +1137,8 @@ function renderProps() {
     <button type="button" class="fb-btn fb-btn-danger" id="p-del">Remover</button>
   </div>`;
 
-  body.innerHTML = html;
+  body.innerHTML = renderVarsPanel(node) + html;
+  wireVarPanel(node);
 
   if (node.type === "action") {
     const syncOp = () => {
@@ -1157,6 +1273,9 @@ function renderProps() {
         };
       }
       renderCanvas();
+      // Re-renderiza o painel pra revalidar as variáveis do texto recém-salvo
+      // (é o que faz o aviso de "{{var}} não existe aqui" aparecer na hora).
+      renderProps();
       toast(t("builder.toast.stepUpdated"));
     };
   }
