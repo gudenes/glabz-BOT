@@ -24,6 +24,7 @@ Auth: `Authorization: Bearer $GLABS_BOT_SECRET`
 | GET/PATCH | `/v1/accounts/:id` |
 | GET | `/v1/accounts/:id/status` |
 | POST | `/v1/accounts/:id/connect` · `disconnect` · `send` · `profile` |
+| GET | `/v1/accounts/:id/contacts` |
 
 ### Provisionar account (idempotente)
 

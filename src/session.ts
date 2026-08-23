@@ -1,7 +1,7 @@
 /**
  * Sessão Baileys por accountId (1 número WhatsApp = 1 account no Glabs Bot).
  */
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import baileysDefault, {
   DisconnectReason,
@@ -12,8 +12,9 @@ import baileysDefault, {
 import { Boom } from "@hapi/boom";
 import pino from "pino";
 import QRCode from "qrcode";
-import { authDir, botSecret, logLevel } from "./config.js";
+import { authDir, botSecret, dataDir, logLevel } from "./config.js";
 import { formatPhoneDisplay, toWhatsAppJid } from "./phone.js";
+import { ingestContacts, type AgendaContact } from "./contacts.js";
 import { getAccount, type AccountRecord } from "./registry.js";
 import { db, hasDatabase } from "./db.js";
 import { sendEmailAlert, sendTelegramAlert } from "./notify.js";
@@ -52,9 +53,48 @@ type LiveSession = {
   connectedAt: Date | null;
   sock: any | null;
   starting: boolean;
+  contacts: Map<string, AgendaContact>;
 };
 
 const sessions = new Map<string, LiveSession>();
+
+function contactsPath(accountId: string): string {
+  return join(dataDir(), "contacts", `${accountId}.json`);
+}
+
+function loadPersistedContacts(accountId: string): Map<string, AgendaContact> {
+  try {
+    const raw = readFileSync(contactsPath(accountId), "utf8");
+    const rows = JSON.parse(raw) as AgendaContact[];
+    if (!Array.isArray(rows)) return new Map();
+    return new Map(
+      rows
+        .filter((row) => row && typeof row.phoneE164 === "string")
+        .map((row) => [row.phoneE164, { phoneE164: row.phoneE164, name: row.name || row.phoneE164 }]),
+    );
+  } catch {
+    return new Map();
+  }
+}
+
+const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function schedulePersistContacts(s: LiveSession): void {
+  const prev = persistTimers.get(s.accountId);
+  if (prev) clearTimeout(prev);
+  persistTimers.set(
+    s.accountId,
+    setTimeout(() => {
+      persistTimers.delete(s.accountId);
+      try {
+        mkdirSync(join(dataDir(), "contacts"), { recursive: true });
+        writeFileSync(contactsPath(s.accountId), JSON.stringify([...s.contacts.values()]));
+      } catch (e) {
+        console.error(`[wa:${s.accountId}] persist contacts failed:`, (e as Error).message);
+      }
+    }, 1500),
+  );
+}
 
 function empty(accountId: string): LiveSession {
   return {
@@ -67,6 +107,7 @@ function empty(accountId: string): LiveSession {
     connectedAt: null,
     sock: null,
     starting: false,
+    contacts: loadPersistedContacts(accountId),
   };
 }
 
@@ -76,6 +117,7 @@ function getOrCreate(accountId: string): LiveSession {
     s = empty(accountId);
     sessions.set(accountId, s);
   }
+  if (!s.contacts) s.contacts = new Map();
   return s;
 }
 
@@ -99,6 +141,29 @@ export function snapshot(accountId: string): SessionSnapshot {
     displayName: s.displayName,
     lastError: s.lastError,
     connectedAt: s.connectedAt?.toISOString() ?? null,
+  };
+}
+
+function harvestStore(s: LiveSession): void {
+  const store = s.sock?.store?.contacts;
+  if (!store || typeof store !== "object") return;
+  ingestContacts(s.contacts, Object.values(store), s.phoneE164);
+}
+
+export function listContacts(accountId: string): {
+  ok: true;
+  connected: boolean;
+  contacts: AgendaContact[];
+} {
+  const s = getOrCreate(accountId);
+  harvestStore(s);
+  const contacts = [...s.contacts.values()].sort((a, b) =>
+    a.name.localeCompare(b.name, "pt"),
+  );
+  return {
+    ok: true,
+    connected: s.status === "connected",
+    contacts: contacts.slice(0, 800),
   };
 }
 
@@ -249,11 +314,14 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
 
   const { state, saveCreds } = await useMultiFileAuthState(dir);
   const { version } = await fetchLatestBaileysVersion();
-  const alreadyRegistered = Boolean((state.creds as { registered?: boolean } | undefined)?.registered);
+  const creds = state.creds as { registered?: boolean; me?: { id?: string } | null } | undefined;
+  const alreadyRegistered = Boolean(creds?.registered || creds?.me?.id);
   if (alreadyRegistered) {
     s.status = "disconnected";
     s.qrDataUrl = null;
-    s.lastError = null;
+    if (!s.lastError || !/reconectando/i.test(s.lastError)) {
+      s.lastError = "Reconectando…";
+    }
     console.log(`[wa:${accountId}] credenciais em disco — reconectando sem QR…`);
   }
 
@@ -267,6 +335,26 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
 
   s.sock = sock;
   sock.ev.on("creds.update", saveCreds);
+
+  const takeContacts = (list: unknown) => {
+    const before = s.contacts.size;
+    const rows = Array.isArray(list)
+      ? list
+      : list && typeof list === "object" && Array.isArray((list as { contacts?: unknown }).contacts)
+        ? ((list as { contacts: unknown[] }).contacts ?? [])
+        : [];
+    ingestContacts(s.contacts, rows, s.phoneE164);
+    if (s.contacts.size !== before) schedulePersistContacts(s);
+  };
+  sock.ev.on("contacts.upsert", takeContacts);
+  sock.ev.on("contacts.update", takeContacts);
+  sock.ev.on("contacts.set", takeContacts);
+  // History sync after QR/reconnect — this is the real address book dump.
+  sock.ev.on("messaging-history.set", (payload: { contacts?: unknown[]; chats?: unknown[] }) => {
+    takeContacts(payload?.contacts);
+    takeContacts(payload?.chats);
+  });
+  sock.ev.on("chats.upsert", takeContacts);
 
   sock.ev.on("messages.upsert", ({ messages, type }: any) => {
     if (type !== "notify") return;
@@ -289,11 +377,14 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
 
   sock.ev.on("connection.update", async (u: any) => {
     if (u.qr) {
-      const regNow = Boolean(
-        (sock.authState?.creds as { registered?: boolean } | undefined)?.registered ||
-          alreadyRegistered
+      const credsNow = sock.authState?.creds as
+        | { registered?: boolean; me?: { id?: string } | null }
+        | undefined;
+      const paired = Boolean(
+        alreadyRegistered || credsNow?.registered || credsNow?.me?.id,
       );
-      if (regNow && s.status !== "pending_qr") {
+      // Sessão já pareada: QR efêmero no restart/408 não é pairing novo.
+      if (paired) {
         console.log(`[wa:${accountId}] QR ignorado (sessão registrada — aguardando open)`);
         return;
       }
@@ -307,6 +398,7 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
         console.error(`[wa:${accountId}] qr encode failed:`, (e as Error).message);
       }
       s.status = "pending_qr";
+      s.lastError = null;
       s.phoneE164 = null;
       s.displayName = null;
       s.connectedAt = null;
@@ -341,6 +433,12 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
         s.phoneE164 = null;
         s.displayName = null;
         s.connectedAt = null;
+        s.contacts.clear();
+        try {
+          rmSync(contactsPath(accountId), { force: true });
+        } catch {
+          /* ignore */
+        }
         s.lastError = "Sessão encerrada no celular. Conecte de novo e escaneie o QR.";
         void persistStatus(s);
         void sendTelegramAlert(
@@ -398,8 +496,14 @@ export async function disconnect(accountId: string): Promise<SessionSnapshot> {
   s.connectedAt = null;
   s.starting = false;
   s.lastError = null;
+  s.contacts.clear();
   try {
     rmSync(accountAuthPath(accountId), { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+  try {
+    rmSync(contactsPath(accountId), { force: true });
   } catch {
     /* ignore */
   }
@@ -444,7 +548,7 @@ async function postWebhook(accountId: string, payload: Record<string, unknown>):
 
 async function handleInbound(accountId: string, m: any, sock: any): Promise<void> {
   try {
-    if (m?.key?.fromMe) return;
+    const fromMe = Boolean(m?.key?.fromMe);
     const jid: string = m?.key?.remoteJid ?? "";
     if (!jid || jid.endsWith("@g.us") || jid === "status@broadcast" || jid.endsWith("@newsletter")) {
       return;
@@ -463,6 +567,26 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
 
     const quote = extractQuotedContext(unwrapped);
     const bodyText = text || mediaLabel(media);
+
+    // Mensagem mandada no celular do número conectado — espelha no inbox como outbound.
+    // Dedup no app via externalId (o send pela API já grava o mesmo id).
+    if (fromMe) {
+      await postWebhook(accountId, {
+        type: "message",
+        direction: "out",
+        phoneE164: phone,
+        body: bodyText,
+        externalId: m?.key?.id ?? null,
+        sentAt: new Date(Number(m?.messageTimestamp || 0) * 1000 || Date.now()).toISOString(),
+        media: media ?? undefined,
+        quoted: quote ?? undefined,
+      });
+      console.log(
+        `[wa:${accountId}] echo fromMe → ${phone}${media ? ` +${media.kind}` : ""}`
+      );
+      return;
+    }
+
     const meta = accountMeta(accountId);
     const product = meta?.product || "gestor";
 
@@ -585,7 +709,7 @@ function unwrapMessageContent(msg: any): any {
 }
 
 type InboundMedia = {
-  kind: "audio" | "image" | "document";
+  kind: "audio" | "image" | "document" | "video";
   mimetype: string;
   base64: string;
   fileName?: string;
@@ -625,8 +749,7 @@ async function downloadInboundMedia(
     mimetype = content.documentMessage.mimetype || "application/octet-stream";
     fileName = content.documentMessage.fileName || "document";
   } else if (content.videoMessage) {
-    // vídeo: trata como documento para download/reprodução simples
-    kind = "document";
+    kind = "video";
     mimetype = content.videoMessage.mimetype || "video/mp4";
     fileName = "video.mp4";
   } else {
@@ -678,6 +801,7 @@ function mediaLabel(media: InboundMedia | null): string {
   if (!media) return "";
   if (media.kind === "audio") return media.ptt ? "🎤 Áudio" : "🔊 Áudio";
   if (media.kind === "image") return "🖼 Imagem";
+  if (media.kind === "video") return "🎬 Vídeo";
   return `📎 ${media.fileName || "Documento"}`;
 }
 
@@ -813,8 +937,8 @@ export type SendMediaInput = {
   base64: string;
   mimetype: string;
   fileName?: string;
-  /** image | document (default: infere pelo mime) */
-  kind?: "image" | "document";
+  /** image | video | audio | document (default: infere pelo mime) */
+  kind?: "image" | "video" | "audio" | "document";
 };
 
 /** Citação WhatsApp (reply-to): key da mensagem original. */
@@ -896,6 +1020,8 @@ export async function sendText(
         mime = guessMimeFromName(fileName);
       }
       const isImage = media.kind === "image" || mime.startsWith("image/");
+      const isVideo = media.kind === "video" || mime.startsWith("video/");
+      const isAudio = media.kind === "audio" || mime.startsWith("audio/");
 
       if (isImage) {
         result = await s.sock.sendMessage(
@@ -904,6 +1030,26 @@ export async function sendText(
             image: buf,
             caption: text || undefined,
             mimetype: mime.startsWith("image/") ? mime : "image/jpeg",
+          },
+          sendOpts
+        );
+      } else if (isVideo) {
+        result = await s.sock.sendMessage(
+          jid,
+          {
+            video: buf,
+            caption: text || undefined,
+            mimetype: mime.startsWith("video/") ? mime : "video/mp4",
+          },
+          sendOpts
+        );
+      } else if (isAudio) {
+        result = await s.sock.sendMessage(
+          jid,
+          {
+            audio: buf,
+            mimetype: mime || "audio/ogg",
+            ptt: false,
           },
           sendOpts
         );
@@ -919,8 +1065,9 @@ export async function sendText(
           sendOpts
         );
       }
+      const sentKind = isImage ? "image" : isVideo ? "video" : isAudio ? "audio" : "document";
       console.log(
-        `[wa:${accountId}] enviou ${isImage ? "image" : "document"} → ${jid} name=${fileName} mime=${mime} bytes=${buf.length}${quoted?.id ? " quoted" : ""}`
+        `[wa:${accountId}] enviou ${sentKind} → ${jid} name=${fileName} mime=${mime} bytes=${buf.length}${quoted?.id ? " quoted" : ""}`
       );
     } else {
       result = await s.sock.sendMessage(jid, { text }, sendOpts);
@@ -953,6 +1100,58 @@ export async function sendText(
   }
 }
 
+export async function editText(
+  accountId: string,
+  to: string,
+  externalId: string,
+  body: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const s = getOrCreate(accountId);
+  if (s.status !== "connected" || !s.sock) {
+    return { ok: false, reason: "WhatsApp desconectado. Conecte e escaneie o QR." };
+  }
+  const text = (body ?? "").trim();
+  if (!text) return { ok: false, reason: "Mensagem vazia." };
+  if (!externalId.trim()) return { ok: false, reason: "Mensagem sem id WhatsApp." };
+  const jid = toWhatsAppJid(to);
+  if (!jid) return { ok: false, reason: "Telefone inválido." };
+  try {
+    await s.sock.sendMessage(jid, {
+      text,
+      edit: { remoteJid: jid, fromMe: true, id: externalId.trim() },
+    });
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "falha ao editar";
+    console.error(`[wa:${accountId}] edit failed:`, msg);
+    return { ok: false, reason: msg };
+  }
+}
+
+export async function deleteSentMessage(
+  accountId: string,
+  to: string,
+  externalId: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const s = getOrCreate(accountId);
+  if (s.status !== "connected" || !s.sock) {
+    return { ok: false, reason: "WhatsApp desconectado. Conecte e escaneie o QR." };
+  }
+  if (!externalId.trim()) return { ok: false, reason: "Mensagem sem id WhatsApp." };
+  const jid = toWhatsAppJid(to);
+  if (!jid) return { ok: false, reason: "Telefone inválido." };
+  try {
+    await s.sock.sendMessage(jid, {
+      delete: { remoteJid: jid, fromMe: true, id: externalId.trim() },
+    });
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "falha ao apagar";
+    console.error(`[wa:${accountId}] delete failed:`, msg);
+    return { ok: false, reason: msg };
+  }
+}
+
 function guessMimeFromName(name: string): string {
   const n = name.toLowerCase();
   if (n.endsWith(".pdf")) return "application/pdf";
@@ -968,7 +1167,9 @@ function guessMimeFromName(name: string): string {
     return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   if (n.endsWith(".txt")) return "text/plain";
   if (n.endsWith(".csv")) return "text/csv";
-  if (n.endsWith(".mp4")) return "video/mp4";
+  if (n.endsWith(".mp4") || n.endsWith(".m4v")) return "video/mp4";
+  if (n.endsWith(".webm")) return "video/webm";
+  if (n.endsWith(".mov")) return "video/quicktime";
   if (n.endsWith(".ogg") || n.endsWith(".opus")) return "audio/ogg";
   return "application/octet-stream";
 }
