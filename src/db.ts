@@ -194,9 +194,41 @@ CREATE INDEX IF NOT EXISTS idx_wa_msg_thread ON wa_messages(account_id, phone_e1
 CREATE INDEX IF NOT EXISTS idx_wa_msg_client ON wa_messages(client_id, sent_at DESC);
 `;
 
+/**
+ * Habilita pgvector se a imagem do Postgres tiver a extensão disponível.
+ *
+ * É pré-requisito pra busca semântica no histórico de atendimento (RAG) — ver
+ * docs/. Falha de propósito em silêncio (só loga): nem toda imagem traz a
+ * extensão compilada, e o app tem que subir normalmente sem ela. Enquanto não
+ * existir, nada no produto depende disso.
+ *
+ * Roda separado do SCHEMA porque `CREATE EXTENSION` exige privilégio que nem
+ * todo ambiente concede — se fosse junto, um erro aqui derrubaria todas as
+ * migrations.
+ */
+export async function ensureVectorExtension(): Promise<boolean> {
+  if (!hasDatabase()) return false;
+  try {
+    await db().unsafe("CREATE EXTENSION IF NOT EXISTS vector");
+    const rows = await db().unsafe(
+      "SELECT extversion FROM pg_extension WHERE extname = 'vector'"
+    );
+    const version = (rows[0] as { extversion?: string } | undefined)?.extversion;
+    console.log(`[glabs-bot] pgvector disponível (v${version ?? "?"})`);
+    return true;
+  } catch (e) {
+    console.warn(
+      "[glabs-bot] pgvector NÃO disponível nesta imagem do Postgres:",
+      e instanceof Error ? e.message : e
+    );
+    return false;
+  }
+}
+
 export async function migrate(): Promise<void> {
   if (!hasDatabase()) return;
   await db().unsafe(SCHEMA);
+  await ensureVectorExtension();
 }
 
 export function readJsonFile<T>(path: string): T | null {
