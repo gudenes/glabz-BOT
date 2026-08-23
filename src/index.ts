@@ -13,6 +13,7 @@
  *   GET/PATCH/DELETE /v1/accounts/:id
  *   GET  /v1/accounts/:id/status
  *   POST /v1/accounts/:id/connect · disconnect · send · profile
+ *   GET  /v1/accounts/:id/contacts
  *   GET/POST /v1/flows · GET/PUT/DELETE /v1/flows/:id
  *   POST /v1/flows/simulate · /v1/flows/:id/publish · /reset-state
  *   GET  /v1/portal · /v1/portal/dashboard
@@ -91,8 +92,11 @@ import {
 import {
   connect,
   disconnect,
+  listContacts,
   resetConnectionStatusOnBoot,
   restoreSessionsFromDisk,
+  deleteSentMessage,
+  editText,
   sendText,
   snapshot,
   updateProfile,
@@ -832,7 +836,7 @@ const server = createServer(async (req, res) => {
           base64?: string;
           mimetype?: string;
           fileName?: string;
-          kind?: "image" | "document";
+          kind?: "image" | "document" | "audio" | "video";
         } | null;
       }>(await readBody(req));
       const author =
@@ -1428,7 +1432,7 @@ const server = createServer(async (req, res) => {
     // ── Account by id ─────────────────────────────────────
     const accMatch = path.match(
       new RegExp(
-        `^/v1/accounts/(${UUID_RE})(?:/(status|connect|disconnect|send|profile))?$`,
+        `^/v1/accounts/(${UUID_RE})(?:/(status|connect|disconnect|send|profile|contacts))?$`,
         "i"
       )
     );
@@ -1490,6 +1494,15 @@ const server = createServer(async (req, res) => {
         return;
       }
 
+      if (method === "GET" && action === "contacts") {
+        if (!getAccount(accountId)) {
+          json(res, 404, { ok: false, reason: "accountNotFound" });
+          return;
+        }
+        json(res, 200, listContacts(accountId));
+        return;
+      }
+
       if (method === "POST" && action === "connect") {
         if (!getAccount(accountId)) {
           json(res, 404, { ok: false, reason: "accountNotFound" });
@@ -1522,7 +1535,7 @@ const server = createServer(async (req, res) => {
             base64?: string;
             mimetype?: string;
             fileName?: string;
-            kind?: "image" | "document";
+            kind?: "image" | "document" | "audio" | "video";
           } | null;
           quoted?: {
             id?: string;
@@ -1563,6 +1576,45 @@ const server = createServer(async (req, res) => {
           return;
         }
         json(res, 200, result);
+        return;
+      }
+
+      if (method === "POST" && action === "edit") {
+        if (!getAccount(accountId)) {
+          json(res, 404, { ok: false, reason: "accountNotFound" });
+          return;
+        }
+        const body = parseJson<{ to?: string; externalId?: string; body?: string }>(
+          await readBody(req),
+        );
+        if (!body?.to || !body.externalId) {
+          json(res, 400, { ok: false, reason: "missingFields" });
+          return;
+        }
+        const result = await editText(
+          accountId,
+          body.to,
+          body.externalId,
+          body.body ?? "",
+        );
+        json(res, result.ok ? 200 : 409, result);
+        return;
+      }
+
+      if (method === "POST" && action === "delete") {
+        if (!getAccount(accountId)) {
+          json(res, 404, { ok: false, reason: "accountNotFound" });
+          return;
+        }
+        const body = parseJson<{ to?: string; externalId?: string }>(
+          await readBody(req),
+        );
+        if (!body?.to || !body.externalId) {
+          json(res, 400, { ok: false, reason: "missingFields" });
+          return;
+        }
+        const result = await deleteSentMessage(accountId, body.to, body.externalId);
+        json(res, result.ok ? 200 : 409, result);
         return;
       }
 
