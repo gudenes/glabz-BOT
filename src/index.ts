@@ -6,6 +6,7 @@
  *
  *   GET  /health
  *   GET  /admin  ·  /admin/*
+ *   POST /v1/users (cria admin GLabs — glabs-only)
  *   GET  /v1/dashboard
  *   GET/POST /v1/products
  *   GET/POST /v1/accounts
@@ -47,6 +48,7 @@ import { hasDatabase, migrate } from "./db.js";
 import {
   SESSION_COOKIE,
   clearSessionCookieHeader,
+  createUser,
   getSessionUser,
   login as loginUser,
   logout as logoutUser,
@@ -454,6 +456,36 @@ const server = createServer(async (req, res) => {
     }
 
     // ── Clients (GLabs cria; portal lê o próprio) ─────────
+    // ── Admins GLabs (não confundir com login de client) ──
+    // seedAdmin() (auth.ts) só cria 1 admin, no primeiro boot, se nenhum
+    // existir ainda — não dá pra adicionar um segundo admin por ali. Essa
+    // rota cobre isso: só glabs-admin/secret pode criar outro glabs-admin.
+    if (method === "POST" && path === "/v1/users") {
+      if (!requireGlabs(auth)) {
+        unauthorized(res);
+        return;
+      }
+      const body = parseJson<{ email?: string; password?: string; name?: string }>(
+        await readBody(req)
+      );
+      if (!body?.email || !body?.password) {
+        json(res, 400, { ok: false, reason: "email e password obrigatórios" });
+        return;
+      }
+      try {
+        const user = await createUser({
+          email: body.email,
+          password: body.password,
+          name: body.name || null,
+          role: "glabs",
+        });
+        json(res, 200, { ok: true, user });
+      } catch (e) {
+        json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "invalid" });
+      }
+      return;
+    }
+
     if (method === "GET" && path === "/v1/clients") {
       if (!requireGlabs(auth)) {
         unauthorized(res);
