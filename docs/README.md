@@ -1,10 +1,10 @@
-# Documentação de arquitetura — Glabz-bot
+# Documentação de arquitetura e produto — Glabz-bot
 
 Referência técnica pra qualquer trabalho de infraestrutura/arquitetura no projeto. Antes de
 propor ou implementar mudança estrutural (não é sobre features de produto), consultar esses
 documentos primeiro.
 
-## Documentos
+## Arquitetura e infraestrutura
 
 - **[arquitetura-as-is.md](./arquitetura-as-is.md)** — estado técnico da arquitetura na data do
   levantamento (17/08/2026): stack, dados, sessão WhatsApp/Baileys, processo, fila, reconexão,
@@ -20,6 +20,17 @@ documentos primeiro.
 - **[teste-de-carga-fase3-gate.md](./teste-de-carga-fase3-gate.md)** — resultado do teste de
   carga que serviu de gate pra decisão sobre a Fase 3 (20/08/2026): metodologia, números reais
   de CPU/memória/latência, conclusão.
+
+## Produto e roadmap funcional
+
+- **[estudo-casos-de-uso-e-integracoes.md](./estudo-casos-de-uso-e-integracoes.md)** — estudo
+  (23/08/2026) de 8 casos de uso reais por segmento, catálogo proposto de 10 templates
+  (5 simples + 5 complexos), matriz de integrações priorizada e lacunas técnicas que os cenários
+  revelam. Base pra decidir o que construir no builder/connectors.
+- **[roadmap-ux-builder.md](./roadmap-ux-builder.md)** — frente de usabilidade do builder
+  (registrada, não iniciada): variáveis visíveis/sugeridas, teste de trecho isolado, blocos
+  reutilizáveis, transcrição de áudio, histórico de versões. Motivada pelo objetivo de o usuário
+  leigo construir o próprio fluxo.
 
 ## Convenção de versionamento
 
