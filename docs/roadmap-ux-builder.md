@@ -2,9 +2,9 @@
 
 Registro de frente de trabalho · 23/08/2026 · repositório `gudenes/glabz-BOT`
 
-> **Status: registrado, não iniciado.** Este documento existe pra não perder o contexto da
-> discussão — as soluções aqui estão deliberadamente em aberto, pra serem desenhadas no momento
-> da implementação.
+> **Status (23/08/2026):** item 1 (variáveis) implementado · item 5 (histórico) já existia antes,
+> foi listado por engano · itens 2, 3 e 4 seguem em aberto, com solução a desenhar na
+> implementação.
 
 ## Por que esta frente existe
 
@@ -17,7 +17,13 @@ Essa frente é **distinta** do estudo de casos de uso
 encontra um template pronto que serve pro negócio dele"; este resolve "o cliente consegue
 adaptar/criar sozinho quando o template não serve".
 
-## 1. Visibilidade e sugestão de variáveis *(prioridade declarada do usuário)*
+## 1. Visibilidade e sugestão de variáveis — ✅ IMPLEMENTADO (23/08/2026)
+
+> Entregue: painel "Variáveis disponíveis aqui" no topo dos Detalhes (lista contextual
+> clicável, calculada percorrendo o grafo e respeitando ramificação), autocomplete ao digitar
+> `{{`, e aviso quando o texto cita variável inexistente naquele ponto. Ver `public/admin/vars.js`.
+
+### Registro do problema original
 
 **Problema:** variáveis são o conceito mais abstrato do builder e hoje são praticamente
 invisíveis. Quem monta um fluxo precisa saber que um nó de Ação de calendário produz
@@ -75,23 +81,21 @@ o template C4. É a única desta lista que é ao mesmo tempo item de UX e de int
 **Complexidade:** média — precisa de uma API de transcrição (custo por minuto) e de decidir o
 comportamento quando a transcrição falha ou vem ruim.
 
-## 5. Histórico de versões de fluxo
+## 5. Histórico de versões de fluxo — ✅ JÁ EXISTIA
 
-**Problema:** não há como ver o que mudou num fluxo nem voltar pra uma versão anterior.
-Pendência antiga do projeto, anterior a esta discussão.
+**Correção (23/08/2026):** este item entrou na lista por engano. O histórico **já estava
+implementado** antes desta frente: `snapshotFlowVersion`/`listFlowVersions`/`restoreFlowVersion`
+em `src/flows/store.ts`, rota `/v1/flows/:id/versions` (+ `/restore`) em `src/index.ts`, e os
+botões "Histórico" e "Reverter" no builder. Guarda até 30 versões por fluxo.
 
-**Consequência:** editar um fluxo em produção é uma operação sem rede de segurança.
-
-**Complexidade:** média — exige versionar `nodes`/`edges` a cada save e uma UI de comparação/
-restauração.
+Nada a fazer aqui — mantido no documento só para registrar a correção.
 
 ## Ordem sugerida
 
 1. **Variáveis visíveis** — maior impacto no objetivo declarado (leigo construir sozinho), e é o
    ponto onde a pessoa efetivamente trava hoje.
 2. **Teste de trecho isolado** — melhora o ciclo de iteração de quem está montando.
-3. **Histórico de versões** — rede de segurança, cresce em importância junto com o nº de clientes.
-4. **Blocos reutilizáveis** — ganho de manutenção, mais relevante conforme o catálogo cresce.
+3. **Blocos reutilizáveis** — ganho de manutenção, mais relevante conforme o catálogo cresce.
 5. **Transcrição de áudio** — alto valor, mas é a única com custo recorrente por uso e decisão
    de provedor; pode ser puxada pra frente se o segmento-alvo for de muito áudio.
 

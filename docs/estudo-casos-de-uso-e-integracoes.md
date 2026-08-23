@@ -2,6 +2,17 @@
 
 Documento de estudo · 23/08/2026 · repositório `gudenes/glabz-BOT`
 
+> **Status de execução (23/08/2026)** — o que saiu deste estudo já foi implementado:
+> Etapa 1 (seeds não sobrescrevem mais a edição do usuário · seleção de template unificada) ·
+> Etapa 2 (catálogo dos 10 templates publicado, C1 com Google Calendar real, C2–C5 com aviso
+> explícito de simulação) · **nó de IA livre** (prioridade 2 da matriz — card "Responder com
+> IA") · lacunas técnicas 3 e 4 (registro de connectors substituindo o if/else · operação por
+> integração em vez de `"request"` fixo).
+>
+> **Continuam em aberto:** integrações e-mail · Sheets · transcrição de áudio · pagamento
+> (prioridades 1, 3, 4 e 5), e as lacunas técnicas 1, 5, 7 e 8 (colisão de variáveis · Studio
+> proibido de gerar `action` · sem lista/repetição · calendário com 1 agenda e duração fixa).
+
 ## 1. Contexto e método
 
 Hoje o produto oferece **2 templates de demo** e **2 connectors**. Isso é insuficiente pra
@@ -181,7 +192,7 @@ abaixo importa.
 | Prioridade | Integração | Destrava | Esforço | Exige do usuário |
 |---|---|---|---|---|
 | **1** | **E-mail** | C2 · confirmação/lembrete em 6 dos 8 cenários | Baixo | Conta num provedor (Resend/SMTP) |
-| **2** | **Nó de IA livre** | C4 · "responder pergunta aberta" (8 de 8 cenários) | Baixo-médio | Nada — a chave de LLM já existe |
+| ~~2~~ ✅ | ~~**Nó de IA livre**~~ *(implementado 23/08)* | C4 · "responder pergunta aberta" (8 de 8 cenários) | Baixo-médio | Nada — a chave de LLM já existe |
 | **3** | **Google Sheets** | C3 · "consultar informação que muda" (6 de 8) | Médio | Só autorizar (reusa o OAuth Google existente) |
 | **4** | **Transcrição de áudio** | C4 · advocacia e qualquer público que manda áudio | Médio | Conta de API de transcrição |
 | **5** | **Pagamento (Pix/link)** | C5 · farmácia, restaurante, serviços | Médio-alto | Conta no gateway (Mercado Pago/Asaas) + dados fiscais |
