@@ -314,11 +314,14 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
 
   const { state, saveCreds } = await useMultiFileAuthState(dir);
   const { version } = await fetchLatestBaileysVersion();
-  const alreadyRegistered = Boolean((state.creds as { registered?: boolean } | undefined)?.registered);
+  const creds = state.creds as { registered?: boolean; me?: { id?: string } | null } | undefined;
+  const alreadyRegistered = Boolean(creds?.registered || creds?.me?.id);
   if (alreadyRegistered) {
     s.status = "disconnected";
     s.qrDataUrl = null;
-    s.lastError = null;
+    if (!s.lastError || !/reconectando/i.test(s.lastError)) {
+      s.lastError = "Reconectando…";
+    }
     console.log(`[wa:${accountId}] credenciais em disco — reconectando sem QR…`);
   }
 
@@ -374,11 +377,14 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
 
   sock.ev.on("connection.update", async (u: any) => {
     if (u.qr) {
-      const regNow = Boolean(
-        (sock.authState?.creds as { registered?: boolean } | undefined)?.registered ||
-          alreadyRegistered
+      const credsNow = sock.authState?.creds as
+        | { registered?: boolean; me?: { id?: string } | null }
+        | undefined;
+      const paired = Boolean(
+        alreadyRegistered || credsNow?.registered || credsNow?.me?.id,
       );
-      if (regNow && s.status !== "pending_qr") {
+      // Sessão já pareada: QR efêmero no restart/408 não é pairing novo.
+      if (paired) {
         console.log(`[wa:${accountId}] QR ignorado (sessão registrada — aguardando open)`);
         return;
       }
@@ -392,6 +398,7 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
         console.error(`[wa:${accountId}] qr encode failed:`, (e as Error).message);
       }
       s.status = "pending_qr";
+      s.lastError = null;
       s.phoneE164 = null;
       s.displayName = null;
       s.connectedAt = null;
