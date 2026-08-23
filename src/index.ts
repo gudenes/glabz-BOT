@@ -95,6 +95,8 @@ import {
   listContacts,
   resetConnectionStatusOnBoot,
   restoreSessionsFromDisk,
+  deleteSentMessage,
+  editText,
   sendText,
   snapshot,
   updateProfile,
@@ -1570,6 +1572,45 @@ const server = createServer(async (req, res) => {
           return;
         }
         json(res, 200, result);
+        return;
+      }
+
+      if (method === "POST" && action === "edit") {
+        if (!getAccount(accountId)) {
+          json(res, 404, { ok: false, reason: "accountNotFound" });
+          return;
+        }
+        const body = parseJson<{ to?: string; externalId?: string; body?: string }>(
+          await readBody(req),
+        );
+        if (!body?.to || !body.externalId) {
+          json(res, 400, { ok: false, reason: "missingFields" });
+          return;
+        }
+        const result = await editText(
+          accountId,
+          body.to,
+          body.externalId,
+          body.body ?? "",
+        );
+        json(res, result.ok ? 200 : 409, result);
+        return;
+      }
+
+      if (method === "POST" && action === "delete") {
+        if (!getAccount(accountId)) {
+          json(res, 404, { ok: false, reason: "accountNotFound" });
+          return;
+        }
+        const body = parseJson<{ to?: string; externalId?: string }>(
+          await readBody(req),
+        );
+        if (!body?.to || !body.externalId) {
+          json(res, 400, { ok: false, reason: "missingFields" });
+          return;
+        }
+        const result = await deleteSentMessage(accountId, body.to, body.externalId);
+        json(res, result.ok ? 200 : 409, result);
         return;
       }
 

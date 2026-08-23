@@ -1077,6 +1077,58 @@ export async function sendText(
   }
 }
 
+export async function editText(
+  accountId: string,
+  to: string,
+  externalId: string,
+  body: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const s = getOrCreate(accountId);
+  if (s.status !== "connected" || !s.sock) {
+    return { ok: false, reason: "WhatsApp desconectado. Conecte e escaneie o QR." };
+  }
+  const text = (body ?? "").trim();
+  if (!text) return { ok: false, reason: "Mensagem vazia." };
+  if (!externalId.trim()) return { ok: false, reason: "Mensagem sem id WhatsApp." };
+  const jid = toWhatsAppJid(to);
+  if (!jid) return { ok: false, reason: "Telefone inválido." };
+  try {
+    await s.sock.sendMessage(jid, {
+      text,
+      edit: { remoteJid: jid, fromMe: true, id: externalId.trim() },
+    });
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "falha ao editar";
+    console.error(`[wa:${accountId}] edit failed:`, msg);
+    return { ok: false, reason: msg };
+  }
+}
+
+export async function deleteSentMessage(
+  accountId: string,
+  to: string,
+  externalId: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const s = getOrCreate(accountId);
+  if (s.status !== "connected" || !s.sock) {
+    return { ok: false, reason: "WhatsApp desconectado. Conecte e escaneie o QR." };
+  }
+  if (!externalId.trim()) return { ok: false, reason: "Mensagem sem id WhatsApp." };
+  const jid = toWhatsAppJid(to);
+  if (!jid) return { ok: false, reason: "Telefone inválido." };
+  try {
+    await s.sock.sendMessage(jid, {
+      delete: { remoteJid: jid, fromMe: true, id: externalId.trim() },
+    });
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "falha ao apagar";
+    console.error(`[wa:${accountId}] delete failed:`, msg);
+    return { ok: false, reason: msg };
+  }
+}
+
 function guessMimeFromName(name: string): string {
   const n = name.toLowerCase();
   if (n.endsWith(".pdf")) return "application/pdf";
