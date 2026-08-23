@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=28" />
+    <link rel="stylesheet" href="/admin/portal.css?v=29" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -63,6 +63,10 @@
           <button type="button" class="nav-link" data-view="integrations">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             <span data-i18n="portal.nav.integrations">Integrações</span>
+          </button>
+          <button type="button" class="nav-link" data-view="knowledge">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            <span data-i18n="portal.nav.knowledge">Conhecimento</span>
           </button>
         </nav>
 
@@ -382,6 +386,19 @@
             <p class="hint-muted" data-i18n="portal.account.integrations.help">Conectando, o node de Ação do tipo Calendário pode listar horários livres e criar/cancelar eventos direto no seu Google Calendar.</p>
           </div>
         </section>
+
+        <!-- Conhecimento (RAG) -->
+        <section id="view-knowledge" class="view hidden">
+          <div class="card-form">
+            <h2 data-i18n="portal.knowledge.title">O que a IA aprendeu com sua equipe</h2>
+            <p class="hint-muted" data-i18n="portal.knowledge.sub">Perguntas que seus clientes fizeram e que alguém da equipe respondeu. A IA usa isso pra responder sozinha da próxima vez.</p>
+            <div class="kb-actions">
+              <button type="button" class="btn-lime" id="btn-kb-reindex" data-i18n="portal.knowledge.reindex">Atualizar com as conversas recentes</button>
+              <span id="kb-status" class="hint-muted"></span>
+            </div>
+            <div id="kb-list" class="kb-list"></div>
+          </div>
+        </section>
       </main>
     </div>
 
@@ -417,6 +434,6 @@
       </div>
     </div>
 
-    <script src="/admin/portal.js?v=29" type="module"></script>
+    <script src="/admin/portal.js?v=30" type="module"></script>
   </body>
 </html>

@@ -1072,3 +1072,22 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
   }
   .mobile-nav button.on { color: var(--ink); }
 }
+
+/* Base de conhecimento (RAG) — o que a IA aprendeu com a equipe */
+.kb-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 14px 0 6px; }
+.kb-list { display: grid; gap: 10px; margin-top: 12px; }
+.kb-item {
+  display: flex; gap: 12px; align-items: flex-start; justify-content: space-between;
+  border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: #fff;
+}
+.kb-body { display: grid; gap: 4px; min-width: 0; }
+.kb-body b { font-size: 14px; }
+.kb-body p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.kb-badge {
+  justify-self: start; font-size: 11px; background: #eef6ee; color: #2f6b34;
+  border-radius: 999px; padding: 2px 9px; margin-top: 2px;
+}
+.kb-remove { color: #b42318 !important; flex-shrink: 0; }
+@media (max-width: 620px) {
+  .kb-item { flex-direction: column; }
+}
