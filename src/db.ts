@@ -194,6 +194,50 @@ CREATE INDEX IF NOT EXISTS idx_wa_msg_thread ON wa_messages(account_id, phone_e1
 CREATE INDEX IF NOT EXISTS idx_wa_msg_client ON wa_messages(client_id, sent_at DESC);
 `;
 
+/** Dimensões do vetor — ver EMBEDDING_MODEL em src/rag/embeddings.ts. */
+export const EMBEDDING_DIMS = 1536;
+
+/**
+ * Schema do RAG — separado do principal porque depende do tipo `vector`, que
+ * só existe onde a extensão pgvector está disponível. O dev local (PG14 sem a
+ * extensão) precisa continuar subindo normalmente, sem RAG.
+ *
+ * Desenho e justificativa das decisões: docs/rag-desenho.md
+ */
+const VECTOR_SCHEMA = `
+CREATE TABLE IF NOT EXISTS knowledge_chunks (
+  id TEXT PRIMARY KEY,
+  -- ON DELETE CASCADE não é detalhe: apagar um cliente TEM que levar junto os
+  -- vetores derivados das conversas dele (privacidade, ver rag-desenho.md §5.1).
+  client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  -- Pergunta e resposta já anonimizadas (sem nome/telefone/documento).
+  question TEXT NOT NULL,
+  answer TEXT NOT NULL,
+  -- Indexamos o PAR pergunta→resposta: mede melhor que só a resposta (§4.1).
+  embedding vector(${EMBEDDING_DIMS}) NOT NULL,
+  -- Frequência = sinal de confiança: resposta repetida pesa mais que isolada (§5.2).
+  occurrences INT NOT NULL DEFAULT 1,
+  -- Marcação negativa: tira da busca sem apagar o histórico de origem (§5.2).
+  suppressed BOOLEAN NOT NULL DEFAULT false,
+  -- Rastreabilidade: permite refazer/remover quando a mensagem de origem sair.
+  source_message_ids TEXT[] NOT NULL DEFAULT '{}',
+  -- Vetores de modelos diferentes não são comparáveis — guardar qual gerou
+  -- permite detectar base misturada e reindexar (§7).
+  embedding_model TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Todo acesso filtra por client_id (isolamento entre clientes, §5.4).
+CREATE INDEX IF NOT EXISTS idx_knowledge_client
+  ON knowledge_chunks(client_id) WHERE NOT suppressed;
+
+-- HNSW (e não ivfflat) porque pode ser criado com a tabela vazia — ivfflat
+-- exige dados presentes pra treinar as listas.
+CREATE INDEX IF NOT EXISTS idx_knowledge_embedding
+  ON knowledge_chunks USING hnsw (embedding vector_cosine_ops);
+`;
+
 /**
  * Habilita pgvector se a imagem do Postgres tiver a extensão disponível.
  *
@@ -225,10 +269,30 @@ export async function ensureVectorExtension(): Promise<boolean> {
   }
 }
 
+/** true quando o RAG tem onde funcionar (extensão + tabelas prontas). */
+let vectorReady = false;
+export function isVectorReady(): boolean {
+  return vectorReady;
+}
+
 export async function migrate(): Promise<void> {
   if (!hasDatabase()) return;
   await db().unsafe(SCHEMA);
-  await ensureVectorExtension();
+
+  // O schema vetorial só roda onde a extensão existe — sem ela o app sobe
+  // igual, apenas sem RAG (dev local em PG14, por exemplo).
+  if (await ensureVectorExtension()) {
+    try {
+      await db().unsafe(VECTOR_SCHEMA);
+      vectorReady = true;
+      console.log("[glabs-bot] schema do RAG pronto (knowledge_chunks)");
+    } catch (e) {
+      console.error(
+        "[glabs-bot] falhou ao criar schema do RAG:",
+        e instanceof Error ? e.message : e
+      );
+    }
+  }
 }
 
 export function readJsonFile<T>(path: string): T | null {
