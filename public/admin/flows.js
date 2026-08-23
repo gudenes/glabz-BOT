@@ -321,6 +321,7 @@ async function loadAll() {
   const [flowsData, productsData] = await Promise.all([
     api("/v1/flows"),
     api("/v1/products").catch(() => ({ products: [] })),
+    loadConnectorCatalog(),
   ]);
   state.flows = flowsData.flows || [];
   state.products = productsData.products || [];
@@ -1025,6 +1026,57 @@ function attachVarAutocomplete(el, node) {
   });
 }
 
+/**
+ * Integrações e operações vêm de GET /v1/flows/connectors (registro em
+ * flows/connectors/index.ts). Antes a lista estava duplicada aqui em HTML e
+ * ficava defasada em relação ao backend. Enquanto o fetch não volta, usa o
+ * fallback abaixo — o painel nunca fica sem opção.
+ */
+let connectorCatalogCache = [
+  {
+    slug: "calendar",
+    label: "Calendário",
+    defaultOperation: "list_slots",
+    operations: [
+      { value: "list_slots", label: "Listar horários livres" },
+      { value: "create_event", label: "Criar evento" },
+      { value: "cancel_event", label: "Cancelar evento" },
+    ],
+  },
+  { slug: "http", label: "HTTP / webhook", defaultOperation: "request", operations: [{ value: "request", label: "Chamar a URL" }] },
+];
+
+async function loadConnectorCatalog() {
+  try {
+    const res = await fetch("/v1/flows/connectors", { credentials: "include", cache: "no-store" });
+    const data = await res.json();
+    if (data?.ok && Array.isArray(data.connectors) && data.connectors.length) {
+      connectorCatalogCache = data.connectors;
+    }
+  } catch {
+    /* mantém o fallback */
+  }
+}
+
+function connectorOptions(selected) {
+  return connectorCatalogCache
+    .map(
+      (c) =>
+        `<option value="${escapeHtml(c.slug)}"${c.slug === selected ? " selected" : ""}>${escapeHtml(c.label)}</option>`
+    )
+    .join("");
+}
+
+function operationOptions(connectorSlug, selected) {
+  const spec = connectorCatalogCache.find((c) => c.slug === connectorSlug) || connectorCatalogCache[0];
+  return (spec?.operations || [])
+    .map(
+      (o) =>
+        `<option value="${escapeHtml(o.value)}"${o.value === selected ? " selected" : ""}>${escapeHtml(o.label)}</option>`
+    )
+    .join("");
+}
+
 function renderProps() {
   const empty = $("props-empty");
   const body = $("props-body");
@@ -1128,14 +1180,11 @@ function renderProps() {
       <input id="p-label" value="${escapeHtml(String(d.label || ""))}" placeholder="Listar horários" /></div>
       <div class="field"><label>Integração</label>
       <select id="p-connector">
-        <option value="calendar"${connector === "calendar" ? " selected" : ""}>Calendário</option>
-        <option value="http"${connector === "http" ? " selected" : ""}>HTTP / webhook</option>
+        ${connectorOptions(connector)}
       </select></div>
       <div class="field" id="p-op-wrap"><label>Operação</label>
       <select id="p-operation">
-        <option value="list_slots"${operation === "list_slots" ? " selected" : ""}>Listar horários livres</option>
-        <option value="create_event"${operation === "create_event" ? " selected" : ""}>Criar evento</option>
-        <option value="cancel_event"${operation === "cancel_event" ? " selected" : ""}>Cancelar evento</option>
+        ${operationOptions(connector, operation)}
       </select></div>
       <div class="field" id="p-provider-wrap"><label>Fonte dos horários</label>
       <select id="p-provider">
@@ -1169,9 +1218,19 @@ function renderProps() {
     const syncOp = () => {
       const wrap = $("p-op-wrap");
       const providerWrap = $("p-provider-wrap");
-      const isCalendar = $("p-connector").value === "calendar";
-      if (wrap) wrap.style.display = isCalendar ? "" : "none";
-      if (providerWrap) providerWrap.style.display = isCalendar ? "" : "none";
+      const slug = $("p-connector").value;
+      const spec = connectorCatalogCache.find((c) => c.slug === slug);
+      const opSel = $("p-operation");
+      // Repopula as operações da integração escolhida — antes o select ficava
+      // preso nas 3 do calendário, mesmo trocando pra outra integração.
+      if (opSel && spec) {
+        const keep = spec.operations.some((o) => o.value === opSel.value) ? opSel.value : spec.defaultOperation;
+        opSel.innerHTML = operationOptions(slug, keep);
+      }
+      // Esconde o select quando a integração só tem uma operação possível.
+      const manyOps = (spec?.operations || []).length > 1;
+      if (wrap) wrap.style.display = manyOps ? "" : "none";
+      if (providerWrap) providerWrap.style.display = slug === "calendar" ? "" : "none";
       syncProvider();
     };
     const syncProvider = () => {
@@ -1210,10 +1269,10 @@ function renderProps() {
         ...node.data,
         label: $("p-label").value.trim() || undefined,
         connector,
-        operation:
-          connector === "calendar"
-            ? $("p-operation").value
-            : node.data.operation || "request",
+        // Antes gravava "request" fixo pra qualquer integração que não fosse
+        // calendário — o que impedia qualquer connector novo de ter mais de
+        // uma operação. Agora respeita o que o select mostra.
+        operation: $("p-operation")?.value || node.data.operation || "request",
         config,
       };
       renderCanvas();

@@ -18,7 +18,11 @@ export type FlowNodeType =
   | "handoff"
   | "end";
 
-/** Connectors suportados no nó `action`. */
+/**
+ * Connectors suportados no nó `action`.
+ * Fonte de verdade em runtime é CONNECTORS (flows/connectors/index.ts) — este
+ * tipo é só documentação e não é validado em lugar nenhum.
+ */
 export type ActionConnector = "calendar" | "http";
 
 /** Ops do connector calendar. */
