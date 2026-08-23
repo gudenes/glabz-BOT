@@ -548,7 +548,7 @@ async function postWebhook(accountId: string, payload: Record<string, unknown>):
 
 async function handleInbound(accountId: string, m: any, sock: any): Promise<void> {
   try {
-    if (m?.key?.fromMe) return;
+    const fromMe = Boolean(m?.key?.fromMe);
     const jid: string = m?.key?.remoteJid ?? "";
     if (!jid || jid.endsWith("@g.us") || jid === "status@broadcast" || jid.endsWith("@newsletter")) {
       return;
@@ -567,6 +567,26 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
 
     const quote = extractQuotedContext(unwrapped);
     const bodyText = text || mediaLabel(media);
+
+    // Mensagem mandada no celular do número conectado — espelha no inbox como outbound.
+    // Dedup no app via externalId (o send pela API já grava o mesmo id).
+    if (fromMe) {
+      await postWebhook(accountId, {
+        type: "message",
+        direction: "out",
+        phoneE164: phone,
+        body: bodyText,
+        externalId: m?.key?.id ?? null,
+        sentAt: new Date(Number(m?.messageTimestamp || 0) * 1000 || Date.now()).toISOString(),
+        media: media ?? undefined,
+        quoted: quote ?? undefined,
+      });
+      console.log(
+        `[wa:${accountId}] echo fromMe → ${phone}${media ? ` +${media.kind}` : ""}`
+      );
+      return;
+    }
+
     const meta = accountMeta(accountId);
     const product = meta?.product || "gestor";
 
