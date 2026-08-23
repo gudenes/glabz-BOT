@@ -13,6 +13,7 @@ export type FlowNodeType =
   | "condition"
   | "llm_intent"
   | "llm_extract"
+  | "llm_answer"
   | "action"
   | "handoff"
   | "end";

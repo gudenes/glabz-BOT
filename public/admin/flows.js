@@ -93,6 +93,14 @@ function defaultData(type) {
         prompt: "Data que o cliente prefere pra marcar o horário.",
         varName: "data_confirmada",
       };
+    case "llm_answer":
+      return {
+        label: "Responder com IA",
+        context:
+          "Escreva aqui o que a IA precisa saber pra responder: horários, preços, endereço, o que você faz e o que não faz.",
+        varName: "resposta_ia",
+        maxChars: 400,
+      };
     case "condition":
       return { field: "last", op: "contains", value: "sim" };
     case "action":
@@ -132,6 +140,7 @@ function nodeTitle(node) {
   if (node.type === "ask") return prettyPreview(d.prompt || "Pergunta") || "Pergunta";
   if (node.type === "llm_intent") return d.label || "Entender intenção";
   if (node.type === "llm_extract") return d.label || "Extrair data";
+  if (node.type === "llm_answer") return d.label || "Responder com IA";
   if (node.type === "condition")
     return `${d.field || "texto"} ${d.op || "contém"} “${d.value || ""}”`;
   if (node.type === "action") {
@@ -248,6 +257,7 @@ function typeLabel(type) {
       ask: t("builder.step.ask"),
       llm_intent: t("builder.step.intent"),
       llm_extract: t("builder.step.extract"),
+      llm_answer: t("builder.step.answer"),
       condition: t("builder.step.condition"),
       action: t("builder.step.action"),
       handoff: t("builder.step.handoff"),
@@ -715,6 +725,7 @@ const ADDABLE_TYPES = [
   { type: "ask", label: t("builder.step.ask"), ic: "ask" },
   { type: "llm_intent", label: t("builder.step.intent"), ic: "llm" },
   { type: "llm_extract", label: t("builder.step.extract"), ic: "extract" },
+  { type: "llm_answer", label: t("builder.step.answer"), ic: "answer" },
   { type: "action", label: t("builder.step.action"), ic: "act" },
   { type: "condition", label: t("builder.step.condition"), ic: "cond" },
   { type: "handoff", label: t("builder.step.handoff"), ic: "hand" },
@@ -787,6 +798,8 @@ function addChildNode(parentNode, type) {
     edgeLabel = siblings === 0 ? "ok" : "erro";
   } else if (parentNode.type === "llm_extract") {
     edgeLabel = ["ok", "ambiguous", "unclear"][siblings] || "ok";
+  } else if (parentNode.type === "llm_answer") {
+    edgeLabel = siblings === 0 ? "ok" : "erro";
   }
 
   state.flow.edges.push({
@@ -1095,6 +1108,18 @@ function renderProps() {
       <p class="fb-hint">Ligações: <code>ok</code> (extraiu certo) / <code>ambiguous</code> (faltou info) / <code>unclear</code> (não tinha data). Var extra: <code>date_extract_status</code>.</p>`;
   }
 
+  if (node.type === "llm_answer") {
+    html += `<div class="field"><label>Título no cartão</label>
+      <input id="p-label" value="${escapeHtml(String(d.label || ""))}" placeholder="Responder dúvida" /></div>
+      <div class="field"><label>O que a IA sabe sobre o seu negócio</label>
+      <textarea id="p-context" rows="8" placeholder="Horário: seg a sex 9h-18h&#10;Preços: plano X R$ 000&#10;Endereço: rua ...&#10;Não atendemos: ...">${escapeHtml(String(d.context || ""))}</textarea></div>
+      <div class="field"><label>Tamanho máximo da resposta (caracteres)</label>
+      <input id="p-maxchars" type="number" min="80" max="1200" value="${escapeHtml(String(d.maxChars || 400))}" /></div>
+      <div class="field"><label>Salvar resposta em variável</label>
+      <input id="p-var" value="${escapeHtml(String(d.varName || "resposta_ia"))}" /></div>
+      <p class="fb-hint">A IA responde <b>só</b> com o que estiver escrito acima — se a pergunta fugir disso, ela avisa que vai chamar a equipe em vez de inventar. Ligações: <code>ok</code> (respondeu) e <code>erro</code> (IA indisponível — ligue num Atendente).</p>`;
+  }
+
   if (node.type === "action") {
     const cfg = d.config && typeof d.config === "object" ? d.config : {};
     const connector = d.connector || "calendar";
@@ -1271,6 +1296,14 @@ function renderProps() {
           prompt: $("p-prompt").value,
           varName: $("p-var").value.trim() || "data_confirmada",
         };
+      } else if (node.type === "llm_answer") {
+        node.data = {
+          ...node.data,
+          label: $("p-label").value.trim(),
+          context: $("p-context").value,
+          maxChars: Number($("p-maxchars").value) || 400,
+          varName: $("p-var").value.trim() || "resposta_ia",
+        };
       }
       renderCanvas();
       // Re-renderiza o painel pra revalidar as variáveis do texto recém-salvo
@@ -1303,8 +1336,8 @@ function changeNodeType(node, newType) {
   const newField = MAIN_TEXT_FIELD[newType];
   const carryText = oldField && newField ? node.data?.[oldField] : null;
 
-  const wasBranching = ["llm_intent", "llm_extract", "condition", "action"].includes(node.type);
-  const isBranching = ["llm_intent", "llm_extract", "condition", "action"].includes(newType);
+  const wasBranching = ["llm_intent", "llm_extract", "llm_answer", "condition", "action"].includes(node.type);
+  const isBranching = ["llm_intent", "llm_extract", "llm_answer", "condition", "action"].includes(newType);
   const outEdges = state.flow.edges.filter((e) => e.from === node.id);
   const labeledOutEdges = outEdges.filter((e) => e.label);
 
@@ -1660,6 +1693,7 @@ function typeLabelPt(type) {
       ask: t("builder.sim.trace.ask"),
       llm_intent: t("builder.sim.trace.intent"),
       llm_extract: t("builder.step.extract"),
+      llm_answer: t("builder.step.answer"),
       action: t("builder.step.action"),
       condition: t("builder.step.condition"),
       handoff: t("builder.step.handoff"),

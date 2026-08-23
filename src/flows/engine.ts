@@ -5,7 +5,7 @@ import {
   getFlow,
   upsertConversationState,
 } from "./store.js";
-import { classifyIntent, extractDate } from "./llm.js";
+import { answerFreeform, classifyIntent, extractDate } from "./llm.js";
 import { runAction } from "./connectors/index.js";
 
 function render(template: string, vars: Record<string, string>): string {
@@ -243,6 +243,35 @@ export async function runFlowStep(opts: {
         detail: `${result.status}${result.date ? " · " + result.date : ""} (${result.source})`,
       });
       node = nextNode(flow, node.id, result.status);
+      continue;
+    }
+
+    if (node.type === "llm_answer") {
+      // IA responde a pergunta do cliente com o contexto que o dono do negócio
+      // escreveu. Sem chave de IA (ou se a chamada falhar) NÃO inventa resposta:
+      // segue pelo ramo "erro", que normalmente leva a um handoff.
+      const context = String(node.data.context || "");
+      const result = await answerFreeform({
+        question: text,
+        context,
+        maxChars: Number(node.data.maxChars) || 400,
+      });
+      const varName = String(node.data.varName || "resposta_ia");
+      if (result.ok) {
+        vars[varName] = result.answer;
+        replies.push(result.answer);
+        trace.push({
+          nodeId: node.id,
+          type: "llm_answer",
+          reply: result.answer,
+          detail: "respondeu",
+        });
+        node = nextNode(flow, node.id, "ok");
+      } else {
+        vars.llm_answer_error = result.reason;
+        trace.push({ nodeId: node.id, type: "llm_answer", detail: `falhou: ${result.reason}` });
+        node = nextNode(flow, node.id, "erro");
+      }
       continue;
     }
 

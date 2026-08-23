@@ -235,6 +235,7 @@ body.portal-embed .fb-node.type-message .k { color: #2563eb; background: #e8f0fe
 body.portal-embed .fb-node.type-ask .k { color: #17803d; background: #e8f7ed; }
 body.portal-embed .fb-node.type-llm_intent .k { color: #7c3aed; background: #f3eefe; }
 body.portal-embed .fb-node.type-llm_extract .k { color: #0f766e; background: #e6fbf8; }
+body.portal-embed .fb-node.type-llm_answer .k { color: #7e22ce; background: #f6ecff; }
 body.portal-embed .fb-node.type-action .k { color: #b45309; background: #fff4e0; }
 body.portal-embed .fb-node.type-condition .k { color: #b45309; background: #fff4e0; }
 body.portal-embed .fb-node.type-handoff .k { color: #be185d; background: #fde8f0; }

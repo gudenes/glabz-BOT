@@ -246,3 +246,70 @@ function keywordExtractDate(text: string, now: Date): DateExtraction {
 
   return { status: "unclear", date: null, source: "keyword" };
 }
+
+/**
+ * Resposta livre da IA (nó `llm_answer`).
+ *
+ * Diferente de classifyIntent (escolhe entre opções fixas) e extractDate
+ * (extrai um dado): aqui a IA responde a pergunta do cliente com as palavras
+ * dela, dentro do contexto que o dono do negócio escreveu. Era a lacuna mais
+ * universal do estudo — sem isso, todo fluxo vira menu de URA e qualquer
+ * pergunta fora do script cai em handoff.
+ *
+ * `ok: false` quando não há chave configurada ou a chamada falha — o fluxo
+ * então segue pelo ramo "erro" (tipicamente handoff), em vez de responder
+ * qualquer coisa inventada.
+ */
+export async function answerFreeform(opts: {
+  question: string;
+  /** O que a IA sabe sobre este negócio — escrito pelo dono no builder. */
+  context: string;
+  /** Limite de tamanho da resposta, em caracteres (WhatsApp fica ruim com textão). */
+  maxChars?: number;
+  history?: { role: "user" | "assistant"; content: string }[];
+}): Promise<{ ok: true; answer: string } | { ok: false; reason: string }> {
+  const key = llmApiKey();
+  if (!key) return { ok: false, reason: "sem_ia_configurada" };
+
+  const maxChars = Math.min(Math.max(opts.maxChars ?? 400, 80), 1200);
+  const system = [
+    "Você atende clientes deste negócio pelo WhatsApp, em português do Brasil.",
+    "Responda de forma curta, direta e cordial — no máximo " + maxChars + " caracteres.",
+    "Use SOMENTE as informações do contexto abaixo.",
+    "Se a resposta não estiver no contexto, diga que vai chamar alguém da equipe;",
+    "NUNCA invente preço, horário, prazo, endereço ou disponibilidade.",
+    "Não use markdown além de *negrito* eventual.",
+    "",
+    "=== Contexto do negócio ===",
+    opts.context?.trim() || "(o dono do negócio ainda não preencheu o contexto)",
+  ].join("\n");
+
+  try {
+    const res = await fetch(`${llmBaseUrl().replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: llmModel(),
+        temperature: 0.3,
+        max_tokens: Math.ceil(maxChars / 2),
+        messages: [
+          { role: "system", content: system },
+          ...(opts.history || []).slice(-6),
+          { role: "user", content: opts.question.slice(0, 1500) },
+        ],
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) {
+      console.warn("[flow/llm] answer HTTP", res.status, await res.text().catch(() => ""));
+      return { ok: false, reason: `http_${res.status}` };
+    }
+    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    const answer = (data.choices?.[0]?.message?.content || "").trim();
+    if (!answer) return { ok: false, reason: "resposta_vazia" };
+    return { ok: true, answer: answer.slice(0, maxChars) };
+  } catch (e) {
+    console.warn("[flow/llm] answer failed", (e as Error).message);
+    return { ok: false, reason: "falha_na_chamada" };
+  }
+}
