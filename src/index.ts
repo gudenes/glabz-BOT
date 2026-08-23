@@ -18,6 +18,7 @@
  *   POST /v1/flows/simulate · /v1/flows/:id/publish · /reset-state
  *   GET  /v1/portal · /v1/portal/dashboard
  *   PUT  /v1/portal/account/profile · /billing · /business
+ *   POST /v1/rag/reindex · GET /v1/rag/knowledge · POST /v1/rag/knowledge/:id/suppress
  *   GET  /v1/integrations/google-calendar/connect · /callback · /status
  *   DELETE /v1/integrations/google-calendar
  */
@@ -1096,6 +1097,45 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "ia" });
       }
+      return;
+    }
+
+    // ── Base de conhecimento (RAG) ────────────────────────
+    // Sempre escopado ao cliente do contexto — nunca aceita client_id do body
+    // (isolamento estrutural, docs/rag-desenho.md §5.4).
+    if (method === "POST" && path === "/v1/rag/reindex") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const { reindexClient } = await import("./rag/index-store.js");
+      const result = await reindexClient(clientId);
+      json(res, result.ok ? 200 : 400, result);
+      return;
+    }
+
+    if (method === "GET" && path === "/v1/rag/knowledge") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const { listKnowledge } = await import("./rag/index-store.js");
+      json(res, 200, { ok: true, chunks: await listKnowledge(clientId) });
+      return;
+    }
+
+    const ragSuppress = path.match(/^\/v1\/rag\/knowledge\/([\w-]+)\/suppress$/);
+    if (method === "POST" && ragSuppress) {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const { suppressChunk } = await import("./rag/index-store.js");
+      const ok = await suppressChunk(clientId, ragSuppress[1]);
+      json(res, ok ? 200 : 404, { ok });
       return;
     }
 
