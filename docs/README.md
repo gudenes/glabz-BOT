@@ -39,8 +39,18 @@ altera infraestrutura — banco, Railway, Dockerfile, dependência, integração
 processo. Se altera, o autor confirma que revisou estes documentos e, se algum ficou
 desatualizado, que criou a versão nova pela convenção abaixo.
 
-Não é uma trava automática (o projeto não tem CI): é um lembrete visível pra quem abre e pra
-quem revisa o PR.
+Não é uma trava automática: é um lembrete visível pra quem abre e pra quem revisa o PR.
+
+## Fluxo de deploy e commit direto em produção
+
+`main` dispara deploy automático em **produção** no Railway. O fluxo combinado é
+`feature` → `develop` (staging, onde se valida) → `main` (produção).
+
+Commit que chega em `main` **sem passar por PR** vai direto pro ar sem ter sido validado em
+staging. Quando isso acontece, `.github/workflows/warn-direct-push-main.yml` abre uma issue
+marcando o autor. Não bloqueia — correção urgente às vezes precisa ir direto — mas fica
+registrado, e serve de lembrete pra conferir se `develop` não ficou desatualizado em relação
+a `main` (a divergência entre os dois já aconteceu em 23/08/2026).
 
 ## Convenção de versionamento
 
