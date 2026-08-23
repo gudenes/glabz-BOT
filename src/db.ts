@@ -192,6 +192,31 @@ CREATE INDEX IF NOT EXISTS idx_flows_client ON flows(client_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_wa_msg_thread ON wa_messages(account_id, phone_e164, sent_at);
 CREATE INDEX IF NOT EXISTS idx_wa_msg_client ON wa_messages(client_id, sent_at DESC);
+
+-- Registro de cada resposta do card de IA: o que foi perguntado, o que a IA
+-- respondeu e QUE TRECHOS ela viu pra chegar lá. Sem isso, "por que a IA
+-- respondeu isso?" fica sem resposta — foi a falta desse rastro que deixou um
+-- bug de RAG passar despercebido (fluxo sem clientId pulava a base em silêncio).
+--
+-- Fica no schema principal (não no vetorial) de propósito: é justamente onde o
+-- RAG NÃO está disponível que saber "foi pulado, e por quê" mais importa.
+CREATE TABLE IF NOT EXISTS ai_answer_log (
+  id TEXT PRIMARY KEY,
+  -- CASCADE: a pergunta é do cliente final; apagar o cliente leva o rastro junto.
+  client_id TEXT REFERENCES clients(id) ON DELETE CASCADE,
+  flow_id TEXT,
+  node_id TEXT,
+  question TEXT NOT NULL,
+  answer TEXT,
+  -- ok · pulado · falhou · erro
+  rag_status TEXT,
+  rag_reason TEXT,
+  -- trechos consultados, com score — é o que explica a resposta
+  rag_hits JSONB NOT NULL DEFAULT '[]',
+  simulated BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ai_log_client ON ai_answer_log(client_id, created_at DESC);
 `;
 
 /** Dimensões do vetor — ver EMBEDDING_MODEL em src/rag/embeddings.ts. */
