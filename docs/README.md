@@ -32,6 +32,16 @@ documentos primeiro.
   reutilizáveis, transcrição de áudio, histórico de versões. Motivada pelo objetivo de o usuário
   leigo construir o próprio fluxo.
 
+## Quando mexer em infraestrutura
+
+Todo PR nasce com um checklist (`.github/pull_request_template.md`) que pergunta se a mudança
+altera infraestrutura — banco, Railway, Dockerfile, dependência, integração ou modelo de
+processo. Se altera, o autor confirma que revisou estes documentos e, se algum ficou
+desatualizado, que criou a versão nova pela convenção abaixo.
+
+Não é uma trava automática (o projeto não tem CI): é um lembrete visível pra quem abre e pra
+quem revisa o PR.
+
 ## Convenção de versionamento
 
 **Esses documentos são referência viva — qualquer modificação estrutural relevante deve
