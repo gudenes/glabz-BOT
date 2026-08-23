@@ -1262,3 +1262,64 @@
     display: none;
   }
 }
+
+/* ── Variáveis disponíveis (painel de Detalhes) ─────────────────
+   Lista real do que existe naquele ponto do fluxo — antes o usuário tinha
+   que decorar os nomes, e era aí que o fluxo saía quebrado sem aviso. */
+.fb-vars {
+  margin: 10px 14px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 8px 10px;
+}
+.fb-vars > summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+}
+.fb-vars > summary::-webkit-details-marker { display: none; }
+.fb-vars > summary::before { content: "▸"; font-size: 10px; transition: transform .15s; }
+.fb-vars[open] > summary::before { transform: rotate(90deg); }
+.fb-vars-n {
+  background: #e2e8f0; color: #475569; border-radius: 999px;
+  padding: 1px 7px; font-size: 10.5px; margin-left: auto;
+}
+.fb-vars-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.fb-var {
+  border: 1px solid #cbd5e1; background: #fff; color: #334155;
+  border-radius: 6px; padding: 3px 7px; cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+}
+.fb-var:hover { border-color: #94a3b8; background: #f1f5f9; }
+.fb-vars .fb-hint { margin: 8px 0 2px; }
+.fb-vars-warn {
+  margin: 8px 0 0; font-size: 11.5px; line-height: 1.45;
+  color: #92400e; background: #fef3c7; border-radius: 7px; padding: 7px 9px;
+}
+.fb-vars-warn code { background: rgba(0,0,0,0.06); border-radius: 4px; padding: 0 3px; }
+
+/* Autocomplete ao digitar {{ */
+.fb-props .field { position: relative; }
+.fb-var-menu {
+  position: absolute; z-index: 30; left: 0; right: 0; top: 100%;
+  background: #fff; border: 1px solid #cbd5e1; border-radius: 9px;
+  box-shadow: 0 10px 26px rgba(15,23,42,0.14);
+  max-height: 210px; overflow: auto; padding: 4px;
+}
+.fb-var-menu button {
+  display: grid; gap: 1px; width: 100%; text-align: left;
+  border: 0; background: transparent; cursor: pointer;
+  padding: 6px 8px; border-radius: 6px; font: inherit;
+}
+.fb-var-menu button:hover { background: #f1f5f9; }
+.fb-var-menu b {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; color: #334155;
+}
+.fb-var-menu small { font-size: 11px; color: #64748b; }
