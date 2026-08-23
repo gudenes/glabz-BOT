@@ -91,6 +91,48 @@ export async function reindexClient(clientId: string): Promise<IndexResult> {
   return { ok: true, indexed, skipped: pairs.length - novos.length, tokens: res.tokens };
 }
 
+/**
+ * Ensina a IA diretamente, sem depender de histórico.
+ *
+ * Três usos que o histórico sozinho não cobre:
+ * - Cliente novo não tem meses de atendimento acumulado, mas já sabe o que
+ *   responde todo dia — pode escrever de uma vez.
+ * - Correção: quando a IA responde errado, adicionar a resposta certa é mais
+ *   direto do que esperar alguém repetir no WhatsApp.
+ * - Teste: alimentar a base sem precisar plugar número real.
+ *
+ * Entra na mesma tabela da extração automática — a origem não muda como a
+ * busca funciona. source_message_ids fica vazio, marcando que veio daqui.
+ */
+export async function teachManual(
+  clientId: string,
+  question: string,
+  answer: string
+): Promise<{ ok: boolean; reason?: string }> {
+  if (!hasDatabase() || !isVectorReady()) return { ok: false, reason: "pgvector_indisponivel" };
+  if (!embeddingsConfigured()) return { ok: false, reason: "sem_chave_de_embedding" };
+  const q = question.trim();
+  const a = answer.trim();
+  if (q.length < 3 || a.length < 3) return { ok: false, reason: "texto_muito_curto" };
+
+  const res = await embedTexts([pairToText(q, a)]);
+  if (!res.ok) return { ok: false, reason: res.reason };
+
+  try {
+    await db()`
+      INSERT INTO knowledge_chunks
+        (id, client_id, question, answer, embedding, occurrences, source_message_ids, embedding_model)
+      VALUES (
+        ${randomUUID()}, ${clientId}, ${q}, ${a},
+        ${toPgVector(res.vectors[0])}::vector, 1, ${[]}, ${res.model}
+      )
+    `;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "falha_ao_gravar" };
+  }
+}
+
 export type KnowledgeHit = {
   id: string;
   question: string;

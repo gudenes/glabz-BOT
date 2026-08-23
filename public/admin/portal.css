@@ -1091,3 +1091,6 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 @media (max-width: 620px) {
   .kb-item { flex-direction: column; }
 }
+.kb-teach { border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 12px; background: #fafaf7; display: grid; gap: 10px; }
+.kb-teach.hidden { display: none; }
+.kb-teach .hint-muted { margin: 0 0 4px; }

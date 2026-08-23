@@ -748,6 +748,27 @@ function renderKnowledge(chunks) {
   });
 }
 
+$("btn-kb-teach-toggle")?.addEventListener("click", () => {
+  $("kb-teach")?.classList.toggle("hidden");
+  $("kb-q")?.focus();
+});
+
+$("kb-teach")?.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const q = $("kb-q")?.value.trim();
+  const a = $("kb-a")?.value.trim();
+  if (!q || !a) return;
+  try {
+    await api("/v1/rag/teach", { method: "POST", body: JSON.stringify({ question: q, answer: a }) });
+    toast(t("portal.knowledge.taught"));
+    $("kb-q").value = "";
+    $("kb-a").value = "";
+    await loadKnowledge();
+  } catch (e) {
+    toast(e.message, "err");
+  }
+});
+
 $("btn-kb-reindex")?.addEventListener("click", async () => {
   const status = $("kb-status");
   const btn = $("btn-kb-reindex");

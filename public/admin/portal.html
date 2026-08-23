@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=29" />
+    <link rel="stylesheet" href="/admin/portal.css?v=30" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -394,8 +394,22 @@
             <p class="hint-muted" data-i18n="portal.knowledge.sub">Perguntas que seus clientes fizeram e que alguém da equipe respondeu. A IA usa isso pra responder sozinha da próxima vez.</p>
             <div class="kb-actions">
               <button type="button" class="btn-lime" id="btn-kb-reindex" data-i18n="portal.knowledge.reindex">Atualizar com as conversas recentes</button>
+              <button type="button" class="btn-ghost" id="btn-kb-teach-toggle" data-i18n="portal.knowledge.teach">Ensinar uma resposta</button>
               <span id="kb-status" class="hint-muted"></span>
             </div>
+
+            <form id="kb-teach" class="kb-teach hidden">
+              <p class="hint-muted" data-i18n="portal.knowledge.teachHint">Escreva uma pergunta que seus clientes fazem e a resposta certa. A IA passa a usar na hora.</p>
+              <div class="field">
+                <span data-i18n="portal.knowledge.qLabel">Pergunta do cliente</span>
+                <input id="kb-q" type="text" maxlength="300" required placeholder="Ex.: vocês têm estacionamento?" />
+              </div>
+              <div class="field">
+                <span data-i18n="portal.knowledge.aLabel">Resposta que a IA deve dar</span>
+                <textarea id="kb-a" rows="3" maxlength="1000" required placeholder="Ex.: Sim, temos estacionamento gratuito na porta."></textarea>
+              </div>
+              <button type="submit" class="btn-lime" data-i18n="portal.knowledge.teachSave">Ensinar</button>
+            </form>
             <div id="kb-list" class="kb-list"></div>
           </div>
         </section>
@@ -434,6 +448,6 @@
       </div>
     </div>
 
-    <script src="/admin/portal.js?v=30" type="module"></script>
+    <script src="/admin/portal.js?v=31" type="module"></script>
   </body>
 </html>
