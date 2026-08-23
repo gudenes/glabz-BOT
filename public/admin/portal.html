@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=26" />
+    <link rel="stylesheet" href="/admin/portal.css?v=27" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -181,11 +181,8 @@
               <button type="button" class="btn-text" id="start-tpl" data-i18n="portal.studio.useTemplate">usar um template</button>
               <span>·</span>
               <button type="button" class="btn-text" id="start-blank" data-i18n="portal.studio.startBlank">começar do zero</button>
-              <div id="tpl-pick" class="tpl-pick hidden">
-                <button type="button" data-tpl="pilates" data-i18n="portal.studio.tpl.pilates">Marcar sessão</button>
-                <button type="button" data-tpl="consulta" data-i18n="portal.studio.tpl.consulta">Marcar consulta</button>
-                <button type="button" data-tpl="blank" data-i18n="portal.studio.tpl.blank">Em branco mesmo</button>
-              </div>
+              <!-- Preenchido por renderTemplatePicker() a partir de GET /v1/flows/templates -->
+              <div id="tpl-pick" class="tpl-pick hidden"></div>
             </div>
           </div>
           <iframe id="flow-frame" class="hidden" title="Editor de fluxo"></iframe>
@@ -397,6 +394,6 @@
       <button type="button" data-view="integrations" data-i18n="portal.nav.integrations">Integrações</button>
     </nav>
 
-    <script src="/admin/portal.js?v=25" type="module"></script>
+    <script src="/admin/portal.js?v=26" type="module"></script>
   </body>
 </html>
