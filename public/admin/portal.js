@@ -766,12 +766,13 @@ async function loadAiAnswers() {
     box.innerHTML = items
       .map((a) => {
         const quando = new Date(a.createdAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-        const usou = a.ragStatus === "ok" && (a.ragHits || []).length;
+        const ragHits = Array.isArray(a.ragHits) ? a.ragHits : [];
+        const usou = a.ragStatus === "ok" && ragHits.length;
         const tag = usou
-          ? `<span class="ai-tag ok">${t("portal.answers.usedBase", { n: a.ragHits.length })}</span>`
+          ? `<span class="ai-tag ok">${t("portal.answers.usedBase", { n: ragHits.length })}</span>`
           : `<span class="ai-tag off">${t("portal.answers.noBase")}${a.ragReason ? ` · ${escapeHtml(a.ragReason)}` : ""}</span>`;
         const base = usou
-          ? `<details class="ai-src"><summary>${t("portal.answers.seeSources")}</summary><ul>${a.ragHits
+          ? `<details class="ai-src"><summary>${t("portal.answers.seeSources")}</summary><ul>${ragHits
               .map((h) => `<li>${escapeHtml(h.question)} <em>(${Number(h.score).toFixed(2)})</em></li>`)
               .join("")}</ul></details>`
           : "";

@@ -48,9 +48,9 @@ async function enqueueForRetry(input: EnqueueInput): Promise<void> {
         (id, account_id, phone_e164, body, media, quoted, meta, status, attempts, last_error, next_attempt_at)
       VALUES (
         ${randomUUID()}, ${input.accountId}, ${input.phoneE164}, ${input.body},
-        ${input.media ? JSON.stringify(input.media) : null}::jsonb,
-        ${input.quoted ? JSON.stringify(input.quoted) : null}::jsonb,
-        ${input.meta ? JSON.stringify(input.meta) : null}::jsonb,
+        ${input.media ? db().json(input.media) : null},
+        ${input.quoted ? db().json(input.quoted) : null},
+        ${input.meta ? db().json(input.meta) : null},
         'pending', 0, ${input.lastError ?? null}, now()
       )
     `;
