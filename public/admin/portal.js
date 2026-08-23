@@ -183,7 +183,11 @@ function studioLayout() {
 
   $("studio-close")?.classList.toggle("hidden", first || !open);
   $("studio-expand")?.classList.toggle("hidden", first);
-  $("studio-alts")?.classList.toggle("hidden", hasOwnFlows());
+  // "usar um template · começar do zero" fica disponível SEMPRE que o Studio
+  // estiver aberto. Antes sumia assim que o cliente tivesse qualquer fluxo — e
+  // como provisionClient já cria um fluxo inicial no onboarding, isso escondia
+  // o catálogo justamente de quem ainda não montou nada.
+  $("studio-alts")?.classList.toggle("hidden", !open);
   $("btn-wizard")?.classList.toggle("hidden", state.view !== "flow" || first || open);
   $("btn-studio-expand")?.classList.toggle("hidden", state.view !== "flow" || !open || first);
   $("btn-studio-expand").textContent = expanded ? t("portal.collapse") : t("portal.expand");
