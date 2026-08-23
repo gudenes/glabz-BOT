@@ -18,6 +18,7 @@
  *   POST /v1/flows/simulate · /v1/flows/:id/publish · /reset-state
  *   GET  /v1/portal · /v1/portal/dashboard
  *   PUT  /v1/portal/account/profile · /billing · /business
+ *   POST /v1/inbox/import (glabs-only)
  *   POST /v1/rag/reindex · GET /v1/rag/knowledge · POST /v1/rag/knowledge/:id/suppress
  *   GET  /v1/integrations/google-calendar/connect · /callback · /status
  *   DELETE /v1/integrations/google-calendar
@@ -1097,6 +1098,58 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "ia" });
       }
+      return;
+    }
+
+    // Importa histórico de conversa (ex.: cliente vindo de outro sistema, ou
+    // popular ambiente de teste). glabs-only: escreve direto no histórico sem
+    // passar pelo WhatsApp, então não pode ficar exposto ao cliente.
+    if (method === "POST" && path === "/v1/inbox/import") {
+      if (!requireGlabs(auth)) {
+        unauthorized(res);
+        return;
+      }
+      const body = parseJson<{
+        accountId?: string;
+        messages?: {
+          phone?: string;
+          direction?: "in" | "out";
+          source?: "customer" | "bot" | "human";
+          body?: string;
+          authorName?: string | null;
+          sentAt?: string;
+        }[];
+      }>(await readBody(req));
+
+      if (!body?.accountId || !Array.isArray(body.messages)) {
+        json(res, 400, { ok: false, reason: "accountId e messages obrigatórios" });
+        return;
+      }
+      if (!getAccount(body.accountId)) {
+        json(res, 404, { ok: false, reason: "account não encontrada" });
+        return;
+      }
+
+      const { recordMessage } = await import("./inbox.js");
+      let imported = 0;
+      for (const m of body.messages) {
+        if (!m?.phone || !m?.body) continue;
+        try {
+          await recordMessage({
+            accountId: body.accountId,
+            phone: m.phone,
+            direction: m.direction === "out" ? "out" : "in",
+            source: m.source === "human" ? "human" : m.source === "bot" ? "bot" : "customer",
+            body: m.body,
+            authorName: m.authorName ?? null,
+            sentAt: m.sentAt,
+          });
+          imported++;
+        } catch (e) {
+          console.warn("[inbox/import] falhou:", e instanceof Error ? e.message : e);
+        }
+      }
+      json(res, 200, { ok: true, imported, received: body.messages.length });
       return;
     }
 
