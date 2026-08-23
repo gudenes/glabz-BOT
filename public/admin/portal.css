@@ -941,15 +941,49 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
   border-radius: 999px;
   margin-bottom: 12px;
 }
-.tpl-pick { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
-.tpl-pick button {
+/* Catálogo de modelos — cards em vez das 3 pílulas fixas de antes, porque
+   agora são 10 e cada um precisa de resumo + segmento pra escolha fazer sentido. */
+.tpl-pick { grid-column: 1 / -1; display: grid; gap: 14px; margin-top: 10px; }
+.tpl-group h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.tpl-group {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+.tpl-group h4 { grid-column: 1 / -1; }
+.tpl-card {
+  display: grid;
+  gap: 3px;
+  text-align: left;
   border: 1px solid var(--line);
   background: #fff;
-  border-radius: 999px;
-  padding: 8px 14px;
+  border-radius: 14px;
+  padding: 12px 14px;
   font: inherit;
   cursor: pointer;
+  transition: border-color .15s, transform .15s;
 }
+.tpl-card:hover { border-color: var(--gold); transform: translateY(-1px); }
+.tpl-card b { font-size: 14px; }
+.tpl-card small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.tpl-card em { color: var(--muted); font-size: 11px; font-style: normal; opacity: .75; }
+.tpl-sim {
+  justify-self: start;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  background: #fff4d6;
+  color: #8a6a00;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.tpl-loading { color: var(--muted); font-size: 13px; margin: 0; }
 @media (max-width: 860px) {
   .start-grid { grid-template-columns: 1fr; }
 }

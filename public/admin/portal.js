@@ -1052,11 +1052,69 @@ $("btn-wizard")?.addEventListener("click", () => openStudio({ expand: false }));
 $("btn-studio-expand")?.addEventListener("click", toggleStudioExpand);
 $("studio-expand")?.addEventListener("click", toggleStudioExpand);
 $("studio-close")?.addEventListener("click", closeStudio);
-$("start-tpl")?.addEventListener("click", () => $("tpl-pick")?.classList.toggle("hidden"));
-$("start-blank")?.addEventListener("click", () => useTemplate("blank"));
-$("tpl-pick")?.querySelectorAll("[data-tpl]").forEach((b) => {
-  b.addEventListener("click", () => useTemplate(b.dataset.tpl));
+$("start-tpl")?.addEventListener("click", async () => {
+  const box = $("tpl-pick");
+  if (!box) return;
+  const opening = box.classList.contains("hidden");
+  box.classList.toggle("hidden");
+  if (opening) await renderTemplatePicker();
 });
+$("start-blank")?.addEventListener("click", () => useTemplate("blank"));
+
+/**
+ * Lista os templates do catálogo (GET /v1/flows/templates) agrupados por
+ * complexidade. Antes eram 3 opções fixas no HTML, que ficavam defasadas
+ * sempre que o catálogo mudava.
+ */
+let templatesCache = null;
+async function renderTemplatePicker() {
+  const box = $("tpl-pick");
+  if (!box) return;
+  if (!templatesCache) {
+    box.innerHTML = `<p class="tpl-loading">${t("portal.studio.tpl.loading")}</p>`;
+    try {
+      const data = await api("/v1/flows/templates");
+      templatesCache = data.templates || [];
+    } catch (e) {
+      box.innerHTML = `<p class="tpl-loading">${e.message}</p>`;
+      return;
+    }
+  }
+
+  const group = (complexity, titleKey) => {
+    const items = templatesCache.filter((x) => x.complexity === complexity);
+    if (!items.length) return "";
+    return `
+      <div class="tpl-group">
+        <h4>${t(titleKey)}</h4>
+        ${items
+          .map(
+            (x) => `
+          <button type="button" data-tpl="${escapeHtml(x.slug)}" class="tpl-card">
+            <b>${escapeHtml(x.name)}</b>
+            ${x.simulated ? `<span class="tpl-sim">${t("portal.studio.tpl.simulated")}</span>` : ""}
+            <small>${escapeHtml(x.summary)}</small>
+            <em>${escapeHtml(x.segment)}</em>
+          </button>`
+          )
+          .join("")}
+      </div>`;
+  };
+
+  box.innerHTML =
+    group("simples", "portal.studio.tpl.simple") +
+    group("complexo", "portal.studio.tpl.complex") +
+    `<div class="tpl-group">
+       <button type="button" data-tpl="blank" class="tpl-card tpl-blank">
+         <b>${t("portal.studio.tpl.blank")}</b>
+         <small>${t("portal.studio.tpl.blankHint")}</small>
+       </button>
+     </div>`;
+
+  box.querySelectorAll("[data-tpl]").forEach((b) => {
+    b.addEventListener("click", () => useTemplate(b.dataset.tpl));
+  });
+}
 async function useTemplate(kind) {
   try {
     await api("/v1/flows/from-template", { method: "POST", body: JSON.stringify({ template: kind }) });
