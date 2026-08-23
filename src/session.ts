@@ -1,7 +1,7 @@
 /**
  * Sessão Baileys por accountId (1 número WhatsApp = 1 account no Glabs Bot).
  */
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import baileysDefault, {
   DisconnectReason,
@@ -12,8 +12,9 @@ import baileysDefault, {
 import { Boom } from "@hapi/boom";
 import pino from "pino";
 import QRCode from "qrcode";
-import { authDir, botSecret, logLevel } from "./config.js";
+import { authDir, botSecret, dataDir, logLevel } from "./config.js";
 import { formatPhoneDisplay, toWhatsAppJid } from "./phone.js";
+import { ingestContacts, type AgendaContact } from "./contacts.js";
 import { getAccount, type AccountRecord } from "./registry.js";
 import { db, hasDatabase } from "./db.js";
 import { sendEmailAlert, sendTelegramAlert } from "./notify.js";
@@ -52,9 +53,48 @@ type LiveSession = {
   connectedAt: Date | null;
   sock: any | null;
   starting: boolean;
+  contacts: Map<string, AgendaContact>;
 };
 
 const sessions = new Map<string, LiveSession>();
+
+function contactsPath(accountId: string): string {
+  return join(dataDir(), "contacts", `${accountId}.json`);
+}
+
+function loadPersistedContacts(accountId: string): Map<string, AgendaContact> {
+  try {
+    const raw = readFileSync(contactsPath(accountId), "utf8");
+    const rows = JSON.parse(raw) as AgendaContact[];
+    if (!Array.isArray(rows)) return new Map();
+    return new Map(
+      rows
+        .filter((row) => row && typeof row.phoneE164 === "string")
+        .map((row) => [row.phoneE164, { phoneE164: row.phoneE164, name: row.name || row.phoneE164 }]),
+    );
+  } catch {
+    return new Map();
+  }
+}
+
+const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function schedulePersistContacts(s: LiveSession): void {
+  const prev = persistTimers.get(s.accountId);
+  if (prev) clearTimeout(prev);
+  persistTimers.set(
+    s.accountId,
+    setTimeout(() => {
+      persistTimers.delete(s.accountId);
+      try {
+        mkdirSync(join(dataDir(), "contacts"), { recursive: true });
+        writeFileSync(contactsPath(s.accountId), JSON.stringify([...s.contacts.values()]));
+      } catch (e) {
+        console.error(`[wa:${s.accountId}] persist contacts failed:`, (e as Error).message);
+      }
+    }, 1500),
+  );
+}
 
 function empty(accountId: string): LiveSession {
   return {
@@ -67,6 +107,7 @@ function empty(accountId: string): LiveSession {
     connectedAt: null,
     sock: null,
     starting: false,
+    contacts: loadPersistedContacts(accountId),
   };
 }
 
@@ -76,6 +117,7 @@ function getOrCreate(accountId: string): LiveSession {
     s = empty(accountId);
     sessions.set(accountId, s);
   }
+  if (!s.contacts) s.contacts = new Map();
   return s;
 }
 
@@ -99,6 +141,29 @@ export function snapshot(accountId: string): SessionSnapshot {
     displayName: s.displayName,
     lastError: s.lastError,
     connectedAt: s.connectedAt?.toISOString() ?? null,
+  };
+}
+
+function harvestStore(s: LiveSession): void {
+  const store = s.sock?.store?.contacts;
+  if (!store || typeof store !== "object") return;
+  ingestContacts(s.contacts, Object.values(store), s.phoneE164);
+}
+
+export function listContacts(accountId: string): {
+  ok: true;
+  connected: boolean;
+  contacts: AgendaContact[];
+} {
+  const s = getOrCreate(accountId);
+  harvestStore(s);
+  const contacts = [...s.contacts.values()].sort((a, b) =>
+    a.name.localeCompare(b.name, "pt"),
+  );
+  return {
+    ok: true,
+    connected: s.status === "connected",
+    contacts: contacts.slice(0, 800),
   };
 }
 
@@ -268,6 +333,26 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
   s.sock = sock;
   sock.ev.on("creds.update", saveCreds);
 
+  const takeContacts = (list: unknown) => {
+    const before = s.contacts.size;
+    const rows = Array.isArray(list)
+      ? list
+      : list && typeof list === "object" && Array.isArray((list as { contacts?: unknown }).contacts)
+        ? ((list as { contacts: unknown[] }).contacts ?? [])
+        : [];
+    ingestContacts(s.contacts, rows, s.phoneE164);
+    if (s.contacts.size !== before) schedulePersistContacts(s);
+  };
+  sock.ev.on("contacts.upsert", takeContacts);
+  sock.ev.on("contacts.update", takeContacts);
+  sock.ev.on("contacts.set", takeContacts);
+  // History sync after QR/reconnect — this is the real address book dump.
+  sock.ev.on("messaging-history.set", (payload: { contacts?: unknown[]; chats?: unknown[] }) => {
+    takeContacts(payload?.contacts);
+    takeContacts(payload?.chats);
+  });
+  sock.ev.on("chats.upsert", takeContacts);
+
   sock.ev.on("messages.upsert", ({ messages, type }: any) => {
     if (type !== "notify") return;
     for (const m of messages ?? []) {
@@ -341,6 +426,12 @@ async function bootSocket(accountId: string, s: LiveSession, attempt: number): P
         s.phoneE164 = null;
         s.displayName = null;
         s.connectedAt = null;
+        s.contacts.clear();
+        try {
+          rmSync(contactsPath(accountId), { force: true });
+        } catch {
+          /* ignore */
+        }
         s.lastError = "Sessão encerrada no celular. Conecte de novo e escaneie o QR.";
         void persistStatus(s);
         void sendTelegramAlert(
@@ -398,8 +489,14 @@ export async function disconnect(accountId: string): Promise<SessionSnapshot> {
   s.connectedAt = null;
   s.starting = false;
   s.lastError = null;
+  s.contacts.clear();
   try {
     rmSync(accountAuthPath(accountId), { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+  try {
+    rmSync(contactsPath(accountId), { force: true });
   } catch {
     /* ignore */
   }

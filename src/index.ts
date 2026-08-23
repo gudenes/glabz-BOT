@@ -13,6 +13,7 @@
  *   GET/PATCH/DELETE /v1/accounts/:id
  *   GET  /v1/accounts/:id/status
  *   POST /v1/accounts/:id/connect · disconnect · send · profile
+ *   GET  /v1/accounts/:id/contacts
  *   GET/POST /v1/flows · GET/PUT/DELETE /v1/flows/:id
  *   POST /v1/flows/simulate · /v1/flows/:id/publish · /reset-state
  *   GET  /v1/portal · /v1/portal/dashboard
@@ -91,6 +92,7 @@ import {
 import {
   connect,
   disconnect,
+  listContacts,
   resetConnectionStatusOnBoot,
   restoreSessionsFromDisk,
   sendText,
@@ -1424,7 +1426,7 @@ const server = createServer(async (req, res) => {
     // ── Account by id ─────────────────────────────────────
     const accMatch = path.match(
       new RegExp(
-        `^/v1/accounts/(${UUID_RE})(?:/(status|connect|disconnect|send|profile))?$`,
+        `^/v1/accounts/(${UUID_RE})(?:/(status|connect|disconnect|send|profile|contacts))?$`,
         "i"
       )
     );
@@ -1483,6 +1485,15 @@ const server = createServer(async (req, res) => {
           return;
         }
         json(res, 200, { ok: true, session: snapshot(accountId) });
+        return;
+      }
+
+      if (method === "GET" && action === "contacts") {
+        if (!getAccount(accountId)) {
+          json(res, 404, { ok: false, reason: "accountNotFound" });
+          return;
+        }
+        json(res, 200, listContacts(accountId));
         return;
       }
 
