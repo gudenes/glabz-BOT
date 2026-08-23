@@ -1326,3 +1326,45 @@
   font-size: 11.5px; color: #334155;
 }
 .fb-var-menu small { font-size: 11px; color: #64748b; }
+
+/* Fio arrastado a partir do "+" até um card existente */
+.fb-wire-drag {
+  fill: none;
+  stroke: rgba(99, 102, 241, 0.9);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  pointer-events: none;
+}
+#canvas.wiring {
+  cursor: crosshair;
+}
+#canvas.wiring .fb-node {
+  cursor: crosshair;
+}
+.fb-node.wire-target {
+  border-color: rgba(99, 102, 241, 0.95);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.22);
+}
+
+/* Aresta de volta (laço) — mais discreta, pra não competir com o caminho principal */
+.edge-path.loop {
+  stroke-dasharray: 5 4;
+  opacity: 0.75;
+}
+
+/* "Ligar a um card que já existe" no menu do + */
+.node-add-menu .m-link {
+  color: #4f46e5;
+  font-weight: 600;
+}
+.node-add-menu .m-link .ic-link {
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.node-add-menu .m-sep {
+  height: 1px;
+  margin: 6px 4px;
+  background: rgba(15, 23, 42, 0.08);
+}

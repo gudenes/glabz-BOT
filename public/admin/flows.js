@@ -24,6 +24,8 @@ const state = {
   products: [], // [{slug, name, ...}] — carregado do servidor
   selectedNodeId: null,
   linkFrom: null,
+  linkWire: null,
+  linkWireEl: null,
   drag: null,
   llmConfigured: false,
   /** JSON do fluxo como veio do servidor — compara com o atual p/ saber se há edição pendente. */
@@ -197,6 +199,35 @@ function routeEdge(a, b, opts = {}) {
     return {
       d: `M ${x1} ${y1} L ${x2} ${yEnd}`,
       label: { x: x1 + 12, y: (y1 + yEnd) / 2 },
+    };
+  }
+
+  // Volta pra cima (laço): contorna pela lateral em vez de cortar reto por
+  // cima dos cards, senão a linha do "posso ajudar em mais alguma coisa?"
+  // atravessa o fluxo inteiro e não dá pra seguir com o olho.
+  if (y2 < y1 + 8) {
+    const r = 8;
+    const leftEdge = Math.min(a.x, b.x) - 36 - rank * 14;
+    const goLeft = leftEdge > 8;
+    const sideX = goLeft ? leftEdge : Math.max(a.x, b.x) + NODE_W + 36 + rank * 14;
+    const dOut = goLeft ? -1 : 1;
+    const downY = y1 + 20 + rank * 8;
+    const upY = y2 - 24 - rank * 8;
+    return {
+      d: [
+        `M ${x1} ${y1}`,
+        `L ${x1} ${downY - r}`,
+        `Q ${x1} ${downY} ${x1 + dOut * r} ${downY}`,
+        `L ${sideX - dOut * r} ${downY}`,
+        `Q ${sideX} ${downY} ${sideX} ${downY - r}`,
+        `L ${sideX} ${upY + r}`,
+        `Q ${sideX} ${upY} ${sideX - dOut * r} ${upY}`,
+        `L ${x2 + dOut * r} ${upY}`,
+        `Q ${x2} ${upY} ${x2} ${upY + r}`,
+        `L ${x2} ${y2}`,
+      ].join(" "),
+      label: { x: sideX + (goLeft ? -8 : 8), y: (downY + upY) / 2 },
+      loop: true,
     };
   }
 
@@ -566,6 +597,9 @@ function renderCanvas() {
     canvas.prepend(svg);
   }
   svg.innerHTML = "";
+  // O fio do modo "ligar" vive dentro do mesmo <svg> que acabou de ser limpo —
+  // sem recolocar, ele sumiria ao mover qualquer card no meio da ligação.
+  if (state.linkWireEl) svg.appendChild(state.linkWireEl);
   if (!state.flow) return;
 
   const ns = "http://www.w3.org/2000/svg";
@@ -597,17 +631,20 @@ function renderCanvas() {
       const plus = document.createElement("button");
       plus.type = "button";
       plus.className = "node-plus";
-      plus.title = t("builder.addNextStep");
-      plus.setAttribute("aria-label", t("builder.addNextStep"));
+      plus.title = t("builder.addNextStepDrag");
+      plus.setAttribute("aria-label", t("builder.addNextStepDrag"));
       plus.textContent = "+";
       plus.addEventListener("mousedown", (ev) => {
+        if (ev.button !== 0) return;
         ev.stopPropagation();
         ev.preventDefault();
+        startWireDrag(ev, n, plus);
       });
       plus.addEventListener("click", (ev) => {
+        // O menu já abre no mouseup de startWireDrag — aqui só barra o clique
+        // de vazar pro card e trocar a seleção.
         ev.stopPropagation();
         ev.preventDefault();
-        openAddMenu(n, plus);
       });
       el.appendChild(plus);
     }
@@ -674,7 +711,10 @@ function renderCanvas() {
     path.setAttribute("d", routed.d);
     path.setAttribute(
       "class",
-      "edge-path" + (e.label ? " labeled" : "") + (isHot ? " sim-hot" : "")
+      "edge-path" +
+        (e.label ? " labeled" : "") +
+        (routed.loop ? " loop" : "") +
+        (isHot ? " sim-hot" : "")
     );
     path.dataset.edgeId = e.id;
     path.setAttribute(
@@ -744,6 +784,21 @@ function openAddMenu(parentNode, anchorBtn) {
   menu.className = "node-add-menu";
   menu.innerHTML = `<div class="m-title">${t("builder.nextStep")}</div>`;
 
+  // Ligar a um card que já existe — é o que permite laço e reaproveitar um
+  // card em vez de duplicá-lo. Fica junto dos tipos de passo porque é aqui
+  // que a pessoa está olhando quando pensa "e agora, pra onde vai?".
+  const linkBtn = document.createElement("button");
+  linkBtn.type = "button";
+  linkBtn.className = "m-link";
+  linkBtn.innerHTML = `<span class="pal-icon ic-link">↩</span>${t("builder.linkExisting")}`;
+  linkBtn.onclick = (ev) => {
+    ev.stopPropagation();
+    closeAddMenu();
+    armLinkMode(parentNode);
+  };
+  menu.appendChild(linkBtn);
+  menu.insertAdjacentHTML("beforeend", `<div class="m-sep"></div>`);
+
   for (const item of ADDABLE_TYPES) {
     const b = document.createElement("button");
     b.type = "button";
@@ -773,6 +828,196 @@ function openAddMenu(parentNode, anchorBtn) {
   setTimeout(() => document.addEventListener("mousedown", closer, true), 0);
 }
 
+/**
+ * Rótulo que a saída ganha por padrão, conforme o tipo do card de origem.
+ * Um `condition` precisa saber qual saída é o "sim"; um `action`, qual é o erro.
+ * Vale tanto pra passo novo quanto pra ligação arrastada até um card existente.
+ */
+function defaultEdgeLabel(parentNode, siblings) {
+  if (parentNode.type === "llm_intent") {
+    return (
+      prompt(
+        t("builder.prompt.intentLabel"),
+        siblings === 0 ? "marcar_consulta" : "default"
+      )?.trim() || "default"
+    );
+  }
+  if (parentNode.type === "condition") return siblings === 0 ? "true" : "false";
+  if (parentNode.type === "action") return siblings === 0 ? "ok" : "erro";
+  if (parentNode.type === "llm_extract") return ["ok", "ambiguous", "unclear"][siblings] || "ok";
+  if (parentNode.type === "llm_answer") return siblings === 0 ? "ok" : "erro";
+  return undefined;
+}
+
+/**
+ * Liga dois cards que já existem — é o que permite voltar pra um passo anterior
+ * (laço de "posso ajudar em mais alguma coisa?") e reaproveitar um card em vez
+ * de duplicá-lo.
+ */
+function connectNodes(fromNode, toNode) {
+  if (!state.flow || !fromNode || !toNode) return false;
+  if (fromNode.id === toNode.id) {
+    toast(t("builder.toast.linkSelf"), "err");
+    return false;
+  }
+  if (toNode.type === "trigger") {
+    toast(t("builder.toast.linkToTrigger"), "err");
+    return false;
+  }
+  if (state.flow.edges.some((e) => e.from === fromNode.id && e.to === toNode.id)) {
+    toast(t("builder.toast.linkDuplicate"), "err");
+    return false;
+  }
+  const siblings = state.flow.edges.filter((e) => e.from === fromNode.id).length;
+  state.flow.edges.push({
+    id: uid("e"),
+    from: fromNode.id,
+    to: toNode.id,
+    label: defaultEdgeLabel(fromNode, siblings),
+  });
+  state.selectedNodeId = toNode.id;
+  renderCanvas();
+  renderProps();
+  toast(t("builder.toast.linkCreated"));
+  return true;
+}
+
+/**
+ * Conector "preso" no cursor: arma a ligação e o fio segue o mouse até a
+ * pessoa clicar no card de destino. É a alternativa ao arrasto pra quem está
+ * no trackpad ou solta o botão no meio do caminho — e pra quem só descobriu
+ * o recurso pelo menu do "+".
+ */
+function armLinkMode(fromNode) {
+  const canvas = $("canvas");
+  if (!canvas || !state.flow) return;
+  cancelLinkMode();
+  state.linkFrom = fromNode.id;
+
+  const svg = $("edges-svg");
+  const wire = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  wire.setAttribute("class", "fb-wire-drag");
+  svg?.appendChild(wire);
+  state.linkWireEl = wire;
+  canvas.classList.add("wiring");
+
+  let hovered = null;
+  const move = (e) => {
+    const r = canvas.getBoundingClientRect();
+    const x1 = fromNode.x + NODE_W / 2;
+    const y1 = fromNode.y + nodeHeight(fromNode) + 2;
+    const x2 = e.clientX - r.left;
+    const y2 = e.clientY - r.top;
+    wire.setAttribute("d", `M ${x1} ${y1} C ${x1} ${y1 + 40}, ${x2} ${y2 - 40}, ${x2} ${y2}`);
+    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest(".fb-node");
+    const cand = el && el.dataset.id !== fromNode.id ? el : null;
+    if (cand !== hovered) {
+      hovered?.classList.remove("wire-target");
+      cand?.classList.add("wire-target");
+      hovered = cand;
+    }
+  };
+  const esc = (e) => {
+    if (e.key === "Escape") {
+      cancelLinkMode();
+      toast(t("builder.toast.linkCanceled"));
+    }
+  };
+
+  document.addEventListener("mousemove", move);
+  document.addEventListener("keydown", esc);
+  // Guardado pra que qualquer caminho de saída (clique no destino, Esc,
+  // re-render) desfaça tudo — fio, destaque e listeners.
+  state.linkWire = () => {
+    document.removeEventListener("mousemove", move);
+    document.removeEventListener("keydown", esc);
+    hovered?.classList.remove("wire-target");
+    wire.remove();
+    canvas.classList.remove("wiring");
+    state.linkWire = null;
+    state.linkWireEl = null;
+    state.linkFrom = null;
+  };
+  toast(t("builder.toast.clickNextCard"));
+}
+
+function cancelLinkMode() {
+  if (state.linkWire) state.linkWire();
+  else state.linkFrom = null;
+}
+
+/**
+ * Arrastar a partir do "+" pra ligar a um card existente.
+ *
+ * Mesmo botão, dois gestos: clicar abre o menu de passo novo (como antes),
+ * arrastar puxa um fio até outro card. Sem isso, ligar a um card já existente
+ * exigia selecionar o card, achar "Ligar a outro card" no painel e clicar no
+ * destino — três passos escondidos, e quem não achava acabava duplicando o card.
+ */
+function startWireDrag(ev, fromNode, plusBtn) {
+  const canvas = $("canvas");
+  if (!canvas) return;
+  const rect = () => canvas.getBoundingClientRect();
+  const start = { x: ev.clientX, y: ev.clientY };
+  let wire = null;
+  let hovered = null;
+
+  const nodeElAt = (e) => {
+    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest(".fb-node");
+    if (!el || el.dataset.id === fromNode.id) return null;
+    return el;
+  };
+
+  const move = (e) => {
+    const moved = Math.abs(e.clientX - start.x) + Math.abs(e.clientY - start.y);
+    if (!wire && moved < 6) return;
+    if (!wire) {
+      closeAddMenu();
+      const svg = $("edges-svg");
+      if (!svg) return;
+      wire = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      wire.setAttribute("class", "fb-wire-drag");
+      svg.appendChild(wire);
+      canvas.classList.add("wiring");
+    }
+    const r = rect();
+    const x1 = fromNode.x + NODE_W / 2;
+    const y1 = fromNode.y + nodeHeight(fromNode) + 2;
+    const x2 = e.clientX - r.left;
+    const y2 = e.clientY - r.top;
+    wire.setAttribute("d", `M ${x1} ${y1} C ${x1} ${y1 + 40}, ${x2} ${y2 - 40}, ${x2} ${y2}`);
+
+    const el = nodeElAt(e);
+    if (el !== hovered) {
+      hovered?.classList.remove("wire-target");
+      el?.classList.add("wire-target");
+      hovered = el;
+    }
+  };
+
+  const up = (e) => {
+    document.removeEventListener("mousemove", move);
+    document.removeEventListener("mouseup", up);
+    hovered?.classList.remove("wire-target");
+    canvas.classList.remove("wiring");
+    wire?.remove();
+    // Sem arrasto, o "+" continua fazendo o de sempre: abrir o menu de passo novo.
+    if (!wire) {
+      openAddMenu(fromNode, plusBtn);
+      return;
+    }
+    const el = nodeElAt(e);
+    const target = el && state.flow?.nodes.find((n) => n.id === el.dataset.id);
+    if (target) connectNodes(fromNode, target);
+    // Soltou no vazio: em vez de perder o gesto, o fio fica preso no cursor
+    // esperando o clique no destino.
+    else armLinkMode(fromNode);
+  };
+
+  document.addEventListener("mousemove", move);
+  document.addEventListener("mouseup", up);
+}
+
 /** Cria nó filho já ligado ao pai (abaixo, levemente deslocado se já houver filhos). */
 function addChildNode(parentNode, type) {
   if (!state.flow) return;
@@ -786,22 +1031,7 @@ function addChildNode(parentNode, type) {
   };
   state.flow.nodes.push(child);
 
-  let edgeLabel;
-  if (parentNode.type === "llm_intent") {
-    edgeLabel =
-      prompt(
-        t("builder.prompt.intentLabel"),
-        siblings === 0 ? "marcar_consulta" : "default"
-      )?.trim() || "default";
-  } else if (parentNode.type === "condition") {
-    edgeLabel = siblings === 0 ? "true" : "false";
-  } else if (parentNode.type === "action") {
-    edgeLabel = siblings === 0 ? "ok" : "erro";
-  } else if (parentNode.type === "llm_extract") {
-    edgeLabel = ["ok", "ambiguous", "unclear"][siblings] || "ok";
-  } else if (parentNode.type === "llm_answer") {
-    edgeLabel = siblings === 0 ? "ok" : "erro";
-  }
+  const edgeLabel = defaultEdgeLabel(parentNode, siblings);
 
   state.flow.edges.push({
     id: uid("e"),
@@ -868,22 +1098,13 @@ function onNodeClick(ev, node) {
     return;
   }
   if (state.linkFrom && state.linkFrom !== node.id) {
-    const label = prompt(t("builder.prompt.edgeLabel"), "");
-    state.flow.edges.push({
-      id: uid("e"),
-      from: state.linkFrom,
-      to: node.id,
-      label: label?.trim() || undefined,
-    });
-    state.linkFrom = null;
-    state.selectedNodeId = node.id;
-    renderCanvas();
-    renderProps();
-    toast(t("builder.toast.linkCreated"));
+    const from = state.flow.nodes.find((n) => n.id === state.linkFrom);
+    cancelLinkMode();
+    if (from) connectNodes(from, node);
     return;
   }
   if (state.linkFrom === node.id) {
-    state.linkFrom = null;
+    cancelLinkMode();
     toast(t("builder.toast.linkCanceled"));
     return;
   }
@@ -1372,10 +1593,7 @@ function renderProps() {
     };
   }
 
-  $("p-link").onclick = () => {
-    state.linkFrom = node.id;
-    toast(t("builder.toast.clickNextCard"));
-  };
+  $("p-link").onclick = () => armLinkMode(node);
   $("p-del").onclick = () => deleteNode(node);
   $("p-type")?.addEventListener("change", (ev) => changeNodeType(node, ev.target.value));
 }
