@@ -19,6 +19,7 @@
  *   GET  /v1/portal · /v1/portal/dashboard
  *   PUT  /v1/portal/account/profile · /billing · /business
  *   POST /v1/inbox/import (glabs-only)
+ *   GET  /v1/rag/answers
  *   POST /v1/rag/teach · GET /v1/rag/search
  *   POST /v1/rag/reindex · GET /v1/rag/knowledge · POST /v1/rag/knowledge/:id/suppress
  *   GET  /v1/integrations/google-calendar/connect · /callback · /status
@@ -1210,6 +1211,19 @@ const server = createServer(async (req, res) => {
       const { teachManual } = await import("./rag/index-store.js");
       const r = await teachManual(clientId, body.question, body.answer);
       json(res, r.ok ? 200 : 400, r);
+      return;
+    }
+
+    // Rastro das respostas da IA — "por que ela respondeu isso?"
+    if (method === "GET" && path === "/v1/rag/answers") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const { listAiAnswers } = await import("./rag/answer-log.js");
+      const answers = await listAiAnswers(clientId, Number(url.searchParams.get("limit")) || 50);
+      json(res, 200, { ok: true, answers });
       return;
     }
 

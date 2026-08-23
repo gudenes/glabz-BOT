@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=30" />
+    <link rel="stylesheet" href="/admin/portal.css?v=31" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -412,6 +412,12 @@
             </form>
             <div id="kb-list" class="kb-list"></div>
           </div>
+
+          <div class="card-form" style="margin-top:16px">
+            <h2 data-i18n="portal.answers.title">Respostas que a IA deu</h2>
+            <p class="hint-muted" data-i18n="portal.answers.sub">O que foi perguntado, o que ela respondeu e no que ela se baseou. Útil pra entender uma resposta estranha.</p>
+            <div id="ai-log" class="ai-log"></div>
+          </div>
         </section>
       </main>
     </div>
@@ -448,6 +454,6 @@
       </div>
     </div>
 
-    <script src="/admin/portal.js?v=31" type="module"></script>
+    <script src="/admin/portal.js?v=32" type="module"></script>
   </body>
 </html>

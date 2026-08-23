@@ -110,7 +110,7 @@ function setView(view) {
   if (view === "dashboard") void loadDashboard();
   if (view === "account") loadAccount();
   if (view === "integrations") void loadIntegrationsStatus();
-  if (view === "knowledge") void loadKnowledge();
+  if (view === "knowledge") { void loadKnowledge(); void loadAiAnswers(); }
 }
 
 /**
@@ -746,6 +746,50 @@ function renderKnowledge(chunks) {
       }
     });
   });
+}
+
+/**
+ * Rastro das respostas da IA. Mostra em que ela se baseou — inclusive quando
+ * NÃO usou a base (e por quê), que é o caso mais difícil de diagnosticar
+ * olhando só a resposta.
+ */
+async function loadAiAnswers() {
+  const box = $("ai-log");
+  if (!box) return;
+  try {
+    const data = await api("/v1/rag/answers?limit=30");
+    const items = data.answers || [];
+    if (!items.length) {
+      box.innerHTML = `<p class="hint-muted">${t("portal.answers.empty")}</p>`;
+      return;
+    }
+    box.innerHTML = items
+      .map((a) => {
+        const quando = new Date(a.createdAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+        const usou = a.ragStatus === "ok" && (a.ragHits || []).length;
+        const tag = usou
+          ? `<span class="ai-tag ok">${t("portal.answers.usedBase", { n: a.ragHits.length })}</span>`
+          : `<span class="ai-tag off">${t("portal.answers.noBase")}${a.ragReason ? ` · ${escapeHtml(a.ragReason)}` : ""}</span>`;
+        const base = usou
+          ? `<details class="ai-src"><summary>${t("portal.answers.seeSources")}</summary><ul>${a.ragHits
+              .map((h) => `<li>${escapeHtml(h.question)} <em>(${Number(h.score).toFixed(2)})</em></li>`)
+              .join("")}</ul></details>`
+          : "";
+        return `
+          <div class="ai-item">
+            <div class="ai-head">
+              <b>${escapeHtml(a.question)}</b>
+              <small>${quando}${a.simulated ? ` · ${t("portal.answers.fromTest")}` : ""}</small>
+            </div>
+            <p>${a.answer ? escapeHtml(a.answer) : `<i>${t("portal.answers.failed")}</i>`}</p>
+            ${tag}
+            ${base}
+          </div>`;
+      })
+      .join("");
+  } catch (e) {
+    box.innerHTML = `<p class="hint-muted">${escapeHtml(e.message)}</p>`;
+  }
 }
 
 $("btn-kb-teach-toggle")?.addEventListener("click", () => {

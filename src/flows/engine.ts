@@ -265,6 +265,7 @@ export async function runFlowStep(opts: {
       // trouxe — foi a falta dele que fez um bug de clientId ausente passar
       // despercebido no simulador do builder.
       const ragLog: Record<string, unknown> = { node: node.id, flowId: flow.id };
+      let ragHits: { question: string; score: number }[] = [];
 
       if (!flow.clientId) {
         ragLog.rag = "pulado";
@@ -285,6 +286,7 @@ export async function runFlowStep(opts: {
             ragLog.rag = "ok";
             ragLog.trechos = hits.length;
             ragLog.scores = hits.map((h) => Number(h.score).toFixed(3));
+            ragHits = hits.map((h) => ({ question: h.question, score: Number(h.score) }));
             if (hits.length) {
               const trechos = hits
                 .map((h) => `- Pergunta parecida: ${h.question}\n  Resposta dada pela equipe: ${h.answer}`)
@@ -310,6 +312,28 @@ export async function runFlowStep(opts: {
         context,
         maxChars: Number(node.data.maxChars) || 400,
       });
+      // Rastro persistido: o console some, e "por que respondeu isso?" precisa
+      // de resposta depois. Fire-and-forget — gravar log não pode atrasar nem
+      // derrubar o atendimento.
+      // Captura o id agora: `node` é reatribuído no loop, e o .then() roda
+      // depois — sem isso o log apontaria pro passo errado.
+      const answeringNodeId = node.id;
+      void import("./../rag/answer-log.js")
+        .then(({ logAiAnswer }) =>
+          logAiAnswer({
+            clientId: flow.clientId ?? null,
+            flowId: flow.id,
+            nodeId: answeringNodeId,
+            question: text,
+            answer: result.ok ? result.answer : null,
+            ragStatus: String(ragLog.rag ?? ""),
+            ragReason: ragLog.motivo ? String(ragLog.motivo) : null,
+            ragHits,
+            simulated: simulate,
+          })
+        )
+        .catch(() => undefined);
+
       const varName = String(node.data.varName || "resposta_ia");
       if (result.ok) {
         vars[varName] = result.answer;

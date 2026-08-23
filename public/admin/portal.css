@@ -1094,3 +1094,18 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .kb-teach { border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 12px; background: #fafaf7; display: grid; gap: 10px; }
 .kb-teach.hidden { display: none; }
 .kb-teach .hint-muted { margin: 0 0 4px; }
+
+/* Rastro das respostas da IA */
+.ai-log { display: grid; gap: 10px; margin-top: 12px; }
+.ai-item { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: #fff; display: grid; gap: 6px; }
+.ai-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.ai-head b { font-size: 14px; }
+.ai-head small { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.ai-item > p { margin: 0; font-size: 13px; color: #333; line-height: 1.45; }
+.ai-tag { justify-self: start; font-size: 11px; border-radius: 999px; padding: 2px 9px; }
+.ai-tag.ok { background: #eef6ee; color: #2f6b34; }
+.ai-tag.off { background: #fdf1e7; color: #8a4b00; }
+.ai-src { font-size: 12px; }
+.ai-src summary { cursor: pointer; color: var(--muted); }
+.ai-src ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
+.ai-src em { opacity: .7; }
