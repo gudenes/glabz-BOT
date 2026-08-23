@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=27" />
+    <link rel="stylesheet" href="/admin/portal.css?v=28" />
   </head>
   <body class="portal-body">
     <div id="impersonate" class="impersonate hidden">
@@ -157,6 +157,7 @@
               <div class="studio-head-actions">
                 <button type="button" class="btn-text" id="studio-expand" data-i18n="portal.expand">Expandir</button>
                 <button type="button" class="btn-text hidden" id="studio-close" data-i18n="portal.studio.viewFlow">Ver fluxo</button>
+                <button type="button" class="studio-x" id="studio-dismiss" title="Fechar" aria-label="Fechar">✕</button>
               </div>
             </header>
             <div class="studio-log" id="studio-log"></div>
@@ -394,6 +395,27 @@
       <button type="button" data-view="integrations" data-i18n="portal.nav.integrations">Integrações</button>
     </nav>
 
-    <script src="/admin/portal.js?v=27" type="module"></script>
+    <!-- Onboarding: primeira vez na aba Fluxo, antes de existir qualquer fluxo montado -->
+    <div id="onboard" class="onboard hidden" role="dialog" aria-modal="true" aria-labelledby="onboard-title">
+      <div class="onboard-card">
+        <h2 id="onboard-title" data-i18n="portal.onboard.title">Como você quer começar?</h2>
+        <p data-i18n="portal.onboard.sub">Escolha um caminho — dá pra trocar depois.</p>
+        <div class="onboard-opts">
+          <button type="button" id="onboard-tpl" class="onboard-opt">
+            <span class="onboard-ic" aria-hidden="true">📋</span>
+            <b data-i18n="portal.onboard.tplTitle">Escolher um modelo pronto</b>
+            <small data-i18n="portal.onboard.tplSub">Modelos por segmento — agendamento, atendimento, pedidos. Você edita depois.</small>
+          </button>
+          <button type="button" id="onboard-ia" class="onboard-opt">
+            <span class="onboard-ic" aria-hidden="true">✨</span>
+            <b data-i18n="portal.onboard.iaTitle">Montar com a nossa IA</b>
+            <small data-i18n="portal.onboard.iaSub">Você conta como funciona o seu atendimento e a IA desenha o fluxo.</small>
+          </button>
+        </div>
+        <button type="button" class="btn-text" id="onboard-skip" data-i18n="portal.onboard.skip">Explorar por conta própria</button>
+      </div>
+    </div>
+
+    <script src="/admin/portal.js?v=28" type="module"></script>
   </body>
 </html>
