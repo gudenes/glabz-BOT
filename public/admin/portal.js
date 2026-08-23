@@ -74,6 +74,7 @@ const TITLES = {
   dashboard: ["portal.nav.dashboard", "portal.dashboardStageSub"],
   account: ["portal.nav.account", "portal.accountStageSub"],
   integrations: ["portal.nav.integrations", "portal.integrationsStageSub"],
+  knowledge: ["portal.nav.knowledge", "portal.knowledgeStageSub"],
 };
 
 /**
@@ -87,7 +88,7 @@ function setView(view) {
     b.classList.toggle("on", b.dataset.view === view);
   });
   const shownSection = view === "test" ? "flow" : view;
-  for (const id of ["status", "inbox", "flow", "pubs", "dashboard", "account", "integrations"]) {
+  for (const id of ["status", "inbox", "flow", "pubs", "dashboard", "account", "integrations", "knowledge"]) {
     $(`view-${id}`)?.classList.toggle("hidden", id !== shownSection);
   }
   $("hello").textContent = state.firstName ? t("portal.helloName", { name: state.firstName }) : t(TITLES[view][0]);
@@ -109,6 +110,7 @@ function setView(view) {
   if (view === "dashboard") void loadDashboard();
   if (view === "account") loadAccount();
   if (view === "integrations") void loadIntegrationsStatus();
+  if (view === "knowledge") void loadKnowledge();
 }
 
 /**
@@ -690,6 +692,81 @@ function loadAccount() {
   $("biz-audience").value = c.bizAudience || "";
   $("biz-source").value = c.bizSource || "";
 }
+
+/**
+ * Base de conhecimento (RAG): mostra o que a IA aprendeu com as respostas da
+ * equipe e permite tirar da base o que estiver errado.
+ *
+ * A remoção é a válvula de correção do desenho (docs/rag-desenho.md §5.2):
+ * como não há aprovação prévia (não escalaria), precisa haver um jeito simples
+ * de dizer "não use isso" quando alguém perceber um erro.
+ */
+async function loadKnowledge() {
+  const box = $("kb-list");
+  if (!box) return;
+  box.innerHTML = `<p class="hint-muted">${t("portal.knowledge.loading")}</p>`;
+  try {
+    const data = await api("/v1/rag/knowledge");
+    renderKnowledge(data.chunks || []);
+  } catch (e) {
+    box.innerHTML = `<p class="hint-muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function renderKnowledge(chunks) {
+  const box = $("kb-list");
+  if (!box) return;
+  if (!chunks.length) {
+    box.innerHTML = `<p class="hint-muted">${t("portal.knowledge.empty")}</p>`;
+    return;
+  }
+  box.innerHTML = chunks
+    .map(
+      (c) => `
+      <div class="kb-item" data-id="${escapeHtml(c.id)}">
+        <div class="kb-body">
+          <b>${escapeHtml(c.question)}</b>
+          <p>${escapeHtml(c.answer)}</p>
+          ${Number(c.occurrences) > 1 ? `<span class="kb-badge">${t("portal.knowledge.times", { n: c.occurrences })}</span>` : ""}
+        </div>
+        <button type="button" class="btn-text kb-remove" data-remove="${escapeHtml(c.id)}">${t("portal.knowledge.remove")}</button>
+      </div>`
+    )
+    .join("");
+
+  box.querySelectorAll("[data-remove]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm(t("portal.knowledge.confirmRemove"))) return;
+      try {
+        await api(`/v1/rag/knowledge/${encodeURIComponent(btn.dataset.remove)}/suppress`, { method: "POST" });
+        toast(t("portal.knowledge.removed"));
+        await loadKnowledge();
+      } catch (e) {
+        toast(e.message, "err");
+      }
+    });
+  });
+}
+
+$("btn-kb-reindex")?.addEventListener("click", async () => {
+  const status = $("kb-status");
+  const btn = $("btn-kb-reindex");
+  if (btn) btn.disabled = true;
+  if (status) status.textContent = t("portal.knowledge.working");
+  try {
+    const r = await api("/v1/rag/reindex", { method: "POST" });
+    if (status) {
+      status.textContent = r.ok
+        ? t("portal.knowledge.done", { n: r.indexed })
+        : t("portal.knowledge.unavailable");
+    }
+    await loadKnowledge();
+  } catch (e) {
+    if (status) status.textContent = e.message;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+});
 
 async function loadIntegrationsStatus() {
   try {
