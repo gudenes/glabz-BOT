@@ -1,0 +1,76 @@
+# Avisa quando um commit chega em `main` (= produção) sem ter passado por PR
+# e, portanto, sem ter sido validado em staging.
+#
+# Contexto: main dispara deploy automático em produção no Railway. O fluxo
+# combinado é feature → develop (staging, valida) → main (produção). Em
+# 23/08/2026 cinco commits foram para produção por push direto, sem PR e sem
+# passar por staging — nada avisou. Este workflow existe pra isso não passar
+# despercebido.
+#
+# Deliberadamente NÃO bloqueia: correção urgente às vezes precisa ir direto.
+# O objetivo é deixar registrado e visível, não impedir.
+name: Aviso · push direto no main
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  warn:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Detecta commits que não vieram de PR
+        id: check
+        env:
+          # Mensagens de merge/squash de PR terminam com "(#123)".
+          COMMIT_MSGS: ${{ toJSON(github.event.commits.*.message) }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, re
+          msgs = json.loads(os.environ["COMMIT_MSGS"])
+          # Só a primeira linha importa — o corpo pode citar "(#N)" sem ser PR.
+          diretos = [m.splitlines()[0] for m in msgs
+                     if not re.search(r"\(#\d+\)\s*$", m.splitlines()[0])]
+          print(f"count={len(diretos)}")
+          if diretos:
+              print("lista<<EOF")
+              for d in diretos:
+                  print(f"- {d}")
+              print("EOF")
+          PY
+
+      - name: Abre issue de alerta
+        if: steps.check.outputs.count != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const lista = `${{ steps.check.outputs.lista }}`;
+            const autor = context.actor;
+            const sha = context.sha.slice(0, 7);
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `⚠️ Commit direto em produção (main) — ${sha}`,
+              body: [
+                `@${autor}, um ou mais commits chegaram em \`main\` **sem passar por PR**.`,
+                ``,
+                `Como \`main\` dispara deploy automático em produção no Railway, isso significa`,
+                `que o código foi para o ar **sem ter sido validado em staging**.`,
+                ``,
+                `**Commits:**`,
+                lista,
+                ``,
+                `---`,
+                `**Fluxo combinado:** \`feature\` → \`develop\` (staging, valida) → \`main\` (produção).`,
+                ``,
+                `Se foi correção urgente, tudo bem — feche esta issue. Se não foi, vale considerar`,
+                `levar para \`develop\` primeiro na próxima vez, e conferir se \`develop\` não ficou`,
+                `desatualizado em relação a \`main\` (divergência entre os dois já aconteceu).`,
+                ``,
+                `<sub>Aberto automaticamente por \`.github/workflows/warn-direct-push-main.yml\`.</sub>`,
+              ].join("\n"),
+            });
