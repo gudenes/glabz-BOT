@@ -169,6 +169,7 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .app.side-collapsed .side-kicker,
 .app.side-collapsed .side-client,
 .app.side-collapsed .side-sub,
+.app.side-collapsed .side-back-admin,
 .app.side-collapsed .nav-link span,
 .app.side-collapsed .who div,
 .app.side-collapsed #btn-logout { display: none; }
@@ -198,6 +199,14 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 }
 .side-client { margin: 4px 8px 0; font-size: 16px; color: #fff; }
 .side-sub { margin: 0 8px 14px; color: #8a8a86; font-size: 12px; }
+.side-back-admin {
+  display: inline-block; margin: 0 8px 14px; width: fit-content;
+  background: var(--gold); color: var(--gold-ink);
+  font-size: 12px; font-weight: 800;
+  padding: 5px 12px; border-radius: 999px;
+  text-decoration: none;
+}
+.side-back-admin.hidden { display: none; }
 .side-nav { display: grid; gap: 4px; }
 .nav-link {
   display: flex; align-items: center; gap: 10px;
