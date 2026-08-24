@@ -1605,6 +1605,11 @@ $("studio-input")?.addEventListener("keydown", (e) => {
 
 $("studio-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
+  // Cobre o caminho que faltava: apertar Enter (ou clicar em "Enviar" direto
+  // com o mouse) enquanto ainda está gravando dispara o submit SEM passar
+  // por stopStudioMic (que só roda no clique no próprio botão do mic) — sem
+  // isso o rec ficava ativo e a fala do próximo turno se somava à anterior.
+  stopMicSilently();
   const input = $("studio-input");
   const text = (input.value || "").trim();
   if (!text || state.studio.busy) return;
@@ -1633,17 +1638,33 @@ function setMicUi(on) {
   if ($("studio-mic-label")) $("studio-mic-label").textContent = on ? t("portal.studio.stopMic") : t("portal.studio.talk");
 }
 
-function stopStudioMic({ send = false } = {}) {
+/**
+ * Encerra a sessão de reconhecimento de voz, se houver uma ativa — sem mexer
+ * no texto do campo (isso fica a cargo de quem chama). Existe separado de
+ * `stopStudioMic` porque o envio do formulário pode acontecer por caminhos
+ * que NUNCA passam por `stopStudioMic` (Enter no campo, clique direto em
+ * "Enviar" enquanto ainda grava) — sem isso, o `rec` fica ativo e
+ * `state.studio.heard` nunca zera, então a fala do PRÓXIMO turno (já depois
+ * da resposta do coach) se soma ao texto do turno anterior, que nunca foi
+ * de fato limpo. Chamada no topo do submit do form cobre todos os
+ * caminhos de uma vez; é idempotente (não faz nada se não há `rec` ativo).
+ */
+function stopMicSilently() {
   const rec = state.studio.rec;
+  if (!rec) return;
   state.studio.rec = null;
   try {
-    rec?.stop();
+    rec.stop();
   } catch {
     /* ignore */
   }
   setMicUi(false);
-  const text = ($("studio-input")?.value || "").trim();
   state.studio.heard = "";
+}
+
+function stopStudioMic({ send = false } = {}) {
+  stopMicSilently();
+  const text = ($("studio-input")?.value || "").trim();
   if (send && text && !state.studio.busy) {
     $("studio-form")?.requestSubmit();
   } else if ($("studio-input")) {
