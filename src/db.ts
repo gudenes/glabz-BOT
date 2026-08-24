@@ -257,7 +257,8 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
   source_message_ids TEXT[] NOT NULL DEFAULT '{}',
   -- manual (ensinado avulso na aba Conhecimento) · imported (extraído de
   -- histórico respondido por humano) · onboarding (coletado no chat do
-  -- Studio). Só exibição/diagnóstico — não muda como a busca funciona.
+  -- Studio) · pasted (extraído de texto colado pelo dono, ex.: site,
+  -- cardápio). Só exibição/diagnóstico — não muda como a busca funciona.
   origin TEXT NOT NULL DEFAULT 'manual',
   -- Vetores de modelos diferentes não são comparáveis — guardar qual gerou
   -- permite detectar base misturada e reindexar (§7).

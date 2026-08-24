@@ -753,13 +753,15 @@ function renderKnowledge(chunks) {
   box.innerHTML = chunks
     .map((c) => {
       // 'manual' (ensino avulso na própria aba) é o caso comum — não marca
-      // nada, só os outros dois dizem de onde vieram.
+      // nada, só os outros dizem de onde vieram.
       const originTag =
         c.origin === "onboarding"
           ? `<span class="ai-tag ok">${t("portal.knowledge.originOnboarding")}</span>`
           : c.origin === "imported"
             ? `<span class="ai-tag off">${t("portal.knowledge.originImported")}</span>`
-            : "";
+            : c.origin === "pasted"
+              ? `<span class="ai-tag ok">${t("portal.knowledge.originPasted")}</span>`
+              : "";
       return `
       <div class="kb-item" data-id="${escapeHtml(c.id)}">
         <div class="kb-body">
@@ -864,6 +866,39 @@ $("kb-teach")?.addEventListener("submit", async (ev) => {
     await loadKnowledge();
   } catch (e) {
     toast(e.message, "err");
+  }
+});
+
+$("btn-kb-paste-toggle")?.addEventListener("click", () => {
+  $("kb-paste")?.classList.toggle("hidden");
+  $("kb-paste-text")?.focus();
+});
+
+$("kb-paste")?.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const text = $("kb-paste-text")?.value.trim();
+  if (!text) return;
+  const btn = $("kb-paste-submit");
+  btn?.setAttribute("disabled", "true");
+  if (btn) btn.textContent = t("portal.knowledge.review.extracting");
+  try {
+    const data = await api("/v1/rag/extract-from-text", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
+    const pairs = data.pairs || [];
+    if (pairs.length) {
+      $("kb-paste")?.classList.add("hidden");
+      $("kb-paste-text").value = "";
+      renderKnowledgeReview(pairs, "pasted");
+    } else {
+      toast(t("portal.knowledge.pasteEmpty"));
+    }
+  } catch (e) {
+    toast(e.message, "err");
+  } finally {
+    btn?.removeAttribute("disabled");
+    if (btn) btn.textContent = t("portal.knowledge.pasteSubmit");
   }
 });
 
@@ -1288,7 +1323,12 @@ async function offerKnowledgeReview() {
   }
 }
 
-function renderKnowledgeReview(pairs) {
+// Origem a marcar quando o dono confirmar a revisão — setada por quem abre
+// a tela (onboarding vs. texto colado), lida só na hora de salvar.
+let krOrigin = "onboarding";
+
+function renderKnowledgeReview(pairs, origin = "onboarding") {
+  krOrigin = origin;
   const panel = $("knowledge-review");
   const box = $("kr-list");
   if (!panel || !box) return;
@@ -1327,6 +1367,7 @@ function closeKnowledgeReview() {
  */
 function finishKnowledgeReview() {
   closeKnowledgeReview();
+  krOrigin = "onboarding";
   const next = state.studio.afterKnowledge;
   state.studio.afterKnowledge = null;
   if (next === "template") {
@@ -1378,7 +1419,7 @@ $("kr-confirm")?.addEventListener("click", async () => {
   try {
     const res = await api("/v1/rag/teach-batch", {
       method: "POST",
-      body: JSON.stringify({ pairs: items }),
+      body: JSON.stringify({ pairs: items, origin: krOrigin }),
     });
     toast(t("portal.knowledge.review.saved", { n: res.saved }));
   } catch (e) {
