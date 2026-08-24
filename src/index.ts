@@ -75,6 +75,7 @@ import {
   updateClientBizProfile,
   type ClientBillingPatch,
   type ClientBizProfilePatch,
+  type ClientRecord,
 } from "./clients.js";
 import {
   countActiveConversations,
@@ -211,6 +212,22 @@ function actingClientId(req: IncomingMessage, auth: AuthCtx): string | null {
     return raw || null;
   }
   return null;
+}
+
+/**
+ * Contexto passado pro coach do Studio — nome + perfil de negócio ("Dados da
+ * conta"), quando existir. Um só lugar pra montar isso evita repetir o
+ * mapeamento nos 3 pontos que chamam studioTurn/extractKnowledgeFromConversation.
+ */
+function studioContextFor(client: ClientRecord | null) {
+  if (!client) return null;
+  return {
+    name: client.name,
+    bizRole: client.bizRole,
+    bizSize: client.bizSize,
+    bizSegment: client.bizSegment,
+    bizAudience: client.bizAudience,
+  };
 }
 
 // América/São_Paulo é sempre UTC-3 (Brasil não tem mais horário de verão desde 2019) —
@@ -1014,9 +1031,23 @@ const server = createServer(async (req, res) => {
       // uma conversa já encerrada.
       if (body?.action === "extract_knowledge") {
         try {
-          const ctx = client ? { name: client.name } : null;
+          const ctx = studioContextFor(client);
           const { extractKnowledgeFromConversation } = await import("./rag/knowledge-extraction.js");
-          const pairs = await extractKnowledgeFromConversation(messages, ctx);
+          const { pairs, bizProfile } = await extractKnowledgeFromConversation(messages, ctx);
+          // Perfil de negócio grava direto, sem tela de revisão: é metadado
+          // da própria conta (nunca aparece pra cliente final, diferente dos
+          // pares de conhecimento), e só preenche o que ainda estava vazio —
+          // nunca sobrescreve o que o dono já preencheu em "Dados da conta".
+          if (clientId && client) {
+            const patch: Record<string, string> = {};
+            if (bizProfile.role && !client.bizRole) patch.bizRole = bizProfile.role;
+            if (bizProfile.size && !client.bizSize) patch.bizSize = bizProfile.size;
+            if (bizProfile.segment && !client.bizSegment) patch.bizSegment = bizProfile.segment;
+            if (bizProfile.audience && !client.bizAudience) patch.bizAudience = bizProfile.audience;
+            if (Object.keys(patch).length) {
+              await updateClientBizProfile(clientId, patch).catch(() => undefined);
+            }
+          }
           json(res, 200, { ok: true, kind: "knowledge", pairs });
         } catch (e) {
           json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "ia" });
@@ -1042,7 +1073,7 @@ const server = createServer(async (req, res) => {
               ? "test"
               : "chat";
       try {
-        const ctx = client ? { name: client.name } : null;
+        const ctx = studioContextFor(client);
         if (action === "build") {
           const gen = await buildFlowFromStudio(messages, ctx);
           const flow = saveFlow({
@@ -1293,7 +1324,7 @@ const server = createServer(async (req, res) => {
         return;
       }
       try {
-        const ctx = client ? { name: client.name } : null;
+        const ctx = studioContextFor(client);
         const { extractKnowledgeFromText } = await import("./rag/knowledge-extraction.js");
         const pairs = await extractKnowledgeFromText(text, ctx);
         json(res, 200, { ok: true, pairs });

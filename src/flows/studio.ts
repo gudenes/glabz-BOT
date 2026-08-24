@@ -15,20 +15,50 @@ export type StudioTurn = {
 export type ClientContext = {
   name?: string | null;
   about?: string | null;
+  // Perfil de negócio ("Dados da conta" no portal) — hoje só usado ali, nunca
+  // tinha chegado ao coach. Deixar disponível evita reperguntar o que já
+  // existe e ajuda a direcionar quais perguntas de conhecimento fazem
+  // sentido pro segmento (ver §5d da lista de observações).
+  bizRole?: string | null;
+  bizSize?: string | null;
+  bizSegment?: string | null;
+  bizAudience?: string | null;
 };
 
 export function clientContextBlock(ctx?: ClientContext | null): string {
   const name = ctx?.name?.trim();
   const about = ctx?.about?.trim();
+  const bizRole = ctx?.bizRole?.trim();
+  const bizSize = ctx?.bizSize?.trim();
+  const bizSegment = ctx?.bizSegment?.trim();
+  const bizAudience = ctx?.bizAudience?.trim();
+
+  const lines: string[] = [];
   if (!name && !about) {
-    return "Contexto do cliente: ainda não há nome cadastrado. Só pergunte o nome do negócio se o dono não deixar claro.";
+    lines.push(
+      "Contexto do cliente: ainda não há nome cadastrado. Só pergunte o nome do negócio se o dono não deixar claro."
+    );
+  } else {
+    lines.push("Contexto JÁ cadastrado neste projeto — trate como fato, não pergunte de novo:");
+    if (name) lines.push(`- Nome do negócio: ${name}`);
+    if (about) lines.push(`- Sobre: ${about}`);
+    lines.push(
+      "Se o nome já descreve o ramo (consultoria, pilates, clínica, escritório…), NÃO pergunte qual o serviço principal. Siga para o que falta: o que o cliente pede no WhatsApp, o que coletar, quando passar para humano."
+    );
   }
-  const lines = ["Contexto JÁ cadastrado neste projeto — trate como fato, não pergunte de novo:"];
-  if (name) lines.push(`- Nome do negócio: ${name}`);
-  if (about) lines.push(`- Sobre: ${about}`);
-  lines.push(
-    "Se o nome já descreve o ramo (consultoria, pilates, clínica, escritório…), NÃO pergunte qual o serviço principal. Siga para o que falta: o que o cliente pede no WhatsApp, o que coletar, quando passar para humano."
-  );
+
+  if (bizRole || bizSize || bizSegment || bizAudience) {
+    lines.push("Perfil de negócio já cadastrado — trate como fato, não pergunte de novo:");
+    if (bizRole) lines.push(`- Cargo/função do dono: ${bizRole}`);
+    if (bizSize) lines.push(`- Porte: ${bizSize}`);
+    if (bizSegment) lines.push(`- Segmento: ${bizSegment}`);
+    if (bizAudience) lines.push(`- Público atendido: ${bizAudience}`);
+  } else {
+    lines.push(
+      "Perfil de negócio (segmento, porte, público) AINDA não está cadastrado. Pergunte o SEGMENTO do negócio (ex.: pilates, petshop, clínica, consultoria) logo nas primeiras perguntas, antes das demais — isso ajuda a direcionar o resto da conversa. Não precisa perguntar porte/público explicitamente, só o segmento."
+    );
+  }
+
   return lines.join("\n");
 }
 
