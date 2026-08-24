@@ -3,6 +3,10 @@ import { generateFlowFromPrompt, type GeneratedFlow } from "./from-prompt.js";
 
 export type StudioMsg = { role: "user" | "assistant"; content: string };
 export type StudioPhase = "ask" | "offer" | "preview" | "debrief" | "ready";
+/** flow = briefing normal (monta fluxo no fim). knowledge = mini-briefing
+ * reduzido, só pra quem não escolheu "Montar com IA" no onboarding — nunca
+ * builda, só alimenta a Base de Conhecimento. */
+export type StudioMode = "flow" | "knowledge";
 export type StudioTurn = {
   phase: StudioPhase;
   as: "coach" | "bot";
@@ -53,6 +57,34 @@ Regras:
 - As respostas de conhecimento (horário, política, diferenciais, dúvidas frequentes) valem só o que o dono disser — nunca proponha valores nem preencha lacuna com achismo.
 - say: no máximo 3 frases.`;
 
+/**
+ * Mini-briefing pra quem NÃO escolheu "Montar com IA" (usou template ou
+ * pulou) — pulável, com aviso, e SÓ sobre conhecimento (ver plano de
+ * onboarding). Nunca builda: não tem fase "offer"/"preview"/"debrief", e
+ * o backend recusa action:"build" quando mode==="knowledge" mesmo assim
+ * (defesa em profundidade — ver POST /v1/flows/studio).
+ */
+const SYSTEM_KNOWLEDGE_ONLY = `Você é o coach da GLABZ. Está fazendo um mini-briefing SÓ sobre
+conhecimento de atendimento — NÃO vai montar fluxo nenhum agora.
+
+Responda APENAS um JSON:
+{ "phase": "ask" | "ready", "as": "coach", "say": "texto curto em português" }
+
+Fases:
+1. ask — UMA pergunta por vez, sobre: horário de funcionamento, política de cancelamento/troca,
+   o que diferencia o negócio, e a dúvida mais frequente dos clientes. No máximo 4 a 6 perguntas
+   no total. Pule qualquer uma que o dono já tenha respondido no histórico.
+2. ready — depois de cobrir isso (ou se o dono disser "chega", "pular", "depois", "para"), diga
+   que já tem o suficiente por agora e que ele pode revisar antes de salvar.
+
+Regras:
+- Nunca pergunte nome do negócio nem peça pra descrever/montar um fluxo — isso não é papel deste
+  chat. Se o dono tentar descrever um fluxo, agradeça e redirecione pra próxima pergunta de
+  conhecimento.
+- Nunca ofereça ensaio nem fale como se fosse o bot.
+- As respostas valem só o que o dono disser — nunca proponha valor nem preencha lacuna com achismo.
+- say: no máximo 2 frases.`;
+
 function extractJson(raw: string): string {
   const trimmed = raw.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
   const start = trimmed.indexOf("{");
@@ -63,7 +95,8 @@ function extractJson(raw: string): string {
 
 export async function studioTurn(
   messages: StudioMsg[],
-  ctx?: ClientContext | null
+  ctx?: ClientContext | null,
+  mode: StudioMode = "flow"
 ): Promise<StudioTurn> {
   const key = llmApiKey();
   if (!key) throw new Error("LLM não configurada (XAI_API_KEY).");
@@ -85,7 +118,7 @@ export async function studioTurn(
       max_tokens: 400,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: SYSTEM },
+        { role: "system", content: mode === "knowledge" ? SYSTEM_KNOWLEDGE_ONLY : SYSTEM },
         { role: "system", content: clientContextBlock(ctx) },
         ...history,
       ],

@@ -165,6 +165,7 @@
                 <button type="button" class="studio-x" id="studio-dismiss" title="Fechar" aria-label="Fechar">✕</button>
               </div>
             </header>
+            <p class="studio-hint hidden" id="studio-knowledge-banner" data-i18n="portal.studio.knowledge.banner">Essas respostas viram conhecimento pra IA — quanto mais completas, melhor ela atende sozinha. Pode pular quando quiser.</p>
             <div class="studio-log" id="studio-log"></div>
             <div class="studio-cta hidden" id="studio-offer">
               <button type="button" class="btn-lime" id="studio-test" data-i18n="portal.studio.testNow">Vamos testar agora</button>
@@ -173,6 +174,9 @@
             <div class="studio-cta hidden" id="studio-ready">
               <button type="button" class="btn-lime" id="studio-build" data-i18n="portal.studio.buildFlow">Montar o fluxo</button>
               <span data-i18n="portal.studio.feedbackHint">o ensaio acabou — agora o feedback vale</span>
+            </div>
+            <div class="studio-cta hidden" id="studio-knowledge-skip">
+              <button type="button" class="btn-text" id="studio-skip-knowledge" data-i18n="portal.studio.knowledge.skip">Pular por enquanto</button>
             </div>
             <p class="studio-listen hidden" id="studio-listen" data-i18n="portal.studio.listening">Ouvindo… toca em Falar de novo para enviar</p>
             <form class="studio-form" id="studio-form">
@@ -453,6 +457,7 @@
       <div class="onboard-card">
         <h2 id="onboard-title" data-i18n="portal.onboard.title">Como você quer começar?</h2>
         <p data-i18n="portal.onboard.sub">Escolha um caminho — dá pra trocar depois.</p>
+        <p class="onboard-note" data-i18n="portal.onboard.knowledgeNote">Depois de escolher, fazemos algumas perguntas rápidas — as respostas ajudam a IA a responder seus clientes de verdade.</p>
         <div class="onboard-opts">
           <button type="button" id="onboard-tpl" class="onboard-opt">
             <span class="onboard-ic" aria-hidden="true">📋</span>

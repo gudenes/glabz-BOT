@@ -123,6 +123,7 @@ import {
   wantsBuild,
   wantsTest,
   type StudioMsg,
+  type StudioMode,
 } from "./flows/studio.js";
 import { blankFlow, pickCatalogFlow, templateCatalog } from "./flows/catalog.js";
 import { connectorCatalog } from "./flows/connectors/index.js";
@@ -998,7 +999,9 @@ const server = createServer(async (req, res) => {
         messages?: StudioMsg[];
         action?: "chat" | "build" | "test" | "extract_knowledge";
         phase?: string;
+        mode?: "flow" | "knowledge";
       }>(await readBody(req));
+      const mode: StudioMode = body?.mode === "knowledge" ? "knowledge" : "flow";
       const messages = (body?.messages || []).filter(
         (m) => (m.role === "user" || m.role === "assistant") && String(m.content || "").trim()
       );
@@ -1020,14 +1023,24 @@ const server = createServer(async (req, res) => {
         }
         return;
       }
+      // Modo conhecimento nunca builda — nem por ação explícita nem por
+      // inferência de texto livre (defesa em profundidade: o frontend desse
+      // modo nem mostra o botão "Montar o fluxo", mas qualquer request pode
+      // ser forjado).
+      if (mode === "knowledge" && body?.action === "build") {
+        json(res, 400, { ok: false, reason: "modo conhecimento não monta fluxo" });
+        return;
+      }
       const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content || "";
       const inPreview = body?.phase === "preview";
       const action =
-        body?.action === "build" || (!inPreview && body?.action !== "test" && wantsBuild(lastUser))
-          ? "build"
-          : body?.action === "test" || (!inPreview && wantsTest(lastUser))
-            ? "test"
-            : "chat";
+        mode === "knowledge"
+          ? "chat"
+          : body?.action === "build" || (!inPreview && body?.action !== "test" && wantsBuild(lastUser))
+            ? "build"
+            : body?.action === "test" || (!inPreview && wantsTest(lastUser))
+              ? "test"
+              : "chat";
       try {
         const ctx = client ? { name: client.name } : null;
         if (action === "build") {
@@ -1082,7 +1095,7 @@ const server = createServer(async (req, res) => {
                 : m
             )
           : messages;
-        const turn = await studioTurn(history, ctx);
+        const turn = await studioTurn(history, ctx, mode);
         json(res, 200, { ok: true, kind: "chat", ...turn });
       } catch (e) {
         json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "ia" });
