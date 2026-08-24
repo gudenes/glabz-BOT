@@ -231,6 +231,12 @@
   flex-shrink: 1;
   color: #f8fafc;
   font-family: inherit;
+  /* Nome mais longo que os 280px do max-width cortava sem nenhum aviso
+     visual (item 8a da lista de observações) — ellipsis avisa que cortou,
+     o title (setado em fitFlowName()) mostra o nome inteiro no hover. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .fb-name:hover,
 .fb-name:focus {
