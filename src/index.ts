@@ -1015,7 +1015,7 @@ const server = createServer(async (req, res) => {
       if (body?.action === "extract_knowledge") {
         try {
           const ctx = client ? { name: client.name } : null;
-          const { extractKnowledgeFromConversation } = await import("./rag/from-onboarding.js");
+          const { extractKnowledgeFromConversation } = await import("./rag/knowledge-extraction.js");
           const pairs = await extractKnowledgeFromConversation(messages, ctx);
           json(res, 200, { ok: true, kind: "knowledge", pairs });
         } catch (e) {
@@ -1242,18 +1242,20 @@ const server = createServer(async (req, res) => {
     }
 
     // Salva em lote pares revisados pelo dono (ex.: extraídos de uma conversa
-    // do Studio) — uma chamada só em vez do frontend disparar N requests.
-    // Cada teachManual já é independente; não há transação cross-row em
-    // nenhum outro caminho do RAG hoje, então o loop aqui não perde nada.
+    // do Studio, ou de um texto colado) — uma chamada só em vez do frontend
+    // disparar N requests. Cada teachManual já é independente; não há
+    // transação cross-row em nenhum outro caminho do RAG hoje, então o loop
+    // aqui não perde nada.
     if (method === "POST" && path === "/v1/rag/teach-batch") {
       const clientId = actingClientId(req, auth);
       if (!clientId) {
         json(res, 400, { ok: false, reason: "sem cliente no contexto" });
         return;
       }
-      const body = parseJson<{ pairs?: { question?: string; answer?: string }[] }>(
-        await readBody(req)
-      );
+      const body = parseJson<{
+        pairs?: { question?: string; answer?: string }[];
+        origin?: string;
+      }>(await readBody(req));
       const pairs = (body?.pairs || []).filter(
         (p) => p?.question?.trim() && p?.answer?.trim()
       ) as { question: string; answer: string }[];
@@ -1261,13 +1263,43 @@ const server = createServer(async (req, res) => {
         json(res, 400, { ok: false, reason: "nenhum par válido" });
         return;
       }
+      // Default "onboarding" preserva o comportamento anterior (única chamada
+      // até aqui); "pasted" quando vem do "colar texto e extrair" na aba
+      // Conhecimento (ver /v1/rag/extract-from-text).
+      const origin = body?.origin === "pasted" ? "pasted" : "onboarding";
       const { teachManual } = await import("./rag/index-store.js");
       let saved = 0;
       for (const p of pairs) {
-        const r = await teachManual(clientId, p.question, p.answer, "onboarding");
+        const r = await teachManual(clientId, p.question, p.answer, origin);
         if (r.ok) saved++;
       }
       json(res, saved > 0 ? 200 : 400, { ok: saved > 0, saved, total: pairs.length });
+      return;
+    }
+
+    // Extrai pares pergunta→resposta de um texto colado (site, cardápio,
+    // política, mensagem padrão do WhatsApp) — mesmo espírito da extração
+    // de conversa do Studio (POST /v1/flows/studio {action:"extract_
+    // knowledge"}), só que a fonte é um bloco de texto solto em vez de um
+    // histórico de chat. Também nunca grava sozinho — só devolve candidatos
+    // pra revisão (ver /v1/rag/teach-batch).
+    if (method === "POST" && path === "/v1/rag/extract-from-text") {
+      const clientId = actingClientId(req, auth);
+      const client = clientId ? await getClient(clientId) : null;
+      const body = parseJson<{ text?: string }>(await readBody(req));
+      const text = String(body?.text || "").trim();
+      if (!text) {
+        json(res, 400, { ok: false, reason: "cole um texto" });
+        return;
+      }
+      try {
+        const ctx = client ? { name: client.name } : null;
+        const { extractKnowledgeFromText } = await import("./rag/knowledge-extraction.js");
+        const pairs = await extractKnowledgeFromText(text, ctx);
+        json(res, 200, { ok: true, pairs });
+      } catch (e) {
+        json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "ia" });
+      }
       return;
     }
 

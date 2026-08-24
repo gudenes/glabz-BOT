@@ -418,6 +418,7 @@
             <div class="kb-actions">
               <button type="button" class="btn-lime" id="btn-kb-reindex" data-i18n="portal.knowledge.reindex">Atualizar com as conversas recentes</button>
               <button type="button" class="btn-ghost" id="btn-kb-teach-toggle" data-i18n="portal.knowledge.teach">Ensinar uma resposta</button>
+              <button type="button" class="btn-ghost" id="btn-kb-paste-toggle" data-i18n="portal.knowledge.pasteToggle">Colar texto e deixar a IA extrair</button>
               <span id="kb-status" class="hint-muted"></span>
             </div>
 
@@ -432,6 +433,15 @@
                 <textarea id="kb-a" rows="3" maxlength="1000" required placeholder="Ex.: Sim, temos estacionamento gratuito na porta."></textarea>
               </div>
               <button type="submit" class="btn-lime" data-i18n="portal.knowledge.teachSave">Ensinar</button>
+            </form>
+
+            <form id="kb-paste" class="kb-teach hidden">
+              <p class="hint-muted" data-i18n="portal.knowledge.pasteHint">Cole um texto que vocês já têm por aí — o "sobre nós" do site, um cardápio, uma política de trocas, uma mensagem padrão do WhatsApp. A IA lê e sugere o que pode virar conhecimento; você revisa antes de salvar.</p>
+              <div class="field">
+                <span data-i18n="portal.knowledge.pasteLabel">Texto pra analisar</span>
+                <textarea id="kb-paste-text" rows="8" maxlength="8000" required placeholder="Cole aqui…"></textarea>
+              </div>
+              <button type="submit" class="btn-lime" id="kb-paste-submit" data-i18n="portal.knowledge.pasteSubmit">Extrair conhecimento</button>
             </form>
             <div id="kb-list" class="kb-list"></div>
           </div>
