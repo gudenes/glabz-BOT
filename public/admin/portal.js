@@ -1414,7 +1414,16 @@ function stopStudioMic({ send = false } = {}) {
   setMicUi(false);
   const text = ($("studio-input")?.value || "").trim();
   state.studio.heard = "";
-  if (send && text && !state.studio.busy) $("studio-form")?.requestSubmit();
+  if (send && text && !state.studio.busy) {
+    $("studio-form")?.requestSubmit();
+  } else if ($("studio-input")) {
+    // Sem envio (erro, cancelamento): limpa o campo — senão o resíduo
+    // sobrevive pro próximo clique no mic, que semeia state.studio.heard a
+    // partir do valor atual do textarea (abaixo) e concatena fala velha com
+    // a nova.
+    $("studio-input").value = "";
+    growStudioInput();
+  }
 }
 
 $("studio-mic")?.addEventListener("click", async () => {
@@ -1445,6 +1454,12 @@ $("studio-mic")?.addEventListener("click", async () => {
   state.studio.heard = ($("studio-input")?.value || "").trim();
   if (state.studio.heard) state.studio.heard += " ";
   rec.onresult = (ev) => {
+    // Sem essa guarda, um resultado tardio de uma instância já parada/
+    // substituída (comum: stop() é assíncrono, ainda dispara onresult depois
+    // do form já ter sido enviado e limpo) continua escrevendo em
+    // state.studio.heard/textarea — que são estado global — e isso reaparece
+    // como texto repetido no próximo turno. onend já tinha essa guarda.
+    if (state.studio.rec !== rec) return;
     let final = "";
     let interim = "";
     for (let i = ev.resultIndex; i < ev.results.length; i++) {
