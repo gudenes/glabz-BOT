@@ -1849,6 +1849,10 @@ function fitFlowName() {
   if (!el) return;
   const probe = el.value || el.placeholder || "Fluxo";
   el.style.width = Math.min(Math.max(probe.length * 11 + 28, 96), 440) + "px";
+  // Nome maior que o max-width (280px, ver flows.css) fica com ellipsis —
+  // o title garante que o nome inteiro aparece no hover, já que o campo em
+  // si não mostra mais.
+  el.title = probe;
 }
 
 $("flow-name").oninput = () => {
