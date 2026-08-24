@@ -996,7 +996,7 @@ const server = createServer(async (req, res) => {
       const client = clientId ? await getClient(clientId) : null;
       const body = parseJson<{
         messages?: StudioMsg[];
-        action?: "chat" | "build" | "test";
+        action?: "chat" | "build" | "test" | "extract_knowledge";
         phase?: string;
       }>(await readBody(req));
       const messages = (body?.messages || []).filter(
@@ -1004,6 +1004,20 @@ const server = createServer(async (req, res) => {
       );
       if (!messages.length) {
         json(res, 400, { ok: false, reason: "escreve uma mensagem" });
+        return;
+      }
+      // Extração nunca é inferida por texto livre (diferente de build/test
+      // abaixo) — só roda quando o frontend pede explicitamente, no fim de
+      // uma conversa já encerrada.
+      if (body?.action === "extract_knowledge") {
+        try {
+          const ctx = client ? { name: client.name } : null;
+          const { extractKnowledgeFromConversation } = await import("./rag/from-onboarding.js");
+          const pairs = await extractKnowledgeFromConversation(messages, ctx);
+          json(res, 200, { ok: true, kind: "knowledge", pairs });
+        } catch (e) {
+          json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "ia" });
+        }
         return;
       }
       const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content || "";
@@ -1211,6 +1225,36 @@ const server = createServer(async (req, res) => {
       const { teachManual } = await import("./rag/index-store.js");
       const r = await teachManual(clientId, body.question, body.answer);
       json(res, r.ok ? 200 : 400, r);
+      return;
+    }
+
+    // Salva em lote pares revisados pelo dono (ex.: extraídos de uma conversa
+    // do Studio) — uma chamada só em vez do frontend disparar N requests.
+    // Cada teachManual já é independente; não há transação cross-row em
+    // nenhum outro caminho do RAG hoje, então o loop aqui não perde nada.
+    if (method === "POST" && path === "/v1/rag/teach-batch") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const body = parseJson<{ pairs?: { question?: string; answer?: string }[] }>(
+        await readBody(req)
+      );
+      const pairs = (body?.pairs || []).filter(
+        (p) => p?.question?.trim() && p?.answer?.trim()
+      ) as { question: string; answer: string }[];
+      if (!pairs.length) {
+        json(res, 400, { ok: false, reason: "nenhum par válido" });
+        return;
+      }
+      const { teachManual } = await import("./rag/index-store.js");
+      let saved = 0;
+      for (const p of pairs) {
+        const r = await teachManual(clientId, p.question, p.answer, "onboarding");
+        if (r.ok) saved++;
+      }
+      json(res, saved > 0 ? 200 : 400, { ok: saved > 0, saved, total: pairs.length });
       return;
     }
 

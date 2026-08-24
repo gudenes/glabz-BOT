@@ -75,10 +75,10 @@ export async function reindexClient(clientId: string): Promise<IndexResult> {
     try {
       await db()`
         INSERT INTO knowledge_chunks
-          (id, client_id, question, answer, embedding, occurrences, source_message_ids, embedding_model)
+          (id, client_id, question, answer, embedding, occurrences, source_message_ids, origin, embedding_model)
         VALUES (
           ${randomUUID()}, ${clientId}, ${p.question}, ${p.answer},
-          ${vec}::vector, ${p.occurrences}, ${p.sourceIds}, ${res.model}
+          ${vec}::vector, ${p.occurrences}, ${p.sourceIds}, 'imported', ${res.model}
         )
         ON CONFLICT DO NOTHING
       `;
@@ -107,7 +107,8 @@ export async function reindexClient(clientId: string): Promise<IndexResult> {
 export async function teachManual(
   clientId: string,
   question: string,
-  answer: string
+  answer: string,
+  origin: string = "manual"
 ): Promise<{ ok: boolean; reason?: string }> {
   if (!hasDatabase() || !isVectorReady()) return { ok: false, reason: "pgvector_indisponivel" };
   if (!embeddingsConfigured()) return { ok: false, reason: "sem_chave_de_embedding" };
@@ -121,10 +122,10 @@ export async function teachManual(
   try {
     await db()`
       INSERT INTO knowledge_chunks
-        (id, client_id, question, answer, embedding, occurrences, source_message_ids, embedding_model)
+        (id, client_id, question, answer, embedding, occurrences, source_message_ids, origin, embedding_model)
       VALUES (
         ${randomUUID()}, ${clientId}, ${q}, ${a},
-        ${toPgVector(res.vectors[0])}::vector, 1, ${[]}, ${res.model}
+        ${toPgVector(res.vectors[0])}::vector, 1, ${[]}, ${origin}, ${res.model}
       )
     `;
     return { ok: true };
@@ -139,6 +140,8 @@ export type KnowledgeHit = {
   answer: string;
   occurrences: number;
   score: number;
+  /** manual · imported · onboarding — só em listKnowledge (diagnóstico/UI). */
+  origin?: string;
 };
 
 /**
@@ -188,7 +191,7 @@ export async function suppressChunk(clientId: string, chunkId: string): Promise<
 export async function listKnowledge(clientId: string, limit = 100): Promise<KnowledgeHit[]> {
   if (!hasDatabase() || !isVectorReady()) return [];
   return (await db()`
-    SELECT id, question, answer, occurrences, 0 AS score
+    SELECT id, question, answer, occurrences, origin, 0 AS score
     FROM knowledge_chunks
     WHERE client_id = ${clientId} AND NOT suppressed
     ORDER BY occurrences DESC, updated_at DESC

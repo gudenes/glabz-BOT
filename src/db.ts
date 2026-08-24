@@ -242,7 +242,9 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
   -- ON DELETE CASCADE não é detalhe: apagar um cliente TEM que levar junto os
   -- vetores derivados das conversas dele (privacidade, ver rag-desenho.md §5.1).
   client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-  -- Pergunta e resposta já anonimizadas (sem nome/telefone/documento).
+  -- Pergunta e resposta — anonimizadas quando origin='imported' (dado de
+  -- cliente final em histórico de WhatsApp); cruas nos demais casos, porque
+  -- vêm do próprio dono do negócio (ver anonymize.ts e rag-desenho.md §5.1).
   question TEXT NOT NULL,
   answer TEXT NOT NULL,
   -- Indexamos o PAR pergunta→resposta: mede melhor que só a resposta (§4.1).
@@ -253,12 +255,19 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
   suppressed BOOLEAN NOT NULL DEFAULT false,
   -- Rastreabilidade: permite refazer/remover quando a mensagem de origem sair.
   source_message_ids TEXT[] NOT NULL DEFAULT '{}',
+  -- manual (ensinado avulso na aba Conhecimento) · imported (extraído de
+  -- histórico respondido por humano) · onboarding (coletado no chat do
+  -- Studio). Só exibição/diagnóstico — não muda como a busca funciona.
+  origin TEXT NOT NULL DEFAULT 'manual',
   -- Vetores de modelos diferentes não são comparáveis — guardar qual gerou
   -- permite detectar base misturada e reindexar (§7).
   embedding_model TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Tabela já existia em staging/produção antes deste campo — ALTER cobre quem
+-- já rodou o CREATE TABLE acima sem ele.
+ALTER TABLE knowledge_chunks ADD COLUMN IF NOT EXISTS origin TEXT NOT NULL DEFAULT 'manual';
 
 -- Todo acesso filtra por client_id (isolamento entre clientes, §5.4).
 CREATE INDEX IF NOT EXISTS idx_knowledge_client
