@@ -481,10 +481,11 @@ function render() {
   if (!p) return;
   $("client-name").textContent = p.client.name;
   $("client-sub").textContent = p.impersonating ? t("portal.impersonateView") : t("portal.clientPortal");
-  $("impersonate").classList.toggle("hidden", !p.impersonating);
-  // Mesmo link do banner acima, só que dentro da sidebar fixa — o banner some
-  // ao rolar a página, este não (ver comentário em portal.css `.side`).
-  $("side-back-admin")?.classList.toggle("hidden", !p.impersonating);
+  // Só o link da sidebar fixa agora — o banner do topo (que existia antes)
+  // foi removido: ele some ao rolar a página (não é sticky como a sidebar),
+  // então virou redundante depois que o link da sidebar cobre o mesmo caso
+  // sempre visível (ver comentário em portal.css `.side`).
+  $("back-admin")?.classList.toggle("hidden", !p.impersonating);
 
   const acc = p.accounts[0];
   const sess = acc?.session;

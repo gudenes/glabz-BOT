@@ -271,8 +271,6 @@ const DICT = {
     "builder.toast.openFlowFirst": "Abra um fluxo primeiro",
 
     // ── portal.html / portal.js (cliente) ──
-    "portal.impersonate.html": "Você está no projeto do cliente como <b>admin GLabs</b> — não é o login dele.",
-    "portal.impersonate.admin": "admin GLabs",
     "portal.impersonate.back": "← Voltar ao admin",
     "portal.myBusiness": "Meu negócio",
     "portal.clientPortal": "Portal do cliente",
@@ -828,8 +826,6 @@ const DICT = {
     "builder.toast.triggerCantDelete": "The flow's start can't be removed",
     "builder.toast.openFlowFirst": "Open a flow first",
 
-    "portal.impersonate.html": "You're in the client's project as <b>GLabs admin</b> — this is not their login.",
-    "portal.impersonate.admin": "GLabs admin",
     "portal.impersonate.back": "← Back to admin",
     "portal.myBusiness": "My business",
     "portal.clientPortal": "Client portal",

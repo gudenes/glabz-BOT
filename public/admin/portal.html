@@ -13,11 +13,6 @@
     <link rel="stylesheet" href="/admin/portal.css?v=31" />
   </head>
   <body class="portal-body">
-    <div id="impersonate" class="impersonate hidden">
-      <span data-i18n-html="portal.impersonate.html">Você está no projeto do cliente como <b>admin GLabs</b> — não é o login dele.</span>
-      <a href="/admin/" id="back-admin" data-i18n="portal.impersonate.back">← Voltar ao admin</a>
-    </div>
-
     <div class="app">
       <aside class="side">
         <div class="brand">
@@ -30,10 +25,10 @@
         <p class="side-kicker" data-i18n="portal.myBusiness">Meu negócio</p>
         <strong class="side-client" id="client-name">—</strong>
         <span class="side-sub" id="client-sub" data-i18n="portal.clientPortal">Portal do cliente</span>
-        <!-- Cópia do link do banner de impersonation (#impersonate lá em cima), só que aqui
-             dentro da sidebar fixa (position:sticky) — o banner rola pra fora de vista assim
-             que a página cresce, esse link fica sempre visível. -->
-        <a href="/admin/" id="side-back-admin" class="side-back-admin hidden" data-i18n="portal.impersonate.back">← Voltar ao admin</a>
+        <!-- Link "voltar ao admin" (impersonation) — vive na sidebar fixa
+             (position:sticky) de propósito: um banner no topo do body existia
+             antes disso, mas não é sticky, então sumia ao rolar a página. -->
+        <a href="/admin/" id="back-admin" class="side-back-admin hidden" data-i18n="portal.impersonate.back">← Voltar ao admin</a>
 
         <nav class="side-nav">
           <button type="button" class="nav-link on" data-view="status">

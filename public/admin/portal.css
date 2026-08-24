@@ -133,21 +133,6 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 
 /* Portal */
 .portal-body { background: var(--paper); }
-.impersonate {
-  background: var(--gold); color: var(--gold-ink);
-  font-size: 13px; font-weight: 600;
-  padding: 10px 16px;
-  display: flex; align-items: center; justify-content: center; gap: 16px;
-  flex-wrap: wrap;
-}
-.impersonate a {
-  color: var(--gold-ink);
-  font-weight: 800;
-  background: #fff;
-  border-radius: 999px;
-  padding: 4px 12px;
-  text-decoration: none;
-}
 .app {
   min-height: 100vh;
   display: grid;
