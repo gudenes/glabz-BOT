@@ -25,6 +25,11 @@ async function api(path, opts = {}) {
 
 function welcomeText() {
   const name = state.portal?.client?.name?.trim();
+  if (state.studio.mode === "knowledge") {
+    return name
+      ? t("portal.studio.knowledge.welcomeNamed", { name })
+      : t("portal.studio.knowledge.welcome");
+  }
   if (name) {
     return t("portal.studio.welcomeNamed", { name });
   }
@@ -48,6 +53,12 @@ const state = {
     phase: "ask",
     messages: [],
     previewTurns: 0,
+    mode: "flow",
+    // O que fazer quando o mini-briefing de conhecimento (mode:"knowledge")
+    // termina ou é pulado: "template" reabre o picker, "close" só fecha.
+    // null = veio do caminho "Montar com IA" (não passou pelo onboarding
+    // reduzido), onde não há próximo passo a decidir.
+    afterKnowledge: null,
     rec: null,
     heard: "",
     welcomed: false,
@@ -180,20 +191,19 @@ function dismissOnboard(remember = true) {
   $("onboard")?.classList.add("hidden");
 }
 
-$("onboard-skip")?.addEventListener("click", () => dismissOnboard());
+$("onboard-skip")?.addEventListener("click", () => {
+  dismissOnboard();
+  state.studio.afterKnowledge = "close";
+  openStudio({ expand: true, mode: "knowledge" });
+});
 $("onboard-ia")?.addEventListener("click", () => {
   dismissOnboard();
-  openStudio({ expand: true });
+  openStudio({ expand: true, mode: "flow" });
 });
-$("onboard-tpl")?.addEventListener("click", async () => {
+$("onboard-tpl")?.addEventListener("click", () => {
   dismissOnboard();
-  openStudio({ expand: true });
-  const box = $("tpl-pick");
-  if (box) {
-    box.classList.remove("hidden");
-    await renderTemplatePicker();
-    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
+  state.studio.afterKnowledge = "template";
+  openStudio({ expand: true, mode: "knowledge" });
 });
 // Clicar fora fecha, mas sem marcar como "já resolvi" — volta na próxima visita.
 $("onboard")?.addEventListener("click", (ev) => {
@@ -244,17 +254,34 @@ function studioLayout() {
   $("studio-close")?.classList.toggle("hidden", first || !open);
   $("studio-dismiss")?.classList.toggle("hidden", !open);
   $("studio-expand")?.classList.toggle("hidden", first);
-  // "usar um template · começar do zero" fica disponível SEMPRE que o Studio
-  // estiver aberto. Antes sumia assim que o cliente tivesse qualquer fluxo — e
-  // como provisionClient já cria um fluxo inicial no onboarding, isso escondia
-  // o catálogo justamente de quem ainda não montou nada.
-  $("studio-alts")?.classList.toggle("hidden", !open);
   $("btn-wizard")?.classList.toggle("hidden", state.view !== "flow" || first || open);
   // Trocar de modelo é ação válida a qualquer momento — não só no onboarding.
   $("btn-templates")?.classList.toggle("hidden", state.view !== "flow" || open);
   $("btn-studio-expand")?.classList.toggle("hidden", state.view !== "flow" || !open || first);
   $("btn-studio-expand").textContent = expanded ? t("portal.collapse") : t("portal.expand");
   $("studio-expand").textContent = expanded && !first ? t("portal.collapse") : t("portal.expand");
+
+  if (state.studio.mode === "knowledge") {
+    // Mini-briefing só de conhecimento: nunca oferece template/ensaio/build
+    // (isso é papel do chat normal, mode "flow") — só pergunta e deixa pular.
+    $("studio-alts")?.classList.add("hidden");
+    $("studio-offer")?.classList.add("hidden");
+    $("studio-ready")?.classList.add("hidden");
+    $("studio-knowledge-banner")?.classList.toggle("hidden", !open);
+    $("studio-knowledge-skip")?.classList.toggle("hidden", !open || state.studio.busy);
+    $("studio-kicker").textContent = t("portal.studio.kicker.knowledge");
+    $("studio-kicker").className = "studio-kicker";
+    $("studio-title").textContent = t("portal.studio.title.knowledge");
+    $("studio-sub").textContent = t("portal.studio.sub.knowledge");
+    return;
+  }
+  $("studio-knowledge-banner")?.classList.add("hidden");
+  $("studio-knowledge-skip")?.classList.add("hidden");
+  // "usar um template · começar do zero" fica disponível SEMPRE que o Studio
+  // estiver aberto. Antes sumia assim que o cliente tivesse qualquer fluxo — e
+  // como provisionClient já cria um fluxo inicial no onboarding, isso escondia
+  // o catálogo justamente de quem ainda não montou nada.
+  $("studio-alts")?.classList.toggle("hidden", !open);
   const phase = state.studio.phase;
   const kick =
     phase === "ready"
@@ -1173,7 +1200,19 @@ function studioThink(label = t("portal.studio.thinking")) {
   return row;
 }
 
-function openStudio({ expand = true } = {}) {
+function openStudio({ expand = true, mode = "flow" } = {}) {
+  if (state.studio.mode !== mode) {
+    // Os dois modos reaproveitam o mesmo painel/estado, mas são conversas
+    // semanticamente diferentes — cada uma com seu próprio SYSTEM prompt no
+    // backend. Misturar histórico de uma na outra confundiria o LLM (o modo
+    // conhecimento não sabe interpretar fala de construção de fluxo, e
+    // vice-versa) — por isso reseta ao trocar de modo, em qualquer direção.
+    state.studio.messages = [];
+    state.studio.phase = "ask";
+    state.studio.welcomed = false;
+    state.studio.previewTurns = 0;
+    state.studio.mode = mode;
+  }
   state.studio.open = true;
   state.studio.expanded = expand || !hasOwnFlows();
   ensureStudioWelcome();
@@ -1268,11 +1307,34 @@ function closeKnowledgeReview() {
   $("knowledge-review")?.classList.add("hidden");
 }
 
-$("kr-skip")?.addEventListener("click", () => closeKnowledgeReview());
+/**
+ * Chamada depois que a revisão termina (salvou, pulou, ou nunca chegou a
+ * abrir por falta do que revisar) — decide o próximo passo do onboarding
+ * conforme `state.studio.afterKnowledge`:
+ * "template" → veio de "Usar um template", reabre o Studio em modo normal
+ * já no seletor de template. "close" → veio de "Pular", só fecha mesmo.
+ * null → veio do caminho "Montar com IA" (offerKnowledgeReview, pós-build),
+ * onde não há nenhum próximo passo — o studio já estava fechado.
+ */
+function finishKnowledgeReview() {
+  closeKnowledgeReview();
+  const next = state.studio.afterKnowledge;
+  state.studio.afterKnowledge = null;
+  if (next === "template") {
+    openStudio({ expand: true, mode: "flow" });
+    const box = $("tpl-pick");
+    if (box) {
+      box.classList.remove("hidden");
+      void renderTemplatePicker();
+    }
+  }
+}
+
+$("kr-skip")?.addEventListener("click", () => finishKnowledgeReview());
 
 // Clicar fora fecha sem salvar, mesmo padrão do modal de onboarding.
 $("knowledge-review")?.addEventListener("click", (ev) => {
-  if (ev.target === $("knowledge-review")) closeKnowledgeReview();
+  if (ev.target === $("knowledge-review")) finishKnowledgeReview();
 });
 
 $("kr-confirm")?.addEventListener("click", async () => {
@@ -1284,7 +1346,7 @@ $("kr-confirm")?.addEventListener("click", async () => {
     }))
     .filter((p) => p.question && p.answer);
   if (!items.length) {
-    closeKnowledgeReview();
+    finishKnowledgeReview();
     return;
   }
   $("kr-confirm")?.setAttribute("disabled", "true");
@@ -1298,9 +1360,42 @@ $("kr-confirm")?.addEventListener("click", async () => {
     toast(e.message, "err");
   } finally {
     $("kr-confirm")?.removeAttribute("disabled");
-    closeKnowledgeReview();
+    finishKnowledgeReview();
   }
 });
+
+/**
+ * Encerra o mini-briefing de conhecimento (mode:"knowledge") — chamado
+ * tanto quando o backend sinaliza phase:"ready" (terminou naturalmente)
+ * quanto quando o dono clica "pular por enquanto" dentro do próprio chat
+ * (skipped:true, nunca chega a extrair nada).
+ */
+async function finishKnowledgeChat({ skipped = false } = {}) {
+  if (skipped) {
+    closeStudio();
+    finishKnowledgeReview();
+    return;
+  }
+  const pending = studioThink(t("portal.knowledge.review.extracting"));
+  try {
+    const data = await api("/v1/flows/studio", {
+      method: "POST",
+      body: JSON.stringify({ messages: studioHistory(), action: "extract_knowledge" }),
+    });
+    pending?.remove();
+    closeStudio();
+    const pairs = data.pairs || [];
+    if (pairs.length) renderKnowledgeReview(pairs);
+    else finishKnowledgeReview();
+  } catch {
+    // Extração é sempre pulável — falha aqui não pode travar o onboarding.
+    pending?.remove();
+    closeStudio();
+    finishKnowledgeReview();
+  }
+}
+
+$("studio-skip-knowledge")?.addEventListener("click", () => finishKnowledgeChat({ skipped: true }));
 
 async function sendStudio(_text, action = "chat") {
   if (state.studio.busy) return;
@@ -1323,12 +1418,17 @@ async function sendStudio(_text, action = "chat") {
         messages: studioHistory(),
         action,
         phase: state.studio.phase,
+        mode: state.studio.mode,
       }),
     });
     pending?.remove();
     await applyStudioReply(data);
     if (data.kind === "flow") {
       await revealBuiltFlow();
+      return;
+    }
+    if (state.studio.mode === "knowledge" && state.studio.phase === "ready") {
+      await finishKnowledgeChat();
       return;
     }
     if (data.phase === "preview") {
@@ -1376,7 +1476,17 @@ $("btn-templates")?.addEventListener("click", async () => {
 $("btn-studio-expand")?.addEventListener("click", toggleStudioExpand);
 $("studio-expand")?.addEventListener("click", toggleStudioExpand);
 $("studio-close")?.addEventListener("click", closeStudio);
-$("studio-dismiss")?.addEventListener("click", closeStudio);
+$("studio-dismiss")?.addEventListener("click", () => {
+  // No mini-briefing de conhecimento, fechar pelo X tem que honrar o mesmo
+  // "próximo passo" que "pular por enquanto" honra — senão "Usar um
+  // template" morre aqui: modal de onboarding já foi dispensado (não volta
+  // sozinho) e o template picker nunca chega a abrir.
+  if (state.studio.mode === "knowledge") {
+    void finishKnowledgeChat({ skipped: true });
+    return;
+  }
+  closeStudio();
+});
 $("start-tpl")?.addEventListener("click", async () => {
   const box = $("tpl-pick");
   if (!box) return;
