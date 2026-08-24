@@ -45,6 +45,10 @@ Regras:
 - Ignore falas de ensaio (o dono fingindo ser cliente) e conteúdo só sobre construção do fluxo em
   si (nomes de nó, "monta o fluxo", etc.) — isso não é conhecimento de atendimento.
 - Se não houver nada reaproveitável, devolva lista vazia. Não invente pares pra preencher.
+- NUNCA crie uma pergunta pra que você não tem resposta real. Se você pensar numa pergunta
+  plausível (ex.: "tem personal trainer?") mas o dono não respondeu isso na conversa, NÃO inclua
+  o par — nem com resposta tipo "não foi mencionado"/"não sei"/"não informado". Um par sem
+  resposta de verdade é pior que não ter o par: a IA responderia isso pro cliente final.
 - Máximo 8 pares.
 
 Além dos pares, se a conversa disser claramente o SEGMENTO do negócio (ex.: pilates, petshop,
@@ -116,6 +120,10 @@ Regras:
 - Ignore o que for só formatação/navegação do site (menu, rodapé, "clique aqui") — extraia só
   conteúdo informativo de verdade.
 - Se não houver nada reaproveitável, devolva lista vazia. Não invente pares pra preencher.
+- NUNCA crie uma pergunta pra que o texto não responde. Se você pensar numa pergunta plausível
+  mas o texto não trouxer a resposta, NÃO inclua o par — nem com resposta tipo "não
+  mencionado"/"não consta"/"não informado". Um par sem resposta de verdade é pior que não ter o
+  par: a IA responderia isso pro cliente final.
 - Máximo 15 pares (um texto colado tende a ter mais fatos que uma conversa curta).
 
 Responda APENAS um JSON: {"pairs":[{"question":"...","answer":"..."}]}`;
@@ -155,6 +163,44 @@ export async function extractKnowledgeFromText(
   return parsePairs(raw, 15);
 }
 
+// Rede de segurança: mesmo com a regra no prompt, o modelo às vezes ainda
+// inclui um par pra uma pergunta plausível sem resposta real, escrevendo um
+// "não sei" qualquer no lugar da resposta (visto em teste real — ver item 9
+// da lista de observações). Compara a resposta INTEIRA (normalizada) contra
+// frases conhecidas de "sem informação" — não usa substring, pra não cortar
+// uma resposta legítima que só contenha a palavra "não" (ex.: "Não, não
+// atendemos aos domingos." é um fato de verdade, não pode ser filtrado).
+const NON_ANSWER_PHRASES = new Set([
+  "não foi mencionado",
+  "não mencionado",
+  "não foi dito",
+  "não foi especificado",
+  "não especificado",
+  "não informado",
+  "não consta",
+  "não consta informação",
+  "sem informação",
+  "sem essa informação",
+  "não há informação",
+  "não tenho essa informação",
+  "não sei",
+  "não sabemos",
+  "informação não disponível",
+  "não disponível",
+  "não aplicável",
+  "desconhecido",
+  "n/a",
+  "n.a.",
+]);
+
+function looksLikeNonAnswer(answer: string): boolean {
+  const normalized = answer
+    .trim()
+    .toLowerCase()
+    .replace(/[.!]+$/, "");
+  return NON_ANSWER_PHRASES.has(normalized);
+}
+
 function pairsFrom(parsed: { pairs?: unknown }, max: number): CandidatePair[] {
   if (!Array.isArray(parsed.pairs)) return [];
   return parsed.pairs
@@ -163,7 +209,7 @@ function pairsFrom(parsed: { pairs?: unknown }, max: number): CandidatePair[] {
       const a = String((p as { answer?: unknown })?.answer || "").trim();
       return { question: q, answer: a };
     })
-    .filter((p) => p.question.length >= 3 && p.answer.length >= 3)
+    .filter((p) => p.question.length >= 3 && p.answer.length >= 3 && !looksLikeNonAnswer(p.answer))
     .slice(0, max);
 }
 
