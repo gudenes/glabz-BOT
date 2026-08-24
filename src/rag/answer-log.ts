@@ -26,6 +26,7 @@ export type AiLogEntry = {
   ragStatus: string | null;
   ragReason: string | null;
   ragHits: AiLogHit[];
+  usedManualContext: boolean;
   simulated: boolean;
   createdAt: string;
 };
@@ -40,18 +41,19 @@ export async function logAiAnswer(input: {
   ragStatus?: string | null;
   ragReason?: string | null;
   ragHits?: AiLogHit[];
+  usedManualContext?: boolean;
   simulated?: boolean;
 }): Promise<void> {
   if (!hasDatabase() || !input.clientId) return;
   try {
     await db()`
       INSERT INTO ai_answer_log
-        (id, client_id, flow_id, node_id, question, answer, rag_status, rag_reason, rag_hits, simulated)
+        (id, client_id, flow_id, node_id, question, answer, rag_status, rag_reason, rag_hits, used_manual_context, simulated)
       VALUES (
         ${randomUUID()}, ${input.clientId}, ${input.flowId ?? null}, ${input.nodeId ?? null},
         ${input.question.slice(0, 2000)}, ${input.answer?.slice(0, 4000) ?? null},
         ${input.ragStatus ?? null}, ${input.ragReason ?? null},
-        ${db().json(input.ragHits ?? [])}, ${Boolean(input.simulated)}
+        ${db().json(input.ragHits ?? [])}, ${Boolean(input.usedManualContext)}, ${Boolean(input.simulated)}
       )
     `;
     // Poda os antigos — mantém a tabela útil sem crescer sem limite.
@@ -73,7 +75,7 @@ export async function logAiAnswer(input: {
 export async function listAiAnswers(clientId: string, limit = 50): Promise<AiLogEntry[]> {
   if (!hasDatabase()) return [];
   const rows = (await db()`
-    SELECT id, flow_id, node_id, question, answer, rag_status, rag_reason, rag_hits, simulated, created_at
+    SELECT id, flow_id, node_id, question, answer, rag_status, rag_reason, rag_hits, used_manual_context, simulated, created_at
     FROM ai_answer_log
     WHERE client_id = ${clientId}
     ORDER BY created_at DESC
@@ -89,6 +91,7 @@ export async function listAiAnswers(clientId: string, limit = 50): Promise<AiLog
     ragStatus: (r.rag_status as string) ?? null,
     ragReason: (r.rag_reason as string) ?? null,
     ragHits: (r.rag_hits as AiLogHit[]) ?? [],
+    usedManualContext: Boolean(r.used_manual_context),
     simulated: Boolean(r.simulated),
     createdAt: new Date(r.created_at as string).toISOString(),
   }));

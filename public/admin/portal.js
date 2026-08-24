@@ -777,9 +777,12 @@ async function loadAiAnswers() {
         const ragHits = Array.isArray(a.ragHits) ? a.ragHits : [];
         const strongHits = ragHits.filter((h) => Number(h.score) >= RAG_TAG_MIN_SCORE);
         const usou = a.ragStatus === "ok" && strongHits.length > 0;
-        const tag = usou
+        const baseTag = usou
           ? `<span class="ai-tag ok">${t("portal.answers.usedBase", { n: strongHits.length })}</span>`
           : `<span class="ai-tag off">${t("portal.answers.noBase")}${a.ragReason ? ` · ${escapeHtml(a.ragReason)}` : ""}</span>`;
+        const cardTag = a.usedManualContext
+          ? `<span class="ai-tag ok">${t("portal.answers.usedCard")}</span>`
+          : `<span class="ai-tag off">${t("portal.answers.noCard")}</span>`;
         const base = ragHits.length
           ? `<details class="ai-src"><summary>${t("portal.answers.seeSources")}</summary><ul>${ragHits
               .map((h) => `<li>${escapeHtml(h.question)} <em>(${Number(h.score).toFixed(2)})</em></li>`)
@@ -792,7 +795,7 @@ async function loadAiAnswers() {
               <small>${quando}${a.simulated ? ` · ${t("portal.answers.fromTest")}` : ""}</small>
             </div>
             <p>${a.answer ? escapeHtml(a.answer) : `<i>${t("portal.answers.failed")}</i>`}</p>
-            ${tag}
+            <div class="ai-tags">${cardTag}${baseTag}</div>
             ${base}
           </div>`;
       })

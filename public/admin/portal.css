@@ -1102,6 +1102,7 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .ai-head b { font-size: 14px; }
 .ai-head small { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
 .ai-item > p { margin: 0; font-size: 13px; color: #333; line-height: 1.45; }
+.ai-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .ai-tag { justify-self: start; font-size: 11px; border-radius: 999px; padding: 2px 9px; }
 .ai-tag.ok { background: #eef6ee; color: #2f6b34; }
 .ai-tag.off { background: #fdf1e7; color: #8a4b00; }

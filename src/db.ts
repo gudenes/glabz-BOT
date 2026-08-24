@@ -213,9 +213,16 @@ CREATE TABLE IF NOT EXISTS ai_answer_log (
   rag_reason TEXT,
   -- trechos consultados, com score — é o que explica a resposta
   rag_hits JSONB NOT NULL DEFAULT '[]',
+  -- o campo "O que a IA sabe sobre o seu negócio" do card estava preenchido
+  -- e entrou no prompt. Ao contrário do RAG, isso não é uma busca — é
+  -- sempre incluído quando existe, então aqui só registra "existia ou não".
+  used_manual_context BOOLEAN NOT NULL DEFAULT false,
   simulated BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Tabela já existia em produção/staging antes deste campo — ALTER cobre quem
+-- já rodou o CREATE TABLE acima sem ele.
+ALTER TABLE ai_answer_log ADD COLUMN IF NOT EXISTS used_manual_context BOOLEAN NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS idx_ai_log_client ON ai_answer_log(client_id, created_at DESC);
 `;
 

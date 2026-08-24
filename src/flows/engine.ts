@@ -329,6 +329,7 @@ export async function runFlowStep(opts: {
             ragStatus: String(ragLog.rag ?? ""),
             ragReason: ragLog.motivo ? String(ragLog.motivo) : null,
             ragHits,
+            usedManualContext: manualContext.trim().length > 0,
             simulated: simulate,
           })
         )
