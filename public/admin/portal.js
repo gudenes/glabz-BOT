@@ -721,17 +721,28 @@ function renderKnowledge(chunks) {
     return;
   }
   box.innerHTML = chunks
-    .map(
-      (c) => `
+    .map((c) => {
+      // 'manual' (ensino avulso na própria aba) é o caso comum — não marca
+      // nada, só os outros dois dizem de onde vieram.
+      const originTag =
+        c.origin === "onboarding"
+          ? `<span class="ai-tag ok">${t("portal.knowledge.originOnboarding")}</span>`
+          : c.origin === "imported"
+            ? `<span class="ai-tag off">${t("portal.knowledge.originImported")}</span>`
+            : "";
+      return `
       <div class="kb-item" data-id="${escapeHtml(c.id)}">
         <div class="kb-body">
           <b>${escapeHtml(c.question)}</b>
           <p>${escapeHtml(c.answer)}</p>
-          ${Number(c.occurrences) > 1 ? `<span class="kb-badge">${t("portal.knowledge.times", { n: c.occurrences })}</span>` : ""}
+          <div class="ai-tags">
+            ${Number(c.occurrences) > 1 ? `<span class="kb-badge">${t("portal.knowledge.times", { n: c.occurrences })}</span>` : ""}
+            ${originTag}
+          </div>
         </div>
         <button type="button" class="btn-text kb-remove" data-remove="${escapeHtml(c.id)}">${t("portal.knowledge.remove")}</button>
-      </div>`
-    )
+      </div>`;
+    })
     .join("");
 
   box.querySelectorAll("[data-remove]").forEach((btn) => {
