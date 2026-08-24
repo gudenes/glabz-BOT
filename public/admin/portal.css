@@ -609,6 +609,30 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 @media (max-width: 620px) {
   .onboard-opts { grid-template-columns: 1fr; }
 }
+
+.kr-card { max-width: 560px; text-align: left; }
+.kr-card h2 { text-align: center; }
+.kr-card > p { text-align: center; }
+.kr-list { display: grid; gap: 10px; margin-bottom: 8px; max-height: 50vh; overflow-y: auto; }
+.kr-item {
+  border: 1px solid var(--line); border-radius: 14px; padding: 12px;
+  display: grid; gap: 6px; background: #fff;
+}
+.kr-item .kr-q {
+  font: inherit; font-weight: 600; font-size: 13.5px; border: none; padding: 0;
+  background: transparent;
+}
+.kr-item .kr-a {
+  font: inherit; font-size: 13px; color: #333; border: none; padding: 0;
+  background: transparent; resize: vertical; min-height: 40px;
+}
+.kr-item .kr-q:focus, .kr-item .kr-a:focus { outline: 1px solid var(--gold); border-radius: 6px; }
+.kr-item .kr-remove { justify-self: start; color: #b42318 !important; font-size: 12px; }
+.kr-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 4px; }
+@media (max-width: 620px) {
+  .kr-actions { flex-direction: column-reverse; }
+  .kr-actions .btn-lime { width: 100%; }
+}
 .studio-head .btn-text:hover { color: var(--gold); }
 .studio-log {
   flex: 1;

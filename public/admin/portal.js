@@ -1216,7 +1216,91 @@ async function revealBuiltFlow() {
   state.studio.expanded = false;
   openBuilder();
   studioLayout();
+  // Bônus pós-build, nunca bloqueia: o dono já viu o fluxo pronto (o momento
+  // de recompensa da conversa) antes de qualquer coisa sobre conhecimento
+  // aparecer. Roda em paralelo — se falhar ou não achar nada, não incomoda.
+  void offerKnowledgeReview();
 }
+
+/**
+ * Tenta extrair conhecimento da conversa que acabou de virar fluxo e, se
+ * achar algo, abre a tela de revisão. Silencioso em qualquer falha ou lista
+ * vazia — essa etapa é sempre um bônus pulável, nunca um requisito.
+ */
+async function offerKnowledgeReview() {
+  try {
+    const data = await api("/v1/flows/studio", {
+      method: "POST",
+      body: JSON.stringify({ messages: studioHistory(), action: "extract_knowledge" }),
+    });
+    const pairs = data.pairs || [];
+    if (pairs.length) renderKnowledgeReview(pairs);
+  } catch {
+    /* extração é bônus — falha aqui não pode incomodar quem só queria o fluxo pronto */
+  }
+}
+
+function renderKnowledgeReview(pairs) {
+  const panel = $("knowledge-review");
+  const box = $("kr-list");
+  if (!panel || !box) return;
+  $("kr-empty")?.classList.add("hidden");
+  box.innerHTML = pairs
+    .map(
+      (p) => `
+      <div class="kr-item">
+        <input class="kr-q" value="${escapeHtml(p.question)}" />
+        <textarea class="kr-a" rows="2">${escapeHtml(p.answer)}</textarea>
+        <button type="button" class="btn-text kr-remove">${t("portal.knowledge.review.remove")}</button>
+      </div>`
+    )
+    .join("");
+  box.querySelectorAll(".kr-remove").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      btn.closest(".kr-item")?.remove();
+      if (!box.querySelector(".kr-item")) $("kr-empty")?.classList.remove("hidden");
+    });
+  });
+  panel.classList.remove("hidden");
+}
+
+function closeKnowledgeReview() {
+  $("knowledge-review")?.classList.add("hidden");
+}
+
+$("kr-skip")?.addEventListener("click", () => closeKnowledgeReview());
+
+// Clicar fora fecha sem salvar, mesmo padrão do modal de onboarding.
+$("knowledge-review")?.addEventListener("click", (ev) => {
+  if (ev.target === $("knowledge-review")) closeKnowledgeReview();
+});
+
+$("kr-confirm")?.addEventListener("click", async () => {
+  const box = $("kr-list");
+  const items = [...(box?.querySelectorAll(".kr-item") || [])]
+    .map((el) => ({
+      question: el.querySelector(".kr-q")?.value.trim() || "",
+      answer: el.querySelector(".kr-a")?.value.trim() || "",
+    }))
+    .filter((p) => p.question && p.answer);
+  if (!items.length) {
+    closeKnowledgeReview();
+    return;
+  }
+  $("kr-confirm")?.setAttribute("disabled", "true");
+  try {
+    const res = await api("/v1/rag/teach-batch", {
+      method: "POST",
+      body: JSON.stringify({ pairs: items }),
+    });
+    toast(t("portal.knowledge.review.saved", { n: res.saved }));
+  } catch (e) {
+    toast(e.message, "err");
+  } finally {
+    $("kr-confirm")?.removeAttribute("disabled");
+    closeKnowledgeReview();
+  }
+});
 
 async function sendStudio(_text, action = "chat") {
   if (state.studio.busy) return;

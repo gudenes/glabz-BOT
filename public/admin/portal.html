@@ -194,6 +194,21 @@
           <iframe id="flow-frame" class="hidden" title="Editor de fluxo"></iframe>
         </section>
 
+        <!-- Revisão de conhecimento extraído de uma conversa do Studio — o dono
+             confirma/edita antes de qualquer coisa ir pra Base de Conhecimento. -->
+        <div id="knowledge-review" class="onboard hidden" role="dialog" aria-modal="true" aria-labelledby="kr-title">
+          <div class="onboard-card kr-card">
+            <h2 id="kr-title" data-i18n="portal.knowledge.review.title">Confere antes de salvar</h2>
+            <p data-i18n="portal.knowledge.review.sub">Você pode editar o texto ou remover algum item. Só o que você confirmar entra na base.</p>
+            <div id="kr-list" class="kr-list"></div>
+            <p id="kr-empty" class="hint-muted hidden" data-i18n="portal.knowledge.review.empty">Nada pra revisar por agora.</p>
+            <div class="kr-actions">
+              <button type="button" class="btn-text" id="kr-skip" data-i18n="portal.knowledge.review.skip">Pular por enquanto</button>
+              <button type="button" class="btn-lime" id="kr-confirm" data-i18n="portal.knowledge.review.confirm">Salvar conhecimento</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Conversas -->
         <section id="view-inbox" class="view hidden fill">
           <div class="inbox">
