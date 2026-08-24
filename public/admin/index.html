@@ -217,9 +217,12 @@
         <label class="field">
           <span data-i18n="admin.modal.newClient.template">Template do fluxo</span>
           <select id="cli-template" class="input">
+            <!-- "Em branco" primeiro e default de propósito: antes "pilates" era a 1ª opção
+                 (portanto pré-selecionada), então todo cliente novo nascia com um fluxo de
+                 agendamento de pilates semeado, mesmo não sendo esse o negócio dele. -->
+            <option value="blank" data-i18n="admin.modal.newClient.tplBlank">Em branco</option>
             <option value="pilates" data-i18n="admin.modal.newClient.tplPilates">Marcar sessão</option>
             <option value="consulta" data-i18n="admin.modal.newClient.tplConsulta">Marcar consulta</option>
-            <option value="blank" data-i18n="admin.modal.newClient.tplBlank">Em branco</option>
           </select>
         </label>
         <p id="client-form-err" class="err hidden"></p>

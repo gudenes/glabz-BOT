@@ -482,6 +482,9 @@ function render() {
   $("client-name").textContent = p.client.name;
   $("client-sub").textContent = p.impersonating ? t("portal.impersonateView") : t("portal.clientPortal");
   $("impersonate").classList.toggle("hidden", !p.impersonating);
+  // Mesmo link do banner acima, só que dentro da sidebar fixa — o banner some
+  // ao rolar a página, este não (ver comentário em portal.css `.side`).
+  $("side-back-admin")?.classList.toggle("hidden", !p.impersonating);
 
   const acc = p.accounts[0];
   const sess = acc?.session;
@@ -1274,8 +1277,14 @@ async function offerKnowledgeReview() {
     });
     const pairs = data.pairs || [];
     if (pairs.length) renderKnowledgeReview(pairs);
+    // Sem pairs (extração não achou nada reaproveitável — o cenário mais comum
+    // hoje, dado o roteiro raso do coach): não abre revisão vazia, mas ainda
+    // vale checar se a base ficou vazia, pra avisar.
+    else void nudgeIfKnowledgeEmpty();
   } catch {
-    /* extração é bônus — falha aqui não pode incomodar quem só queria o fluxo pronto */
+    // extração é bônus — falha aqui não pode incomodar quem só queria o fluxo
+    // pronto — mas ainda assim vale a checagem de base vazia.
+    void nudgeIfKnowledgeEmpty();
   }
 }
 
@@ -1327,6 +1336,22 @@ function finishKnowledgeReview() {
       box.classList.remove("hidden");
       void renderTemplatePicker();
     }
+  }
+  void nudgeIfKnowledgeEmpty();
+}
+
+/**
+ * Fim de qualquer caminho de onboarding (com IA, template ou pular): se a
+ * Base de Conhecimento continuar vazia, avisa uma vez — sem isso o dono só
+ * descobre (se descobrir) ao ver uma resposta genérica de verdade num
+ * cliente. Nunca bloqueia, é só um toast; silencioso em qualquer falha.
+ */
+async function nudgeIfKnowledgeEmpty() {
+  try {
+    const data = await api("/v1/rag/knowledge");
+    if (!(data.chunks || []).length) toast(t("portal.knowledge.emptyNudge"));
+  } catch {
+    /* checagem é só um bônus — nunca deve incomodar quem está terminando o onboarding */
   }
 }
 
