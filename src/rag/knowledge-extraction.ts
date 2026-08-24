@@ -19,6 +19,20 @@ import { clientContextBlock, type ClientContext, type StudioMsg } from "../flows
 
 export type CandidatePair = { question: string; answer: string };
 
+/** Só os campos que a conversa de fato mencionou — nunca inventado, nunca
+ * completo por obrigação (ver parseExtractionResult). */
+export type BizProfileGuess = {
+  role?: string;
+  size?: string;
+  segment?: string;
+  audience?: string;
+};
+
+export type ExtractedKnowledge = {
+  pairs: CandidatePair[];
+  bizProfile: BizProfileGuess;
+};
+
 const EXTRACT_SYSTEM = `Você lê uma conversa entre um coach e o dono de um negócio sobre como o
 WhatsApp dele deve atender. Extraia pares pergunta→resposta REAPROVEITÁVEIS como base de
 conhecimento pra uma IA responder CLIENTES FINAIS no WhatsApp.
@@ -33,7 +47,14 @@ Regras:
 - Se não houver nada reaproveitável, devolva lista vazia. Não invente pares pra preencher.
 - Máximo 8 pares.
 
-Responda APENAS um JSON: {"pairs":[{"question":"...","answer":"..."}]}`;
+Além dos pares, se a conversa disser claramente o SEGMENTO do negócio (ex.: pilates, petshop,
+clínica), o PORTE (quantas pessoas trabalham) ou o PÚBLICO atendido, devolva em "bizProfile" —
+só os campos que foram DE FATO ditos, omita os que não foram. Porte só entra se puder ser um
+destes valores exatos: "solo" (só o dono) | "2-5" | "6-20" | "21-50" | "50+"; se não souber
+converter com confiança pra um desses, omita o campo porte.
+
+Responda APENAS um JSON:
+{"pairs":[{"question":"...","answer":"..."}], "bizProfile": {"segment":"...", "role":"...", "audience":"...", "size":"..."}}`;
 
 function extractJson(raw: string): string {
   const trimmed = raw.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
@@ -46,7 +67,7 @@ function extractJson(raw: string): string {
 export async function extractKnowledgeFromConversation(
   messages: StudioMsg[],
   ctx?: ClientContext | null
-): Promise<CandidatePair[]> {
+): Promise<ExtractedKnowledge> {
   const key = llmApiKey();
   if (!key) throw new Error("LLM não configurada (XAI_API_KEY).");
 
@@ -54,7 +75,7 @@ export async function extractKnowledgeFromConversation(
     role: m.role,
     content: m.content.slice(0, 2000),
   }));
-  if (!history.length) return [];
+  if (!history.length) return { pairs: [], bizProfile: {} };
 
   const res = await fetch(`${llmBaseUrl().replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
@@ -78,7 +99,7 @@ export async function extractKnowledgeFromConversation(
 
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   const raw = data.choices?.[0]?.message?.content || "";
-  return parsePairs(raw);
+  return parseExtractionResult(raw);
 }
 
 const EXTRACT_FROM_TEXT_SYSTEM = `Você lê um texto solto que o dono de um negócio colou — pode ser
@@ -134,21 +155,51 @@ export async function extractKnowledgeFromText(
   return parsePairs(raw, 15);
 }
 
+function pairsFrom(parsed: { pairs?: unknown }, max: number): CandidatePair[] {
+  if (!Array.isArray(parsed.pairs)) return [];
+  return parsed.pairs
+    .map((p) => {
+      const q = String((p as { question?: unknown })?.question || "").trim();
+      const a = String((p as { answer?: unknown })?.answer || "").trim();
+      return { question: q, answer: a };
+    })
+    .filter((p) => p.question.length >= 3 && p.answer.length >= 3)
+    .slice(0, max);
+}
+
 function parsePairs(raw: string, max = 8): CandidatePair[] {
   try {
-    const parsed = JSON.parse(extractJson(raw)) as { pairs?: unknown };
-    if (!Array.isArray(parsed.pairs)) return [];
-    return parsed.pairs
-      .map((p) => {
-        const q = String((p as { question?: unknown })?.question || "").trim();
-        const a = String((p as { answer?: unknown })?.answer || "").trim();
-        return { question: q, answer: a };
-      })
-      .filter((p) => p.question.length >= 3 && p.answer.length >= 3)
-      .slice(0, max);
+    return pairsFrom(JSON.parse(extractJson(raw)) as { pairs?: unknown }, max);
   } catch {
     // Grok às vezes devolve prosa — trata como "nada extraído" em vez de
     // quebrar a revisão (essa etapa nunca pode travar o onboarding).
     return [];
+  }
+}
+
+const VALID_BIZ_SIZES = new Set(["solo", "2-5", "6-20", "21-50", "50+"]);
+
+function parseExtractionResult(raw: string): ExtractedKnowledge {
+  try {
+    const parsed = JSON.parse(extractJson(raw)) as {
+      pairs?: unknown;
+      bizProfile?: { segment?: unknown; role?: unknown; audience?: unknown; size?: unknown };
+    };
+    const pairs = pairsFrom(parsed, 8);
+    const bp = parsed.bizProfile;
+    const bizProfile: BizProfileGuess = {};
+    const segment = String(bp?.segment || "").trim();
+    const role = String(bp?.role || "").trim();
+    const audience = String(bp?.audience || "").trim();
+    const size = String(bp?.size || "").trim();
+    if (segment) bizProfile.segment = segment;
+    if (role) bizProfile.role = role;
+    if (audience) bizProfile.audience = audience;
+    if (VALID_BIZ_SIZES.has(size)) bizProfile.size = size;
+    return { pairs, bizProfile };
+  } catch {
+    // Mesmo raciocínio de parsePairs — nunca deixa a extração travar o
+    // onboarding só porque o modelo devolveu algo fora do formato.
+    return { pairs: [], bizProfile: {} };
   }
 }
