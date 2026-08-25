@@ -26,6 +26,9 @@ export type BizProfileGuess = {
   size?: string;
   segment?: string;
   audience?: string;
+  /** URL do site do negócio, se mencionada na conversa (item 5b). Normalizada
+   * em parseExtractionResult — aqui é só o que o modelo devolveu bruto. */
+  website?: string;
 };
 
 export type ExtractedKnowledge = {
@@ -52,13 +55,15 @@ Regras:
 - Máximo 8 pares.
 
 Além dos pares, se a conversa disser claramente o SEGMENTO do negócio (ex.: pilates, petshop,
-clínica), o PORTE (quantas pessoas trabalham) ou o PÚBLICO atendido, devolva em "bizProfile" —
+clínica), o PORTE (quantas pessoas trabalham), o PÚBLICO atendido ou a URL DO SITE do negócio
+(ex.: "temos site sim, é loja.com.br", "pode ver em www.exemplo.com"), devolva em "bizProfile" —
 só os campos que foram DE FATO ditos, omita os que não foram. Porte só entra se puder ser um
 destes valores exatos: "solo" (só o dono) | "2-5" | "6-20" | "21-50" | "50+"; se não souber
-converter com confiança pra um desses, omita o campo porte.
+converter com confiança pra um desses, omita o campo porte. Site só entra se um endereço de
+verdade foi dito (domínio ou URL) — nunca invente um site nem preencha com "não tem"/"não sei".
 
 Responda APENAS um JSON:
-{"pairs":[{"question":"...","answer":"..."}], "bizProfile": {"segment":"...", "role":"...", "audience":"...", "size":"..."}}`;
+{"pairs":[{"question":"...","answer":"..."}], "bizProfile": {"segment":"...", "role":"...", "audience":"...", "size":"...", "website":"..."}}`;
 
 function extractJson(raw: string): string {
   const trimmed = raw.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
@@ -225,11 +230,36 @@ function parsePairs(raw: string, max = 8): CandidatePair[] {
 
 const VALID_BIZ_SIZES = new Set(["solo", "2-5", "6-20", "21-50", "50+"]);
 
+// Aceita o que o modelo devolver como "domínio ou URL solta" (ex.: "loja.com.br",
+// "www.exemplo.com", "https://exemplo.com/sobre") e normaliza pra uma URL http(s)
+// completa. Descarta qualquer coisa que não vire uma URL com host plausível
+// (precisa de um "." no host) — evita salvar lixo tipo "sim"/"não tem" que o
+// modelo eventualmente devolva apesar da instrução do prompt.
+function normalizeWebsite(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 200) return undefined;
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const u = new URL(withProtocol);
+    if (!/^https?:$/.test(u.protocol)) return undefined;
+    if (!u.hostname.includes(".")) return undefined;
+    return u.toString();
+  } catch {
+    return undefined;
+  }
+}
+
 function parseExtractionResult(raw: string): ExtractedKnowledge {
   try {
     const parsed = JSON.parse(extractJson(raw)) as {
       pairs?: unknown;
-      bizProfile?: { segment?: unknown; role?: unknown; audience?: unknown; size?: unknown };
+      bizProfile?: {
+        segment?: unknown;
+        role?: unknown;
+        audience?: unknown;
+        size?: unknown;
+        website?: unknown;
+      };
     };
     const pairs = pairsFrom(parsed, 8);
     const bp = parsed.bizProfile;
@@ -238,10 +268,15 @@ function parseExtractionResult(raw: string): ExtractedKnowledge {
     const role = String(bp?.role || "").trim();
     const audience = String(bp?.audience || "").trim();
     const size = String(bp?.size || "").trim();
+    const website = String(bp?.website || "").trim();
     if (segment) bizProfile.segment = segment;
     if (role) bizProfile.role = role;
     if (audience) bizProfile.audience = audience;
     if (VALID_BIZ_SIZES.has(size)) bizProfile.size = size;
+    if (website) {
+      const normalized = normalizeWebsite(website);
+      if (normalized) bizProfile.website = normalized;
+    }
     return { pairs, bizProfile };
   } catch {
     // Mesmo raciocínio de parsePairs — nunca deixa a extração travar o

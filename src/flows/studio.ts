@@ -23,6 +23,12 @@ export type ClientContext = {
   bizSize?: string | null;
   bizSegment?: string | null;
   bizAudience?: string | null;
+  // URL do site do negócio (também em "Dados da conta") — quando já
+  // conhecida, o coach não pergunta de novo; quando falta, é uma das
+  // perguntas candidatas do roteiro de conhecimento (ver item 5b da lista
+  // de observações: "vira campo persistente + pergunta no onboarding se
+  // ainda não estiver preenchido").
+  bizWebsite?: string | null;
 };
 
 export function clientContextBlock(ctx?: ClientContext | null): string {
@@ -32,6 +38,7 @@ export function clientContextBlock(ctx?: ClientContext | null): string {
   const bizSize = ctx?.bizSize?.trim();
   const bizSegment = ctx?.bizSegment?.trim();
   const bizAudience = ctx?.bizAudience?.trim();
+  const bizWebsite = ctx?.bizWebsite?.trim();
 
   const lines: string[] = [];
   if (!name && !about) {
@@ -56,6 +63,14 @@ export function clientContextBlock(ctx?: ClientContext | null): string {
   } else {
     lines.push(
       "Perfil de negócio (segmento, porte, público) AINDA não está cadastrado. Pergunte o SEGMENTO do negócio (ex.: pilates, petshop, clínica, consultoria) logo nas primeiras perguntas, antes das demais — isso ajuda a direcionar o resto da conversa. Não precisa perguntar porte/público explicitamente, só o segmento."
+    );
+  }
+
+  if (bizWebsite) {
+    lines.push(`Site do negócio já cadastrado: ${bizWebsite} — trate como fato, não pergunte de novo.`);
+  } else {
+    lines.push(
+      "Ainda não sabemos se o negócio tem site. Em algum momento das perguntas de conhecimento (não precisa ser logo de cara), pergunte se tem site e, se sim, peça o link — não é obrigatório, é só mais um tópico útil, sem problema se o dono não tiver ou não souber."
     );
   }
 
