@@ -12,8 +12,14 @@
 import dns from "node:dns/promises";
 import net from "node:net";
 
-const FETCH_TIMEOUT_MS = 10_000;
-const MAX_BYTES = 500_000; // ~500KB — de sobra pra uma página de texto, mesmo com HTML gordo
+const FETCH_TIMEOUT_MS = 15_000;
+// Sites reais (Wix, WordPress cheio de plugin, Squarespace) facilmente passam
+// de 1-2MB de HTML bruto só em script/tracking/CSS inline — o texto útil de
+// verdade é uma fração pequena disso, removida depois por htmlToText(). Um
+// teto pensado pra "página de texto" (500KB) estourava em teste real com
+// site comum. 6MB ainda protege contra download de arquivo grande/binário
+// mislabeled, sem barrar página de negócio normal.
+const MAX_BYTES = 6_000_000;
 
 /** true se o IP (v4 ou v6) é privado, loopback, link-local ou reservado. */
 function isPrivateIp(ip: string): boolean {
