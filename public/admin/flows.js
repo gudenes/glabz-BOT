@@ -3,7 +3,7 @@
  */
 import { typeIcon } from "./icons.js";
 import { applyStaticTranslations, mountLangToggle, t } from "./i18n.js";
-import { unknownVarsIn, varsAvailableAt } from "./vars.js";
+import { unknownVarsIn, varsAvailableAt, varUsageIndex } from "./vars.js";
 
 applyStaticTranslations();
 document.getElementById("lang-toggle-slot-login") &&
@@ -1161,20 +1161,39 @@ function renderVarsPanel(node) {
        ${unknown.length > 1 ? "não existem" : "não existe"} neste ponto do fluxo — vai aparecer sem preencher pro cliente.</p>`
     : "";
 
-  const chips = vars
-    .map(
-      (v) => `<button type="button" class="fb-var" data-var="${escapeHtml(v.name)}"
-        title="${escapeHtml(v.hint)} · vem de: ${escapeHtml(v.from)}">{{${escapeHtml(v.name)}}}</button>`
-    )
+  // Número do card = posição no array + 1, MESMA regra do badge no canvas
+  // (renderCanvas) — é o número que o dono vê e usa pra falar "card 3".
+  const cardNo = new Map(state.flow.nodes.map((n, i) => [n.id, i + 1]));
+  const usage = varUsageIndex(state.flow);
+
+  const rows = vars
+    .map((v) => {
+      const createdAt = v.nodeId ? `card ${cardNo.get(v.nodeId)}` : "sistema";
+      const usedIn = (usage.get(v.name) || []).map((id) => `card ${cardNo.get(id)}`);
+      const usedTxt = usedIn.length
+        ? `Usado: ${listPt(usedIn)}`
+        : `<span class="fb-var-unused">ainda não usada</span>`;
+      return `<div class="fb-var-row">
+        <button type="button" class="fb-var" data-var="${escapeHtml(v.name)}"
+          title="${escapeHtml(v.hint)}">{{${escapeHtml(v.name)}}}</button>
+        <span class="fb-var-where">Criado: ${createdAt} · ${usedTxt}</span>
+      </div>`;
+    })
     .join("");
 
   return `
     <details class="fb-vars" ${unknown.length ? "open" : ""}>
       <summary>Variáveis disponíveis aqui <span class="fb-vars-n">${vars.length}</span></summary>
       ${warn}
-      <div class="fb-vars-list">${chips}</div>
-      <p class="fb-hint">Clique para inserir no campo de texto. Passe o mouse para ver o que cada uma guarda.</p>
+      <div class="fb-vars-list">${rows}</div>
+      <p class="fb-hint">Clique no nome para inserir no campo de texto. Passe o mouse para ver o que cada uma guarda.</p>
     </details>`;
+}
+
+/** "card 5 e card 8" · "card 2, card 5 e card 8" — como se fala, não "a, b, c". */
+function listPt(items) {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} e ${items[items.length - 1]}`;
 }
 
 /** Insere {{var}} no último campo de texto focado (ou no primeiro do painel). */
