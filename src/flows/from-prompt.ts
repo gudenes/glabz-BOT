@@ -12,7 +12,7 @@ Responda APENAS um JSON válido, sem markdown:
 {
   "name": "nome curto do fluxo",
   "nodes": [
-    { "id": "n1", "type": "trigger|message|ask|llm_intent|handoff|end", "text": "texto visível", "varName": "opcional", "intents": [{"slug":"marcar","description":"quer agendar"}] }
+    { "id": "n1", "type": "trigger|message|ask|llm_intent|llm_answer|handoff|end", "text": "texto visível", "varName": "opcional", "context": "opcional, só pra llm_answer", "intents": [{"slug":"marcar","description":"quer agendar"}] }
   ],
   "edges": [
     { "from": "n1", "to": "n2", "label": "marcar" }
@@ -22,11 +22,24 @@ Responda APENAS um JSON válido, sem markdown:
 Arquitetura obrigatória (tronco + ramos, sem cruzar):
 1. trigger → message (boas-vindas) → llm_intent
 2. Do llm_intent saem 2 ou 3 ramos, um por intenção. Cada edge do intent TEM label = slug.
-3. Cada ramo é uma linha reta para baixo: ask? → message? → (handoff|end)
-4. NÃO use condition nem action.
-5. NÓ linear (trigger, message, ask, handoff, end) tem no máximo 1 saída.
-6. NÃO ligue um ramo no outro. NÃO faça atalho de volta ao intent.
-7. Máximo 10 nós e 3 intents.
+3. Cada ramo é uma linha reta para baixo: ask? → message? → (handoff|end|llm_answer).
+4. Se o ramo for uma DÚVIDA/pergunta geral sobre o negócio (não uma ação estruturada tipo
+   marcar/cancelar/comprar), prefira terminar o ramo em llm_answer em vez de ir direto pro
+   handoff — é exatamente pra isso que esse nó existe. llm_answer SEMPRE tem duas saídas: edge
+   label "ok" → end, edge label "erro" → handoff (fallback humano se a IA não souber responder).
+   Preencha "context" do llm_answer com os fatos que JÁ apareceram na conversa/briefing (horário,
+   preço, política, diferenciais) — nunca invente fato que não foi dito; se nada foi dito, deixe
+   "context" como string vazia mesmo assim (o nó continua funcionando via base de conhecimento em
+   tempo real, não depende só do "context").
+5. NÃO use condition nem action.
+6. NÓ linear (trigger, message, ask, handoff, end) tem no máximo 1 saída. llm_answer tem exatamente
+   as duas saídas descritas acima, nunca mais que isso.
+7. NÃO ligue um ramo no outro. NÃO faça atalho de volta ao intent.
+8. Máximo 10 nós e 3 intents.
+9. Se fizer sentido capturar o nome de quem está conversando, use um ask cedo no tronco (antes do
+   llm_intent, comum a todos os ramos) com "varName":"nome". Em mensagens/perguntas/handoffs
+   seguintes, salpique {{name_greet}} colado à saudação (ex.: "Olá{{name_greet}}! 👋") — NUNCA
+   escreva {{nome}} cru; {{name_greet}} já vira ", Nome" ou fica vazio se ainda não souber.
 Textos em português, naturais, prontos para WhatsApp (*negrito* ok).`;
 
 const COL_W = 300;
@@ -101,7 +114,7 @@ export function sanitizeEdges(nodes: FlowNode[], edges: FlowEdge[]): FlowEdge[] 
     seen.add(key);
     const t = typeOf.get(e.from);
     const n = (outCount.get(e.from) || 0) + 1;
-    if (t !== "llm_intent" && t !== "condition" && n > 1) continue;
+    if (t !== "llm_intent" && t !== "condition" && t !== "llm_answer" && n > 1) continue;
     outCount.set(e.from, n);
     out.push({
       id: e.id || `e_${out.length}`,
@@ -125,7 +138,7 @@ export async function generateFlowFromPrompt(prompt: string): Promise<GeneratedF
     body: JSON.stringify({
       model: llmModel(),
       temperature: 0.3,
-      max_tokens: 2200,
+      max_tokens: 2600,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM },
@@ -146,6 +159,7 @@ export async function generateFlowFromPrompt(prompt: string): Promise<GeneratedF
       type?: string;
       text?: string;
       varName?: string;
+      context?: string;
       intents?: { slug: string; description: string }[];
     }>;
     edges?: Array<{ from?: string; to?: string; label?: string }>;
@@ -164,6 +178,12 @@ export async function generateFlowFromPrompt(prompt: string): Promise<GeneratedF
     if (type === "llm_intent") {
       data.label = n.text || "Entender o pedido";
       data.intents = n.intents || [];
+    }
+    if (type === "llm_answer") {
+      data.label = n.text || "Responder com IA";
+      data.context = n.context || "";
+      data.varName = n.varName || "resposta_ia";
+      data.maxChars = 400;
     }
     if (type === "trigger") data.label = n.text || "Mensagem recebida";
     if (type === "end") data.label = n.text || "Fim";
