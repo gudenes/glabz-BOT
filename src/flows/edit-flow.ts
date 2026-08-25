@@ -53,8 +53,12 @@ Regras:
 4. Em "edges", devolva a lista COMPLETA de edges do fluxo DEPOIS da mudança, incluindo as que não
    mudaram — não é um diff.
 5. Arquitetura obrigatória, mesma de sempre (tronco + ramos, sem cruzar):
-   a. trigger → message (boas-vindas) → llm_intent → 2-3 ramos por pedido real MAIS 1 ramo
-      reservado de encerramento (ver 5.g) — edge do intent TEM label=slug.
+   a. trigger → message (boas-vindas) → ask (nome, varName:"nome", OBRIGATÓRIO — todo fluxo
+      pergunta o nome logo após a boas-vindas, nunca opcional) → llm_intent → 2-3 ramos por pedido
+      real MAIS 1 ramo reservado de encerramento (ver 5.g) — edge do intent TEM label=slug. Se o
+      fluxo que você está editando ainda não tem esse ask de nome no tronco, e a instrução tocar
+      no tronco/boas-vindas de alguma forma, adicione-o. {{name_greet}} colado à saudação (ex.:
+      "Olá{{name_greet}}! 👋") aproveita esse nome nas mensagens seguintes — nunca {{nome}} cru.
    b. Cada ramo (exceto o de encerramento) é uma linha reta pra baixo: ask? → message? →
       (handoff|llm_answer), e se NÃO terminar em handoff, sempre seguido do ask "mais alguma
       coisa?" da regra 5.g antes de qualquer end — nenhum ramo (fora handoff) termina direto num

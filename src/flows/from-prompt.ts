@@ -38,7 +38,8 @@ Responda APENAS um JSON válido, sem markdown:
 }
 
 Arquitetura obrigatória (tronco + ramos, sem cruzar):
-1. trigger → message (boas-vindas) → llm_intent
+1. trigger → message (boas-vindas) → ask (nome, ver regra 9 — SEMPRE presente, não é opcional) →
+   llm_intent
 2. Do llm_intent saem 2 ou 3 ramos por pedido real do cliente (um por intenção) MAIS 1 ramo
    reservado de encerramento (ver regra 10) — todos contam pro limite de intents da regra 8. Cada
    edge do intent TEM label = slug.
@@ -59,10 +60,12 @@ Arquitetura obrigatória (tronco + ramos, sem cruzar):
 7. NÃO ligue um ramo no outro. Única exceção: o ask de "mais alguma coisa?" da regra 10 SEMPRE liga
    de volta pro llm_intent (nunca pra outro lugar).
 8. Máximo 14 nós e 4 intents (já contando o ramo de encerramento da regra 10).
-9. Se fizer sentido capturar o nome de quem está conversando, use um ask cedo no tronco (antes do
-   llm_intent, comum a todos os ramos) com "varName":"nome". Em mensagens/perguntas/handoffs
-   seguintes, salpique {{name_greet}} colado à saudação (ex.: "Olá{{name_greet}}! 👋") — NUNCA
-   escreva {{nome}} cru; {{name_greet}} já vira ", Nome" ou fica vazio se ainda não souber.
+9. O ask de nome da regra 1 é OBRIGATÓRIO em TODO fluxo gerado — nunca opcional, nunca "se fizer
+   sentido". Logo após a mensagem de boas-vindas, sempre pergunte o nome (ex.: "Antes de
+   continuar, qual o seu nome?"), com "varName":"nome", antes do llm_intent. Em
+   mensagens/perguntas/handoffs seguintes, salpique {{name_greet}} colado à saudação (ex.:
+   "Olá{{name_greet}}! 👋") — NUNCA escreva {{nome}} cru; {{name_greet}} já vira ", Nome" ou fica
+   vazio se ainda não souber.
 10. NUNCA encerre um ramo de forma abrupta (regra 3/4 já exigem isso). O mecanismo: um ask com
     "text" tipo "Posso te ajudar com mais alguma coisa?", varName livre (ex. "mais_algo") e
     "capturesIntent": true — esse ask SEMPRE liga de volta pro llm_intent (regra 7), nunca pra
