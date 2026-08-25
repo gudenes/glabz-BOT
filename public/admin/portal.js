@@ -753,8 +753,6 @@ function renderKnowledge(chunks) {
   }
   box.innerHTML = chunks
     .map((c) => {
-      // 'manual' (ensino avulso na própria aba) é o caso comum — não marca
-      // nada, só os outros dizem de onde vieram.
       const originTag =
         c.origin === "onboarding"
           ? `<span class="ai-tag ok">${t("portal.knowledge.originOnboarding")}</span>`
@@ -762,7 +760,7 @@ function renderKnowledge(chunks) {
             ? `<span class="ai-tag off">${t("portal.knowledge.originImported")}</span>`
             : c.origin === "pasted"
               ? `<span class="ai-tag ok">${t("portal.knowledge.originPasted")}</span>`
-              : "";
+              : `<span class="ai-tag off">${t("portal.knowledge.originManual")}</span>`;
       return `
       <div class="kb-item" data-id="${escapeHtml(c.id)}">
         <div class="kb-body">
