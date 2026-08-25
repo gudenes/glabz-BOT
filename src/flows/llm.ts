@@ -36,7 +36,17 @@ export async function classifyIntent(opts: {
               content:
                 (opts.systemHint ||
                   "Você classifica intenções de mensagens de WhatsApp em português.") +
-                `\nResponda APENAS com um dos slugs: ${slugs}\n\nCatálogo:\n${catalog}`,
+                `\nResponda APENAS com um dos slugs: ${slugs}, ou "default" se nenhum servir.` +
+                // Sem isso, uma saudação pura ("oi", "olá") era classificada como
+                // a intenção de ENCERRAR ("não precisa de mais nada") — porque de
+                // fato não pede nada — e o atendimento terminava na primeira
+                // mensagem, antes de o cliente dizer o que queria. Bug real visto
+                // em produção; a saudação não é um pedido, é o começo da conversa.
+                `\nRegra importante: se a mensagem for só uma saudação/cumprimento sem pedido nenhum` +
+                ` ("oi", "olá", "bom dia", "tudo bem?"), responda "default" — NUNCA escolha uma` +
+                ` intenção de encerrar/agradecer nesse caso. Só escolha encerrar quando a mensagem` +
+                ` de fato disser que não precisa de mais nada (ex.: "não, obrigado", "era só isso").` +
+                `\n\nCatálogo:\n${catalog}`,
             },
             { role: "user", content: opts.text.slice(0, 800) },
           ],

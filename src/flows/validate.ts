@@ -1,5 +1,5 @@
 import type { Flow, FlowNode } from "./types.js";
-import { runFlowStep, type FlowSimState, type FlowTraceStep } from "./engine.js";
+import { isClosingSlug, runFlowStep, type FlowSimState, type FlowTraceStep } from "./engine.js";
 import { judgeAnswerQuality } from "./llm.js";
 
 /**
@@ -76,9 +76,14 @@ async function runOneCase(
   let steps = 0;
   let reachedTerminal = false;
   let intentChecked = false;
+  // O pedido de teste ("quero saber sobre planos") só é enviado DEPOIS da
+  // abertura genérica ("Oi"). Se o fluxo terminar antes disso, ele encerrou
+  // sem nunca ouvir o que o cliente queria — bug grave, não um detalhe.
+  let deliveredTestMessage = false;
 
   while (steps < MAX_STEPS) {
     steps += 1;
+    if (text === testMessage) deliveredTestMessage = true;
     const result = await runFlowStep({ flow, state, text, simulate: true });
     trace.push(...result.trace);
 
@@ -95,9 +100,12 @@ async function runOneCase(
         intentChecked = true;
         const gotSlug = classificationSlug(hit);
         if (gotSlug && gotSlug !== targetSlug) {
+          // FAIL, não warn: cair no ramo errado é o fluxo não fazer o que
+          // deveria — foi exatamente assim que uma validação "4 de 4
+          // passaram" conviveu com um fluxo que encerrava na saudação.
           issues.push({
-            severity: "warn",
-            message: `testei o ramo "${targetSlug}" mas a IA classificou como "${gotSlug}" — descrições de intenção parecidas demais?`,
+            severity: "fail",
+            message: `testei o ramo "${targetSlug}" mas a IA classificou como "${gotSlug}" — o cliente cairia no ramo errado`,
           });
         }
       }
@@ -142,6 +150,16 @@ async function runOneCase(
     });
   }
 
+  // Encerrou antes de o cliente conseguir dizer o que queria — o caso mais
+  // grave e o mais fácil de passar batido, porque "chegou num Fim" sozinho
+  // parece sucesso.
+  if (reachedTerminal && !deliveredTestMessage) {
+    issues.push({
+      severity: "fail",
+      message: "o fluxo encerrou logo na saudação, antes de o cliente conseguir dizer o que precisava",
+    });
+  }
+
   const ok = reachedTerminal && !issues.some((i) => i.severity === "fail");
   return { id, label, ok, steps, trace, issues };
 }
@@ -151,7 +169,15 @@ export async function validateFlow(flow: Flow): Promise<ValidationReport> {
   const intents = (
     intentNode && Array.isArray(intentNode.data.intents) ? intentNode.data.intents : []
   ) as { slug?: string; description?: string }[];
-  const validIntents = intents.filter((i) => i.slug?.trim());
+  const allIntents = intents.filter((i) => i.slug?.trim());
+  // O ramo de encerramento não é testável isoladamente e nem deveria ser: o
+  // motor (isClosingSlug em engine.ts) só aceita encerrar quando o cliente
+  // responde isso ao "posso ajudar com mais alguma coisa?" — encerrar na
+  // saudação é justamente o bug que a guarda impede. Ele já é exercitado no
+  // FIM de cada outro caso, porque syntheticAnswerFor responde esse ask com
+  // uma recusa. Testar à parte só geraria um falso "falhou".
+  const testableIntents = allIntents.filter((i) => !isClosingSlug(String(i.slug)));
+  const validIntents = testableIntents.length ? testableIntents : allIntents;
 
   const cases: ValidationCaseResult[] = [];
   if (!validIntents.length) {

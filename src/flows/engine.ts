@@ -54,6 +54,18 @@ function triggerNode(flow: Flow): FlowNode | null {
   return flow.nodes.find((n) => n.type === "trigger") ?? flow.nodes[0] ?? null;
 }
 
+/**
+ * Um slug de intenção que significa "acabou, não preciso de mais nada".
+ * Convenção do gerador (src/flows/from-prompt.ts, regra 10) é usar
+ * exatamente "encerrar"; os outros radicais cobrem fluxos montados à mão.
+ * Só é usado pra PROTEGER contra encerramento precoce — um fluxo cujo ramo
+ * de saída tenha outro nome simplesmente não ganha essa proteção extra,
+ * nunca quebra por causa disso.
+ */
+export function isClosingSlug(slug: string): boolean {
+  return /^(encerr|finaliz|sair|tchau|despedi|agradec)/i.test(slug.trim());
+}
+
 /** Estado in-memory do simulador (não grava em disco). */
 export type FlowSimState = {
   nodeId: string | null;
@@ -131,6 +143,12 @@ export async function runFlowStep(opts: {
   // com mais alguma coisa?" antes de encerrar) existe justamente pra colher
   // um novo pedido — esse SIM deve classificar normalmente.
   let skipIntentText = false;
+  // Só é legítimo ENCERRAR o atendimento quando o cliente respondeu "não
+  // preciso de mais nada" a um ask de capturesIntent ("posso ajudar com mais
+  // alguma coisa?"). Fora daí — em especial na saudação inicial — uma
+  // classificação de encerramento é quase sempre engano do classificador e
+  // mataria a conversa antes de começar (bug real: "Ola" virava "encerrar").
+  let fromCapturesIntentAsk = false;
 
   // Continuação de ask
   if (state.waitingFor && state.nodeId) {
@@ -144,7 +162,8 @@ export async function runFlowStep(opts: {
         detail: `salvou ${varName}="${text.slice(0, 60)}"`,
       });
       node = nextNode(flow, askNode.id);
-      skipIntentText = askNode.data.capturesIntent !== true;
+      fromCapturesIntentAsk = askNode.data.capturesIntent === true;
+      skipIntentText = !fromCapturesIntentAsk;
     } else {
       node = triggerNode(flow);
       if (node) node = nextNode(flow, node.id) || node;
@@ -262,9 +281,21 @@ export async function runFlowStep(opts: {
         intents,
         systemHint: String(node.data.prompt || ""),
       });
-      lastIntent = result.intent;
+      // Guarda de encerramento precoce: só aceita cair no ramo de encerrar
+      // quando o cliente respondeu isso a um "posso ajudar com mais alguma
+      // coisa?" (capturesIntent). Numa saudação inicial, "encerrar" é quase
+      // sempre engano do classificador — a mensagem não pede nada, mas isso
+      // é o COMEÇO da conversa, não o fim dela.
+      let effectiveIntent = result.intent;
+      let closedTooEarly = false;
+      if (!fromCapturesIntentAsk && isClosingSlug(effectiveIntent)) {
+        closedTooEarly = true;
+        effectiveIntent = "default";
+      }
+
+      lastIntent = effectiveIntent;
       intentSource = result.source;
-      vars.last_intent = result.intent;
+      vars.last_intent = effectiveIntent;
       vars.intent_source = result.source;
       // Guarda o texto que originou essa classificação — permite reaproveitar
       // (ex.: cliente já mandou a dúvida junto, não precisa perguntar de novo).
@@ -272,17 +303,30 @@ export async function runFlowStep(opts: {
       trace.push({
         nodeId: node.id,
         type: "llm_intent",
-        detail: `${result.intent} (${result.source})`,
+        detail: closedTooEarly
+          ? `${result.intent} ignorado (encerrar cedo demais) → default`
+          : `${result.intent} (${result.source})`,
       });
-      const routed = nextNode(flow, node.id, result.intent);
+      const routed = nextNode(flow, node.id, effectiveIntent);
       if (!routed) {
         // Não deu pra saber qual ramo seguir (classificação incerta —
         // source "default" — ou o fluxo não tem edge pro slug retornado).
-        // Não adivinha um ramo: pede pra reformular e PARA aqui, esperando
-        // a próxima mensagem — na próxima chamada ela reentra neste mesmo
-        // llm_intent (ver "mensagem no meio" no início da função) e
-        // reclassifica do zero, em vez de pular direto pro fim de um ramo
-        // qualquer.
+        // Não adivinha um ramo: PARA aqui e espera a próxima mensagem — na
+        // próxima chamada ela reentra neste mesmo llm_intent (ver "mensagem
+        // no meio" no início da função) e reclassifica do zero, em vez de
+        // pular direto pro fim de um ramo qualquer.
+        if (replies.length) {
+          // Já mandamos algo nesta mesma rodada (tipicamente a mensagem de
+          // boas-vindas, que costuma terminar com "em que posso ajudar?") —
+          // repetir "não entendi" logo depois soa quebrado. Só espera a
+          // resposta da pergunta que acabou de sair.
+          trace.push({
+            nodeId: node.id,
+            type: "llm_intent",
+            detail: "aguardando o pedido do cliente",
+          });
+          break;
+        }
         const clarify = "Desculpa, não entendi bem. Pode me explicar de outro jeito o que você precisa?";
         replies.push(clarify);
         trace.push({
