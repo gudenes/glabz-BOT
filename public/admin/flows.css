@@ -1057,6 +1057,34 @@
   flex-shrink: 0;
 }
 
+/* ── Assistente de IA (edição do fluxo por instrução) ──
+   Mesma posição/visual do .sim-panel (bottom-right) — os dois não abrem
+   juntos de propósito (abrir um fecha o outro, ver flows.js) pra não
+   sobrepor na mesma esquina. Reaproveita .sim-head/.sim-chat/.sim-composer/
+   .sim-bubble por inteiro, só a moldura do painel é própria. */
+.ai-edit-panel {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: min(380px, calc(100vw - 36px));
+  height: min(520px, calc(100vh - 100px));
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #141820 0%, #0e1118 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.ai-edit-panel.hidden {
+  display: none !important;
+}
+.ai-edit-dot {
+  background: #a855f7;
+  box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.15);
+}
+
 /* ── Histórico de versões ── */
 .history-panel {
   position: fixed;

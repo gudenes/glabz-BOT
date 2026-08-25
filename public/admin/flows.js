@@ -39,6 +39,9 @@ const state = {
   /** Histórico de versões */
   historyOpen: false,
   historyVersions: [],
+  /** Assistente de IA (edição do fluxo por instrução) */
+  aiEditOpen: false,
+  aiEditBusy: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -1901,6 +1904,98 @@ function closeSim() {
   state.simOpen = false;
   $("sim-panel").classList.add("hidden");
 }
+
+/**
+ * Assistente de IA do builder (Fase 4b) — chat de instrução em texto livre
+ * ("coloque uma variável de nome no card 2") que edita o fluxo em memória via
+ * POST /v1/flows/ai-edit. Nunca salva sozinho: só aplica em state.flow, quem
+ * persiste continua sendo o botão "Salvar" de sempre (isDirty()/
+ * updateSaveBadge() já reagem à mudança automaticamente via renderCanvas()).
+ * Reaproveita a moldura visual do simulador (.sim-head/.sim-chat/
+ * .sim-composer/.sim-bubble) — os dois painéis não abrem juntos de
+ * propósito, mesma esquina da tela.
+ */
+function openAiEdit() {
+  if (!state.flow) {
+    toast(t("builder.aiEdit.needFlow"), "err");
+    return;
+  }
+  closeSim();
+  state.aiEditOpen = true;
+  $("ai-edit-panel").classList.remove("hidden");
+  $("ai-edit-input")?.focus();
+}
+
+function closeAiEdit() {
+  state.aiEditOpen = false;
+  $("ai-edit-panel").classList.add("hidden");
+}
+
+function appendAiEditBubble(kind, text) {
+  const chat = $("ai-edit-chat");
+  const empty = $("ai-edit-empty");
+  if (empty) empty.remove();
+  const b = document.createElement("div");
+  b.className = "sim-bubble " + kind;
+  b.textContent = text;
+  chat.appendChild(b);
+  chat.scrollTop = chat.scrollHeight;
+  return b;
+}
+
+async function sendAiEdit() {
+  const input = $("ai-edit-input");
+  const instruction = input?.value.trim();
+  if (!instruction || !state.flow || state.aiEditBusy) return;
+  input.value = "";
+  appendAiEditBubble("user", instruction);
+  state.aiEditBusy = true;
+  $("ai-edit-send")?.setAttribute("disabled", "true");
+  const thinking = appendAiEditBubble("sys", t("builder.aiEdit.thinking"));
+  try {
+    const data = await api("/v1/flows/ai-edit", {
+      method: "POST",
+      body: JSON.stringify({
+        instruction,
+        nodes: state.flow.nodes,
+        edges: state.flow.edges,
+      }),
+    });
+    thinking.remove();
+    if (data.nodes?.length) {
+      // Merge por id — só os cards tocados entram/atualizam, o resto do
+      // canvas (posição, seleção, outros cards) fica intacto.
+      const byId = new Map(state.flow.nodes.map((n) => [n.id, n]));
+      for (const n of data.nodes) byId.set(n.id, n);
+      state.flow.nodes = [...byId.values()];
+      state.flow.edges = data.edges || state.flow.edges;
+      state.selectedNodeId = data.changedNodeIds?.[0] || state.selectedNodeId;
+      renderCanvas();
+      renderProps();
+      const nodeEl = state.selectedNodeId
+        ? document.querySelector(`.fb-node[data-id="${state.selectedNodeId}"]`)
+        : null;
+      nodeEl?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    }
+    appendAiEditBubble("bot", data.say || t("builder.aiEdit.done"));
+  } catch (e) {
+    thinking.remove();
+    appendAiEditBubble("sys", e.message || t("builder.aiEdit.error"));
+  } finally {
+    state.aiEditBusy = false;
+    $("ai-edit-send")?.removeAttribute("disabled");
+  }
+}
+
+$("btn-ai-edit")?.addEventListener("click", () => {
+  if (state.aiEditOpen) closeAiEdit();
+  else openAiEdit();
+});
+$("ai-edit-close")?.addEventListener("click", () => closeAiEdit());
+$("ai-edit-form")?.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  void sendAiEdit();
+});
 
 function resetSim() {
   state.simState = null;

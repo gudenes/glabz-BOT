@@ -118,6 +118,7 @@ import {
 } from "./flows/store.js";
 import { simulateFlowMessage } from "./flows/engine.js";
 import { generateFlowFromPrompt } from "./flows/from-prompt.js";
+import { editFlowFromInstruction } from "./flows/edit-flow.js";
 import {
   buildFlowFromStudio,
   studioTurn,
@@ -1565,6 +1566,37 @@ const server = createServer(async (req, res) => {
           ok: false,
           reason: e instanceof Error ? e.message : "simulate failed",
         });
+      }
+      return;
+    }
+
+    if (method === "POST" && path === "/v1/flows/ai-edit") {
+      // Sem :id na URL de propósito: o assistente de IA do builder (Fase 4b)
+      // precisa funcionar mesmo num fluxo ainda não salvo (state.flow.id pode
+      // ser vazio até o primeiro "Salvar") — o canvas atual (nodes/edges) vem
+      // inteiro no corpo, igual /v1/flows/simulate já faz pelo mesmo motivo.
+      const body = parseJson<{
+        instruction?: string;
+        nodes?: FlowNode[];
+        edges?: FlowEdge[];
+      }>(await readBody(req));
+      if (!body?.instruction?.trim()) {
+        json(res, 400, { ok: false, reason: "escreve o que você quer mudar" });
+        return;
+      }
+      if (!body?.nodes?.length) {
+        json(res, 400, { ok: false, reason: "fluxo vazio" });
+        return;
+      }
+      try {
+        const result = await editFlowFromInstruction({
+          instruction: body.instruction,
+          nodes: body.nodes,
+          edges: body.edges || [],
+        });
+        json(res, 200, { ok: true, ...result });
+      } catch (e) {
+        json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "ia" });
       }
       return;
     }

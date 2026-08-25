@@ -11,7 +11,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/admin/styles.css?v=15" />
-    <link rel="stylesheet" href="/admin/flows.css?v=20" />
+    <link rel="stylesheet" href="/admin/flows.css?v=21" />
     <link rel="stylesheet" href="/admin/flows-portal.css?v=19" />
   </head>
   <body class="flows-body">
@@ -64,6 +64,10 @@
             <button type="button" id="btn-sim" class="fb-btn fb-btn-secondary" title="Testar o fluxo digitando" data-i18n-title="builder.test.tooltip">
               <svg class="fb-ico" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>
               <span data-i18n="builder.test">Testar</span>
+            </button>
+            <button type="button" id="btn-ai-edit" class="fb-btn fb-btn-secondary" title="Peça uma mudança no fluxo, em texto livre" data-i18n-title="builder.aiEdit.tooltip">
+              <svg class="fb-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3"/><path d="M12 18v3"/><path d="M3 12h3"/><path d="M18 12h3"/><path d="m5.6 5.6 2.1 2.1"/><path d="m16.3 16.3 2.1 2.1"/><path d="m18.4 5.6-2.1 2.1"/><path d="m7.7 16.3-2.1 2.1"/><circle cx="12" cy="12" r="3"/></svg>
+              <span data-i18n="builder.aiEdit.button">Assistente</span>
             </button>
             <button type="button" id="btn-history" class="fb-btn fb-btn-ghost" title="Ver versões salvas anteriormente" data-i18n="builder.history">Histórico</button>
             <button type="button" id="btn-revert" class="fb-btn fb-btn-ghost" title="Descartar edições não salvas" data-i18n="builder.revert">Reverter</button>
@@ -213,6 +217,42 @@
         </form>
       </div>
 
+      <!-- Assistente de IA: edita o fluxo por instrução em texto livre, referenciando
+           cards pelo número (badge no canto de cada card, ver .fb-num). Nunca salva
+           sozinho — só aplica no canvas em memória, "Salvar" continua manual. -->
+      <div id="ai-edit-panel" class="ai-edit-panel hidden" aria-label="Assistente de IA">
+        <div class="sim-head">
+          <div class="sim-head-left">
+            <span class="sim-dot ai-edit-dot"></span>
+            <div>
+              <strong data-i18n="builder.aiEdit.title">Assistente de IA</strong>
+              <small data-i18n="builder.aiEdit.status">Peça uma mudança no fluxo</small>
+            </div>
+          </div>
+          <div class="sim-head-actions">
+            <button type="button" id="ai-edit-close" class="fb-btn fb-btn-ghost fb-btn-square" title="Fechar" data-i18n-title="common.close">
+              <svg class="fb-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="sim-chat" id="ai-edit-chat">
+          <div class="sim-empty" id="ai-edit-empty">
+            <p data-i18n="builder.aiEdit.emptyHint">Diga o que quer mudar — ex.: "coloque uma pergunta de nome no card 2". Nada é salvo até você clicar em Salvar.</p>
+          </div>
+        </div>
+        <form class="sim-composer" id="ai-edit-form">
+          <input
+            id="ai-edit-input"
+            type="text"
+            placeholder="O que você quer mudar?"
+            data-i18n-placeholder="builder.aiEdit.placeholder"
+            autocomplete="off"
+            maxlength="500"
+          />
+          <button type="submit" class="fb-btn fb-btn-primary" id="ai-edit-send" data-i18n="builder.aiEdit.send">Enviar</button>
+        </form>
+      </div>
+
       <!-- Histórico: versões anteriores salvas deste fluxo -->
       <div id="history-panel" class="history-panel hidden" aria-label="Histórico de versões">
         <div class="history-head">
@@ -230,6 +270,6 @@
       <div id="toast" class="fb-toast hidden"></div>
     </div>
 
-    <script src="/admin/flows.js?v=22" type="module"></script>
+    <script src="/admin/flows.js?v=23" type="module"></script>
   </body>
 </html>
