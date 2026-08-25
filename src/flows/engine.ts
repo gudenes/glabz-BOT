@@ -11,7 +11,10 @@ import { runAction } from "./connectors/index.js";
 function render(template: string, vars: Record<string, string>): string {
   return (template || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, k) => {
     if (k === "name_greet") {
-      const n = vars.nome || vars.name;
+      // pushName (nome do perfil do WhatsApp, capturado automaticamente em
+      // runFlowStep) só entra como último recurso — nome/apelido dado
+      // explicitamente pelo cliente (via ask varName:"nome") sempre vence.
+      const n = vars.nome || vars.name || vars.pushName;
       return n ? `, ${n}` : "";
     }
     return vars[k] ?? "";
