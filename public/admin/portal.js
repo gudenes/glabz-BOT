@@ -210,6 +210,117 @@ $("onboard")?.addEventListener("click", (ev) => {
   if (ev.target === $("onboard")) dismissOnboard(false);
 });
 
+/**
+ * Tour guiado de 1º acesso — roda ANTES do onboarding acima, uma única vez
+ * por cliente (mesmo padrão de onboardKey/dismissOnboard: localStorage por
+ * client.id, nunca por sessionStorage['glabs_client_id']/role, pra ficar
+ * idêntico em impersonation e cliente real). 2 passos com spotlight num
+ * alvo real da tela: conectar WhatsApp → aba Fluxo. Ao terminar o passo 2,
+ * entrega pro .onboard existente via setView("flow") — não duplica a
+ * escolha template x IA que o .onboard já oferece.
+ */
+function tourKey() {
+  const cid = state.portal?.client?.id || "anon";
+  return `glabs_tour_done_${cid}`;
+}
+
+/** No breakpoint mobile a sidebar (.side) some e vira .mobile-nav — pega
+ * qual dos dois data-view="flow" está de fato visível pra apontar o
+ * spotlight certo. offsetParent não serve aqui: some elementos são
+ * position:fixed (.mobile-nav), e offsetParent é sempre null nesse caso
+ * mesmo visível. */
+function visibleFlowNavLink() {
+  const links = [...document.querySelectorAll('[data-view="flow"]')];
+  return links.find((el) => getComputedStyle(el).display !== "none") || links[0] || null;
+}
+
+const TOUR_STEPS = [
+  { target: () => $("btn-connect"), titleKey: "portal.tour.step1Title", bodyKey: "portal.tour.step1Body" },
+  { target: () => visibleFlowNavLink(), titleKey: "portal.tour.step2Title", bodyKey: "portal.tour.step2Body" },
+];
+
+let tourStep = 0;
+
+function positionTour() {
+  const target = TOUR_STEPS[tourStep]?.target();
+  const hole = $("tour-hole");
+  const bubble = $("tour-bubble");
+  if (!target || !hole || !bubble) return;
+  const r = target.getBoundingClientRect();
+  const pad = 8;
+  hole.style.left = `${r.left - pad}px`;
+  hole.style.top = `${r.top - pad}px`;
+  hole.style.width = `${r.width + pad * 2}px`;
+  hole.style.height = `${r.height + pad * 2}px`;
+
+  // Balão embaixo do alvo por padrão; sobe se não couber. Clampa nas bordas
+  // horizontais da viewport pra nunca vazar pra fora da tela.
+  const bubbleWidth = 320;
+  const left = Math.max(12, Math.min(r.left, window.innerWidth - bubbleWidth - 12));
+  const spaceBelow = window.innerHeight - r.bottom;
+  const top = spaceBelow > 170 ? r.bottom + pad + 12 : Math.max(12, r.top - 150);
+  bubble.style.left = `${left}px`;
+  bubble.style.top = `${top}px`;
+}
+
+function showTourStep(i) {
+  const step = TOUR_STEPS[i];
+  const target = step?.target();
+  if (!step || !target) {
+    // Alvo não existe (não devia acontecer, markup é estático) — não força
+    // nada nem marca como visto, só desiste silenciosamente desta vez.
+    dismissTour(false);
+    return;
+  }
+  tourStep = i;
+  $("tour")?.classList.remove("hidden");
+  $("tour-step-label").textContent = t("portal.tour.stepLabel", { n: i + 1 });
+  $("tour-title").textContent = t(step.titleKey);
+  $("tour-body").textContent = t(step.bodyKey);
+  $("tour-next").textContent = i === TOUR_STEPS.length - 1 ? t("portal.tour.goToFlow") : t("portal.tour.next");
+  positionTour();
+}
+
+function dismissTour(remember = true) {
+  if (remember) localStorage.setItem(tourKey(), "1");
+  $("tour")?.classList.add("hidden");
+}
+
+/** Chamado uma vez no boot, depois que refresh() resolve — o tour só faz
+ * sentido pré-conexão (ver state.lastWa, já populado nesse ponto por
+ * render()); depois disso o dono já passou dessa etapa. */
+function maybeTour() {
+  if (localStorage.getItem(tourKey()) === "1") return;
+  if (state.lastWa === "connected") return;
+  showTourStep(0);
+}
+
+$("tour-skip")?.addEventListener("click", () => dismissTour());
+// Clicar fora (fora do balão) fecha, mas sem marcar como "já resolvi" —
+// mesmo padrão do .onboard: volta na próxima visita. .tour-hole tem
+// pointer-events:none, então cliques nele já chegam aqui como alvo #tour.
+$("tour")?.addEventListener("click", (ev) => {
+  if (ev.target === $("tour")) dismissTour(false);
+});
+$("tour-next")?.addEventListener("click", () => {
+  if (tourStep < TOUR_STEPS.length - 1) {
+    showTourStep(tourStep + 1);
+  } else {
+    dismissTour();
+    setView("flow"); // aciona maybeOnboard() naturalmente — ver setView()
+  }
+});
+window.addEventListener("resize", () => {
+  if (!$("tour")?.classList.contains("hidden")) positionTour();
+});
+window.addEventListener(
+  "scroll",
+  () => {
+    if (!$("tour")?.classList.contains("hidden")) positionTour();
+  },
+  true
+);
+
 function openBuilder() {
   const frame = $("flow-frame");
   frame?.classList.remove("hidden");
@@ -1862,9 +1973,13 @@ try {
     if (qs.get("view") && TITLES[qs.get("view")]) setView(qs.get("view"));
     if (qs.get("google_connected")) toast(t("portal.account.integrations.connected"));
     if (qs.get("google_error")) toast(t("portal.account.integrations.connectError"), "err");
-    if (qs.has("view") || qs.has("google_connected") || qs.has("google_error")) {
+    const cameFromRedirect = qs.has("view") || qs.has("google_connected") || qs.has("google_error");
+    if (cameFromRedirect) {
       history.replaceState(null, "", location.pathname);
     }
+    // Tour de 1º acesso: nunca ao voltar de um redirect/callback (OAuth do
+    // Calendar, deep-link ?view=) — competiria com o destino real dele.
+    if (!cameFromRedirect) maybeTour();
 
     const clientName = state.portal?.client?.name || "";
     // Mesmo caso do card de perfil (ver loadAccount): em impersonation, a

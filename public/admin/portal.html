@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=31" />
+    <link rel="stylesheet" href="/admin/portal.css?v=32" />
   </head>
   <body class="portal-body">
     <div class="app">
@@ -475,6 +475,21 @@
       <button type="button" data-view="integrations" data-i18n="portal.nav.integrations">Integrações</button>
     </nav>
 
+    <!-- Tour guiado de 1º acesso: 2 passos (conectar WhatsApp → aba Fluxo) antes do
+         onboarding acima. Aparece só uma vez por cliente (ver tourKey() em portal.js). -->
+    <div id="tour" class="tour hidden" role="dialog" aria-modal="true" aria-labelledby="tour-title">
+      <div class="tour-hole" id="tour-hole"></div>
+      <div class="tour-bubble" id="tour-bubble">
+        <p class="tour-step" id="tour-step-label"></p>
+        <h3 id="tour-title"></h3>
+        <p id="tour-body"></p>
+        <div class="tour-actions">
+          <button type="button" class="btn-text" id="tour-skip" data-i18n="portal.tour.skip">Pular</button>
+          <button type="button" class="btn-lime" id="tour-next" data-i18n="portal.tour.next">Próxima</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Onboarding: primeira vez na aba Fluxo, antes de existir qualquer fluxo montado -->
     <div id="onboard" class="onboard hidden" role="dialog" aria-modal="true" aria-labelledby="onboard-title">
       <div class="onboard-card">
@@ -497,6 +512,6 @@
       </div>
     </div>
 
-    <script src="/admin/portal.js?v=32" type="module"></script>
+    <script src="/admin/portal.js?v=33" type="module"></script>
   </body>
 </html>
