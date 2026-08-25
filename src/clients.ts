@@ -30,6 +30,7 @@ export type ClientRecord = {
   bizSegment: string | null;
   bizAudience: string | null;
   bizSource: string | null;
+  bizWebsite: string | null;
   bizProfileUpdatedAt: string | null;
 };
 
@@ -52,6 +53,7 @@ function rowToClient(r: Record<string, unknown>): ClientRecord {
     bizSegment: (r.biz_segment as string) || null,
     bizAudience: (r.biz_audience as string) || null,
     bizSource: (r.biz_source as string) || null,
+    bizWebsite: (r.biz_website as string) || null,
     bizProfileUpdatedAt: r.biz_profile_updated_at
       ? new Date(r.biz_profile_updated_at as Date).toISOString()
       : null,
@@ -116,7 +118,7 @@ export async function listClients(): Promise<ClientRecord[]> {
     SELECT id, name, slug, created_at,
       billing_name, billing_document, billing_whatsapp, billing_zip,
       billing_street, billing_number, billing_district, billing_complement,
-      biz_role, biz_size, biz_segment, biz_audience, biz_source, biz_profile_updated_at
+      biz_role, biz_size, biz_segment, biz_audience, biz_source, biz_website, biz_profile_updated_at
     FROM clients ORDER BY created_at DESC
   `;
   return rows.map(rowToClient);
@@ -128,7 +130,7 @@ export async function getClient(id: string): Promise<ClientRecord | null> {
     SELECT id, name, slug, created_at,
       billing_name, billing_document, billing_whatsapp, billing_zip,
       billing_street, billing_number, billing_district, billing_complement,
-      biz_role, biz_size, biz_segment, biz_audience, biz_source, biz_profile_updated_at
+      biz_role, biz_size, biz_segment, biz_audience, biz_source, biz_website, biz_profile_updated_at
     FROM clients WHERE id = ${id} LIMIT 1
   `;
   const r = rows[0];
@@ -141,7 +143,7 @@ export async function getClientBySlug(slug: string): Promise<ClientRecord | null
     SELECT id, name, slug, created_at,
       billing_name, billing_document, billing_whatsapp, billing_zip,
       billing_street, billing_number, billing_district, billing_complement,
-      biz_role, biz_size, biz_segment, biz_audience, biz_source, biz_profile_updated_at
+      biz_role, biz_size, biz_segment, biz_audience, biz_source, biz_website, biz_profile_updated_at
     FROM clients WHERE slug = ${slug} LIMIT 1
   `;
   const r = rows[0];
@@ -195,6 +197,7 @@ export type ClientBizProfilePatch = {
   bizSegment?: string | null;
   bizAudience?: string | null;
   bizSource?: string | null;
+  bizWebsite?: string | null;
 };
 
 /** Atualiza o bloco "sobre o negócio" (perfil/onboarding) do cliente. */
@@ -213,6 +216,7 @@ export async function updateClientBizProfile(
       biz_segment = ${patch.bizSegment !== undefined ? patch.bizSegment : existing.bizSegment},
       biz_audience = ${patch.bizAudience !== undefined ? patch.bizAudience : existing.bizAudience},
       biz_source = ${patch.bizSource !== undefined ? patch.bizSource : existing.bizSource},
+      biz_website = ${patch.bizWebsite !== undefined ? patch.bizWebsite : existing.bizWebsite},
       biz_profile_updated_at = now()
     WHERE id = ${clientId}
   `;
@@ -285,6 +289,7 @@ export async function provisionClient(input: {
     bizSegment: null,
     bizAudience: null,
     bizSource: null,
+    bizWebsite: null,
     bizProfileUpdatedAt: null,
   };
   await db()`

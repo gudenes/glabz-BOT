@@ -60,6 +60,7 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_size TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_segment TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_audience TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_source TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_website TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS biz_profile_updated_at TIMESTAMPTZ;
 
 -- Integração Google Calendar por cliente (OAuth) — 1 conexão por cliente por enquanto.

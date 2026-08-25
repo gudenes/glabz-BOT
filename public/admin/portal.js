@@ -720,6 +720,7 @@ function loadAccount() {
   $("biz-role").value = c.bizRole || "";
   $("biz-size").value = c.bizSize || "";
   $("biz-segment").value = c.bizSegment || "";
+  $("biz-website").value = c.bizWebsite || "";
   $("biz-audience").value = c.bizAudience || "";
   $("biz-source").value = c.bizSource || "";
 }
@@ -1060,6 +1061,7 @@ $("form-account-business").addEventListener("submit", async (ev) => {
         bizRole: $("biz-role").value,
         bizSize: $("biz-size").value,
         bizSegment: $("biz-segment").value,
+        bizWebsite: $("biz-website").value,
         bizAudience: $("biz-audience").value,
         bizSource: $("biz-source").value,
       }),
