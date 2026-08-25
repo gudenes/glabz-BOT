@@ -119,6 +119,7 @@ import {
 import { simulateFlowMessage } from "./flows/engine.js";
 import { generateFlowFromPrompt } from "./flows/from-prompt.js";
 import { editFlowFromInstruction } from "./flows/edit-flow.js";
+import { validateFlow } from "./flows/validate.js";
 import {
   buildFlowFromStudio,
   studioTurn,
@@ -1597,6 +1598,46 @@ const server = createServer(async (req, res) => {
         json(res, 200, { ok: true, ...result });
       } catch (e) {
         json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "ia" });
+      }
+      return;
+    }
+
+    if (method === "POST" && path === "/v1/flows/validate") {
+      // Mesmo padrão de /v1/flows/simulate: aceita nodes/edges direto no
+      // corpo (funciona em fluxo ainda não salvo — é chamado automaticamente
+      // assim que o Studio termina de montar, antes de qualquer "Salvar") e
+      // o clientId do fluxo salvo, caindo pro contexto da requisição — sem
+      // isso o card "Responder com IA" não consultaria a base de conhecimento
+      // real durante a validação.
+      const body = parseJson<{
+        flowId?: string;
+        nodes?: FlowNode[];
+        edges?: FlowEdge[];
+        name?: string;
+        product?: string;
+      }>(await readBody(req));
+      if (!body?.nodes?.length) {
+        json(res, 400, { ok: false, reason: "fluxo vazio" });
+        return;
+      }
+      const saved = body.flowId ? getFlow(body.flowId) : null;
+      const flow: Flow = {
+        id: body.flowId || "validate",
+        name: body.name || saved?.name || "Fluxo",
+        product: body.product || saved?.product || "gestor",
+        accountId: null,
+        clientId: saved?.clientId ?? actingClientId(req, auth),
+        status: "draft",
+        nodes: body.nodes,
+        edges: body.edges || [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      try {
+        const report = await validateFlow(flow);
+        json(res, 200, { ok: true, report });
+      } catch (e) {
+        json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "validação falhou" });
       }
       return;
     }
