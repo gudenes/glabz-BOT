@@ -33,8 +33,19 @@ function nextNode(
       edges.find((e) => (e.label || "").toLowerCase() === branch.toLowerCase()) ||
       edges.find((e) => (e.label || "").toLowerCase() === "default");
     if (hit) return flow.nodes.find((n) => n.id === hit.to) ?? null;
+    // Pedido de ramo (ex.: intenção classificada, ok/erro de llm_answer,
+    // true/false de condition) que não bate com NENHUMA edge, nem "default"
+    // — e o nó tem mais de uma saída de verdade (decisão de ramo, não um
+    // continuação simples). Bug real já visto: cair pro "primeira edge" aqui
+    // fazia o fluxo pular pro ramo errado (às vezes um ramo curto sem
+    // pergunta nenhuma) sempre que a classificação de intenção não conseguia
+    // decidir — a conversa "nascia quebrada" pulando direto pro fim. Não
+    // adivinha: devolve null, quem chamou decide o que fazer (llm_intent
+    // pede pra reformular; ver comentário em runFlowStep).
+    if (edges.length > 1) return null;
   }
-  // unlabeled first edge
+  // unlabeled first edge — só chega aqui sem branch, ou com 1 edge só
+  // (continuação simples, sem ambiguidade de verdade).
   const plain = edges.find((e) => !e.label) || edges[0];
   return flow.nodes.find((n) => n.id === plain.to) ?? null;
 }
@@ -231,7 +242,26 @@ export async function runFlowStep(opts: {
         type: "llm_intent",
         detail: `${result.intent} (${result.source})`,
       });
-      node = nextNode(flow, node.id, result.intent);
+      const routed = nextNode(flow, node.id, result.intent);
+      if (!routed) {
+        // Não deu pra saber qual ramo seguir (classificação incerta —
+        // source "default" — ou o fluxo não tem edge pro slug retornado).
+        // Não adivinha um ramo: pede pra reformular e PARA aqui, esperando
+        // a próxima mensagem — na próxima chamada ela reentra neste mesmo
+        // llm_intent (ver "mensagem no meio" no início da função) e
+        // reclassifica do zero, em vez de pular direto pro fim de um ramo
+        // qualquer.
+        const clarify = "Desculpa, não entendi bem. Pode me explicar de outro jeito o que você precisa?";
+        replies.push(clarify);
+        trace.push({
+          nodeId: node.id,
+          type: "llm_intent",
+          detail: "sem ramo correspondente — pediu esclarecimento",
+          reply: clarify,
+        });
+        break;
+      }
+      node = routed;
       continue;
     }
 
