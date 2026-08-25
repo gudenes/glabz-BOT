@@ -611,7 +611,7 @@ function renderCanvas() {
   closeAddMenu();
 
   // 1) nós
-  for (const n of state.flow.nodes) {
+  state.flow.nodes.forEach((n, i) => {
     const el = document.createElement("div");
     el.className =
       "fb-node type-" +
@@ -623,9 +623,14 @@ function renderCanvas() {
     el.style.left = n.x + "px";
     el.style.top = n.y + "px";
     el.dataset.id = n.id;
-    el.innerHTML = `<div class="k"></div><div class="b"></div><span class="port-in" aria-hidden="true"></span><span class="port-out" aria-hidden="true"></span>`;
+    // Numeração é só a posição no array (ordem de criação), recalculada a
+    // cada render — não é um id persistido. Serve pra endereçar cards sem
+    // ambiguidade (usuário/assistente de IA dizendo "card 2"); apagar um
+    // card renumera os posteriores, aceito como limitação v1 (ver plano).
+    el.innerHTML = `<div class="k"></div><div class="b"></div><span class="fb-num"></span><span class="port-in" aria-hidden="true"></span><span class="port-out" aria-hidden="true"></span>`;
     el.querySelector(".k").innerHTML = `${typeIcon(n.type, 12)}<span>${typeLabel(n.type)}</span>`;
     el.querySelector(".b").textContent = nodeTitle(n);
+    el.querySelector(".fb-num").textContent = String(i + 1);
 
     if (n.type !== "end") {
       const plus = document.createElement("button");
@@ -658,7 +663,7 @@ function renderCanvas() {
       onNodeClick(ev, n);
     });
     canvas.appendChild(el);
-  }
+  });
 
   // 2) alturas reais
   const heightMap = new Map();
