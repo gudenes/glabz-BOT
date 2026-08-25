@@ -572,6 +572,33 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 }
 .studio-x:hover { background: rgba(255,255,255,0.08); color: #f4f4f0; }
 
+/* Tour guiado de 1º acesso — spotlight num alvo real da tela (buraco via
+   box-shadow gigante, sem SVG mask) + balão de explicação ao lado. Roda
+   ANTES do .onboard abaixo (2 passos: conectar WhatsApp → aba Fluxo),
+   entrega pro .onboard normalmente ao terminar — os dois nunca aparecem
+   juntos, por isso dividem o mesmo z-index. */
+.tour { position: fixed; inset: 0; z-index: 60; }
+.tour.hidden { display: none; }
+.tour-hole {
+  position: fixed; border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(12,12,12,0.62);
+  transition: left .25s ease, top .25s ease, width .25s ease, height .25s ease;
+  pointer-events: none;
+}
+.tour-bubble {
+  position: fixed; z-index: 1; max-width: 320px;
+  background: var(--card, #fff); border-radius: 16px;
+  padding: 18px 20px; box-shadow: 0 24px 60px rgba(0,0,0,0.3);
+  transition: left .25s ease, top .25s ease;
+}
+.tour-step {
+  margin: 0 0 4px; font-size: 11px; font-weight: 800; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--gold-ink);
+}
+.tour-bubble h3 { margin: 0 0 6px; font-size: 16px; }
+.tour-bubble p:not(.tour-step) { margin: 0 0 16px; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+.tour-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+
 /* Onboarding — dois caminhos de partida na primeira visita à aba Fluxo */
 .onboard {
   position: fixed; inset: 0; z-index: 60;
