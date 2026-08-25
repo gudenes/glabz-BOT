@@ -1350,8 +1350,8 @@ const server = createServer(async (req, res) => {
         return;
       }
       try {
-        const { fetchSiteText } = await import("./rag/fetch-site-text.js");
-        const text = await fetchSiteText(url);
+        const { fetchSiteKnowledgeText } = await import("./rag/fetch-site-text.js");
+        const text = await fetchSiteKnowledgeText(url);
         const ctx = studioContextFor(client);
         const { extractKnowledgeFromText } = await import("./rag/knowledge-extraction.js");
         const pairs = await extractKnowledgeFromText(text, ctx);
