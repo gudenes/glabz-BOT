@@ -227,6 +227,7 @@ function studioContextFor(client: ClientRecord | null) {
     bizSize: client.bizSize,
     bizSegment: client.bizSegment,
     bizAudience: client.bizAudience,
+    bizWebsite: client.bizWebsite,
   };
 }
 
@@ -1032,7 +1033,9 @@ const server = createServer(async (req, res) => {
       if (body?.action === "extract_knowledge") {
         try {
           const ctx = studioContextFor(client);
-          const { extractKnowledgeFromConversation } = await import("./rag/knowledge-extraction.js");
+          const { extractKnowledgeFromConversation, extractKnowledgeFromText } = await import(
+            "./rag/knowledge-extraction.js"
+          );
           const { pairs, bizProfile } = await extractKnowledgeFromConversation(messages, ctx);
           // Perfil de negócio grava direto, sem tela de revisão: é metadado
           // da própria conta (nunca aparece pra cliente final, diferente dos
@@ -1044,8 +1047,27 @@ const server = createServer(async (req, res) => {
             if (bizProfile.size && !client.bizSize) patch.bizSize = bizProfile.size;
             if (bizProfile.segment && !client.bizSegment) patch.bizSegment = bizProfile.segment;
             if (bizProfile.audience && !client.bizAudience) patch.bizAudience = bizProfile.audience;
+            if (bizProfile.website && !client.bizWebsite) patch.bizWebsite = bizProfile.website;
             if (Object.keys(patch).length) {
               await updateClientBizProfile(clientId, patch).catch(() => undefined);
+            }
+          }
+          // Item 5b (fase final): se um site é conhecido — mencionado agora na
+          // conversa ou já salvo em "Dados da conta" — busca automaticamente
+          // (home + páginas relevantes do domínio) e mescla o conhecimento
+          // extraído de lá aos pares da conversa, tudo antes da tela de
+          // revisão (nunca salva direto — mesma rede de segurança dos pares
+          // vindos da conversa). Falha de rede/site fora do ar nunca derruba a
+          // resposta: a conversa segue valendo mesmo sem o site.
+          const effectiveWebsite = bizProfile.website || client?.bizWebsite || null;
+          if (effectiveWebsite) {
+            try {
+              const { fetchSiteKnowledgeText } = await import("./rag/fetch-site-text.js");
+              const siteText = await fetchSiteKnowledgeText(effectiveWebsite);
+              const sitePairs = await extractKnowledgeFromText(siteText, ctx);
+              if (sitePairs.length) pairs.push(...sitePairs);
+            } catch {
+              // Segue só com os pares da conversa — ver comentário acima.
             }
           }
           json(res, 200, { ok: true, kind: "knowledge", pairs });
