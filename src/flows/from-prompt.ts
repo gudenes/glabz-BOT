@@ -7,6 +7,20 @@ export type GeneratedFlow = {
   edges: FlowEdge[];
 };
 
+/** Formato bruto de nó que a LLM devolve tanto na geração (generateFlowFromPrompt)
+ * quanto na edição (src/flows/edit-flow.ts) — mesmo schema simplificado nos dois
+ * casos, ver materializeNode(). */
+export type RawFlowNode = {
+  id?: string;
+  type?: string;
+  text?: string;
+  varName?: string;
+  context?: string;
+  intents?: { slug: string; description: string }[];
+};
+
+export type RawFlowEdge = { from?: string; to?: string; label?: string };
+
 const SYSTEM = `Você monta fluxos de atendimento WhatsApp da GLABZ.
 Responda APENAS um JSON válido, sem markdown:
 {
@@ -100,6 +114,56 @@ export function layoutFlow(nodes: FlowNode[], edges: FlowEdge[]): FlowNode[] {
   }));
 }
 
+/**
+ * Converte um nó bruto (formato que a LLM devolve) num FlowNode de verdade —
+ * mesmo shape que defaultData() da UI do builder usa por tipo (flows.js).
+ * Reaproveitado tanto pra geração do zero (generateFlowFromPrompt) quanto pra
+ * edição de um fluxo existente (edit-flow.ts) — um só lugar decidindo o que
+ * cada tipo de nó "tem" evita os dois caminhos divergirem sobre o que é um
+ * llm_answer/llm_intent válido. x/y ficam 0 — quem chama decide posição
+ * (layoutFlow do zero, ou preservar/posicionar pontualmente numa edição).
+ */
+export function materializeNode(n: RawFlowNode, i: number): FlowNode {
+  const id = String(n.id || `n_${i + 1}`);
+  const type = (n.type || "message") as FlowNode["type"];
+  const data: Record<string, unknown> = {};
+  if (type === "message" || type === "handoff") data[type === "handoff" ? "message" : "text"] = n.text || "";
+  if (type === "ask") {
+    data.prompt = n.text || "Pode me dizer?";
+    data.varName = n.varName || "resposta";
+  }
+  if (type === "llm_intent") {
+    data.label = n.text || "Entender o pedido";
+    data.intents = n.intents || [];
+  }
+  if (type === "llm_answer") {
+    data.label = n.text || "Responder com IA";
+    data.context = n.context || "";
+    data.varName = n.varName || "resposta_ia";
+    data.maxChars = 400;
+  }
+  if (type === "trigger") data.label = n.text || "Mensagem recebida";
+  if (type === "end") data.label = n.text || "Fim";
+  if (type === "action") data.label = n.text || "Ação";
+  if (type === "condition") data.field = "last";
+  return { id, type, x: 0, y: 0, data };
+}
+
+/** Tipos de nó que o gerador/editor por LLM sabe autorar — mesmo enum dos
+ * SYSTEM prompts. Usado como rede de segurança final antes de aceitar
+ * qualquer nó vindo da LLM no canvas. */
+export const KNOWN_NODE_TYPES = new Set([
+  "trigger",
+  "message",
+  "ask",
+  "llm_intent",
+  "llm_answer",
+  "handoff",
+  "end",
+  "action",
+  "condition",
+]);
+
 export function sanitizeEdges(nodes: FlowNode[], edges: FlowEdge[]): FlowEdge[] {
   const ids = new Set(nodes.map((n) => n.id));
   const typeOf = new Map(nodes.map((n) => [n.id, n.type]));
@@ -154,43 +218,14 @@ export async function generateFlowFromPrompt(prompt: string): Promise<GeneratedF
   const jsonText = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   const parsed = JSON.parse(jsonText) as {
     name?: string;
-    nodes?: Array<{
-      id?: string;
-      type?: string;
-      text?: string;
-      varName?: string;
-      context?: string;
-      intents?: { slug: string; description: string }[];
-    }>;
-    edges?: Array<{ from?: string; to?: string; label?: string }>;
+    nodes?: RawFlowNode[];
+    edges?: RawFlowEdge[];
   };
   if (!parsed.nodes?.length) throw new Error("A IA não devolveu um fluxo válido.");
 
-  const nodes: FlowNode[] = parsed.nodes.map((n, i) => {
-    const id = String(n.id || `n_${i + 1}`);
-    const type = (n.type || "message") as FlowNode["type"];
-    const data: Record<string, unknown> = {};
-    if (type === "message" || type === "handoff") data[type === "handoff" ? "message" : "text"] = n.text || "";
-    if (type === "ask") {
-      data.prompt = n.text || "Pode me dizer?";
-      data.varName = n.varName || "resposta";
-    }
-    if (type === "llm_intent") {
-      data.label = n.text || "Entender o pedido";
-      data.intents = n.intents || [];
-    }
-    if (type === "llm_answer") {
-      data.label = n.text || "Responder com IA";
-      data.context = n.context || "";
-      data.varName = n.varName || "resposta_ia";
-      data.maxChars = 400;
-    }
-    if (type === "trigger") data.label = n.text || "Mensagem recebida";
-    if (type === "end") data.label = n.text || "Fim";
-    if (type === "action") data.label = n.text || "Ação";
-    if (type === "condition") data.field = "last";
-    return { id, type, x: 0, y: 0, data };
-  });
+  const nodes: FlowNode[] = parsed.nodes
+    .map((n, i) => materializeNode(n, i))
+    .filter((n) => KNOWN_NODE_TYPES.has(n.type));
 
   const edges = sanitizeEdges(
     nodes,
