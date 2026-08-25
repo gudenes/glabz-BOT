@@ -689,6 +689,26 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* Numeração do card (ordem de criação) — canto superior direito, livre até
+   agora (.k fica à esquerda, ports ficam centralizados topo/base). Serve pra
+   endereçar cards sem ambiguidade (usuário/assistente de IA dizendo "card 2"). */
+.fb-node .fb-num {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  padding: 0 4px;
+  z-index: 3;
+  pointer-events: none;
+}
 
 .fb-node.type-trigger .k { color: #6ee7b7; background: rgba(16, 185, 129, 0.12); }
 .fb-node.type-message .k { color: #93c5fd; background: rgba(59, 130, 246, 0.12); }
