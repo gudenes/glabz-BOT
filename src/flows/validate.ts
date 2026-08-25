@@ -1,4 +1,4 @@
-import type { Flow } from "./types.js";
+import type { Flow, FlowNode } from "./types.js";
 import { runFlowStep, type FlowSimState, type FlowTraceStep } from "./engine.js";
 import { judgeAnswerQuality } from "./llm.js";
 
@@ -45,9 +45,16 @@ function classificationSlug(step: FlowTraceStep): string | null {
  * caminho — não sabe o que o ask pede de verdade, só tenta não travar a
  * conversa. Pra perguntas que parecem pedir "a dúvida em si", reaproveita
  * o texto de teste da própria intenção (é a coisa mais plausível de dizer
- * ali). */
-function syntheticAnswerFor(varName: string, testMessage: string): string {
-  const v = (varName || "").toLowerCase();
+ * ali). Ask com capturesIntent (o "mais alguma coisa?" — ver PR de loop de
+ * encerramento) é caso especial: responder de novo com o mesmo testMessage
+ * reclassificaria pra MESMA intenção sem fim — o teste nunca terminaria
+ * dentro do limite de passos (falso negativo, não é bug do fluxo, é o
+ * driver de teste repetindo a si mesmo). Recusar aqui exercita de brinde o
+ * próprio caminho de encerramento gracioso. */
+function syntheticAnswerFor(askNode: FlowNode | undefined, testMessage: string): string {
+  if (askNode?.data?.capturesIntent) return "Não, obrigado, só isso mesmo.";
+  const varName = String(askNode?.data?.varName || "");
+  const v = varName.toLowerCase();
   if (v.includes("nome") || v.includes("name")) return "Cliente Teste";
   if (v.includes("telefone") || v.includes("phone") || v.includes("celular")) return "11999999999";
   if (v.includes("data") || v.includes("date") || v.includes("dia")) return "amanhã";
@@ -76,7 +83,14 @@ async function runOneCase(
     trace.push(...result.trace);
 
     if (!intentChecked && targetSlug) {
-      const hit = result.trace.find((t) => classificationSlug(t) !== null);
+      // Ignora classificação "default" aqui — é o resultado ESPERADO da
+      // mensagem de abertura genérica ("Oi"), não um sinal de ramo errado.
+      // Só conta como checagem de verdade quando a IA de fato comprometeu
+      // com uma intenção real.
+      const hit = result.trace.find((t) => {
+        const slug = classificationSlug(t);
+        return slug !== null && slug !== "default";
+      });
       if (hit) {
         intentChecked = true;
         const gotSlug = classificationSlug(hit);
@@ -106,7 +120,12 @@ async function runOneCase(
       break;
     }
 
-    text = result.waitingFor ? syntheticAnswerFor(result.waitingFor, testMessage) : testMessage;
+    text = result.waitingFor
+      ? syntheticAnswerFor(
+          flow.nodes.find((n) => n.id === result.nodeId),
+          testMessage
+        )
+      : testMessage;
     state = {
       nodeId: result.nodeId,
       waitingFor: result.waitingFor,

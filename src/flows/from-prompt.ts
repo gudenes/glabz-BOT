@@ -17,6 +17,10 @@ export type RawFlowNode = {
   varName?: string;
   context?: string;
   intents?: { slug: string; description: string }[];
+  /** Só pra "ask": true quando esse ask existe pra colher um NOVO pedido do
+   * cliente (ex.: "posso te ajudar com mais alguma coisa?"), não um dado
+   * qualquer (nome, telefone) — ver regra 10 do SYSTEM/EDIT_SYSTEM. */
+  capturesIntent?: boolean;
 };
 
 export type RawFlowEdge = { from?: string; to?: string; label?: string };
@@ -26,7 +30,7 @@ Responda APENAS um JSON válido, sem markdown:
 {
   "name": "nome curto do fluxo",
   "nodes": [
-    { "id": "n1", "type": "trigger|message|ask|llm_intent|llm_answer|handoff|end", "text": "texto visível", "varName": "opcional", "context": "opcional, só pra llm_answer", "intents": [{"slug":"marcar","description":"quer agendar"}] }
+    { "id": "n1", "type": "trigger|message|ask|llm_intent|llm_answer|handoff|end", "text": "texto visível", "varName": "opcional", "context": "opcional, só pra llm_answer", "capturesIntent": "opcional, só pro ask de \\"mais alguma coisa?\\" da regra 10", "intents": [{"slug":"marcar","description":"quer agendar"}] }
   ],
   "edges": [
     { "from": "n1", "to": "n2", "label": "marcar" }
@@ -35,25 +39,38 @@ Responda APENAS um JSON válido, sem markdown:
 
 Arquitetura obrigatória (tronco + ramos, sem cruzar):
 1. trigger → message (boas-vindas) → llm_intent
-2. Do llm_intent saem 2 ou 3 ramos, um por intenção. Cada edge do intent TEM label = slug.
-3. Cada ramo é uma linha reta para baixo: ask? → message? → (handoff|end|llm_answer).
+2. Do llm_intent saem 2 ou 3 ramos por pedido real do cliente (um por intenção) MAIS 1 ramo
+   reservado de encerramento (ver regra 10) — todos contam pro limite de intents da regra 8. Cada
+   edge do intent TEM label = slug.
+3. Cada ramo (exceto o de encerramento) é uma linha reta para baixo: ask? → message? →
+   (handoff|llm_answer) e, se NÃO terminar em handoff, sempre seguido do ask de "mais alguma
+   coisa?" da regra 10 antes de qualquer end — nenhum ramo (fora handoff) termina direto num end.
 4. Se o ramo for uma DÚVIDA/pergunta geral sobre o negócio (não uma ação estruturada tipo
    marcar/cancelar/comprar), prefira terminar o ramo em llm_answer em vez de ir direto pro
    handoff — é exatamente pra isso que esse nó existe. llm_answer SEMPRE tem duas saídas: edge
-   label "ok" → end, edge label "erro" → handoff (fallback humano se a IA não souber responder).
-   Preencha "context" do llm_answer com os fatos que JÁ apareceram na conversa/briefing (horário,
-   preço, política, diferenciais) — nunca invente fato que não foi dito; se nada foi dito, deixe
-   "context" como string vazia mesmo assim (o nó continua funcionando via base de conhecimento em
-   tempo real, não depende só do "context").
+   label "ok" → (ask "mais alguma coisa?" da regra 10), edge label "erro" → handoff (fallback
+   humano se a IA não souber responder). Preencha "context" do llm_answer com os fatos que JÁ
+   apareceram na conversa/briefing (horário, preço, política, diferenciais) — nunca invente fato
+   que não foi dito; se nada foi dito, deixe "context" como string vazia mesmo assim (o nó
+   continua funcionando via base de conhecimento em tempo real, não depende só do "context").
 5. NÃO use condition nem action.
 6. NÓ linear (trigger, message, ask, handoff, end) tem no máximo 1 saída. llm_answer tem exatamente
    as duas saídas descritas acima, nunca mais que isso.
-7. NÃO ligue um ramo no outro. NÃO faça atalho de volta ao intent.
-8. Máximo 10 nós e 3 intents.
+7. NÃO ligue um ramo no outro. Única exceção: o ask de "mais alguma coisa?" da regra 10 SEMPRE liga
+   de volta pro llm_intent (nunca pra outro lugar).
+8. Máximo 14 nós e 4 intents (já contando o ramo de encerramento da regra 10).
 9. Se fizer sentido capturar o nome de quem está conversando, use um ask cedo no tronco (antes do
    llm_intent, comum a todos os ramos) com "varName":"nome". Em mensagens/perguntas/handoffs
    seguintes, salpique {{name_greet}} colado à saudação (ex.: "Olá{{name_greet}}! 👋") — NUNCA
    escreva {{nome}} cru; {{name_greet}} já vira ", Nome" ou fica vazio se ainda não souber.
+10. NUNCA encerre um ramo de forma abrupta (regra 3/4 já exigem isso). O mecanismo: um ask com
+    "text" tipo "Posso te ajudar com mais alguma coisa?", varName livre (ex. "mais_algo") e
+    "capturesIntent": true — esse ask SEMPRE liga de volta pro llm_intent (regra 7), nunca pra
+    outro nó. Pra essa volta poder de fato terminar a conversa, o llm_intent precisa ter uma
+    intenção reservada de encerramento (ex. slug "encerrar", description "não precisa de mais
+    nada, quer encerrar ou agradecer") cujo edge vai pra uma message curta de despedida (ex.
+    "Foi um prazer ajudar! Até mais 👋") e SÓ DEPOIS pro "end" — nunca ligue o encerramento direto
+    no "end" sem essa despedida, senão a conversa também termina em silêncio.
 Textos em português, naturais, prontos para WhatsApp (*negrito* ok).`;
 
 const COL_W = 300;
@@ -131,6 +148,7 @@ export function materializeNode(n: RawFlowNode, i: number): FlowNode {
   if (type === "ask") {
     data.prompt = n.text || "Pode me dizer?";
     data.varName = n.varName || "resposta";
+    if (n.capturesIntent) data.capturesIntent = true;
   }
   if (type === "llm_intent") {
     data.label = n.text || "Entender o pedido";
@@ -202,7 +220,7 @@ export async function generateFlowFromPrompt(prompt: string): Promise<GeneratedF
     body: JSON.stringify({
       model: llmModel(),
       temperature: 0.3,
-      max_tokens: 2600,
+      max_tokens: 3200,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM },

@@ -126,7 +126,10 @@ export async function runFlowStep(opts: {
   // pro llm_intent não reaproveitar esse texto como se fosse o pedido do
   // cliente. Bug real visto em produção: resposta de nome ("Carlos") virava
   // a "dúvida" classificada, pulando pra uma resposta desconexa e o fim do
-  // fluxo sem nunca perguntar o que o cliente queria de verdade.
+  // fluxo sem nunca perguntar o que o cliente queria de verdade. Exceção
+  // sancionada: um ask com data.capturesIntent=true (ex.: "Posso te ajudar
+  // com mais alguma coisa?" antes de encerrar) existe justamente pra colher
+  // um novo pedido — esse SIM deve classificar normalmente.
   let skipIntentText = false;
 
   // Continuação de ask
@@ -141,7 +144,7 @@ export async function runFlowStep(opts: {
         detail: `salvou ${varName}="${text.slice(0, 60)}"`,
       });
       node = nextNode(flow, askNode.id);
-      skipIntentText = true;
+      skipIntentText = askNode.data.capturesIntent !== true;
     } else {
       node = triggerNode(flow);
       if (node) node = nextNode(flow, node.id) || node;
