@@ -37,7 +37,7 @@ Responda APENAS um JSON válido, sem markdown:
 {
   "say": "confirmação curta do que você fez (ou por que não deu), em português, pro dono ler no chat",
   "nodes": [
-    { "id": "id exato de um card existente OU um id novo tipo n_novo1", "type": "trigger|message|ask|llm_intent|llm_answer|handoff|end", "text": "texto visível", "varName": "opcional", "context": "opcional, só pra llm_answer", "intents": [{"slug":"marcar","description":"quer agendar"}] }
+    { "id": "id exato de um card existente OU um id novo tipo n_novo1", "type": "trigger|message|ask|llm_intent|llm_answer|handoff|end", "text": "texto visível", "varName": "opcional", "context": "opcional, só pra llm_answer", "capturesIntent": "opcional, só pro ask de \\"mais alguma coisa?\\" da regra 5.g", "intents": [{"slug":"marcar","description":"quer agendar"}] }
   ],
   "edges": [
     { "from": "id", "to": "id", "label": "opcional" }
@@ -53,13 +53,28 @@ Regras:
 4. Em "edges", devolva a lista COMPLETA de edges do fluxo DEPOIS da mudança, incluindo as que não
    mudaram — não é um diff.
 5. Arquitetura obrigatória, mesma de sempre (tronco + ramos, sem cruzar):
-   a. trigger → message (boas-vindas) → llm_intent → 2-3 ramos (edge do intent TEM label=slug).
-   b. Cada ramo é uma linha reta pra baixo: ask? → message? → (handoff|end|llm_answer).
+   a. trigger → message (boas-vindas) → llm_intent → 2-3 ramos por pedido real MAIS 1 ramo
+      reservado de encerramento (ver 5.g) — edge do intent TEM label=slug.
+   b. Cada ramo (exceto o de encerramento) é uma linha reta pra baixo: ask? → message? →
+      (handoff|llm_answer), e se NÃO terminar em handoff, sempre seguido do ask "mais alguma
+      coisa?" da regra 5.g antes de qualquer end — nenhum ramo (fora handoff) termina direto num
+      end.
    c. Ramo de dúvida/pergunta geral (não ação estruturada) prefere terminar em llm_answer: edge
-      "ok"→end, edge "erro"→handoff. Preencha "context" só com fatos já ditos, nunca invente.
-   d. NÃO use condition nem action. NÃO ligue um ramo no outro nem faça atalho de volta ao intent.
+      "ok"→(ask "mais alguma coisa?" da 5.g), edge "erro"→handoff. Preencha "context" só com
+      fatos já ditos, nunca invente.
+   d. NÃO use condition nem action. NÃO ligue um ramo no outro — ÚNICA exceção: o ask "mais
+      alguma coisa?" da regra 5.g sempre liga de volta pro llm_intent.
    e. Nó linear tem no máximo 1 saída; llm_answer tem exatamente 2 (ok/erro).
-   f. Máximo 10 cards e 3 intents no total, mesmo depois da edição.
+   f. Máximo 14 cards e 4 intents no total (já contando o de encerramento), mesmo depois da edição.
+   g. NUNCA deixe um ramo terminar de forma abrupta (b/c já exigem isso). Mecanismo: um ask com
+      "text" tipo "Posso te ajudar com mais alguma coisa?", varName livre (ex. "mais_algo") e
+      "capturesIntent": true, que SEMPRE liga de volta pro llm_intent. Pra essa volta poder
+      terminar a conversa de fato, o llm_intent precisa ter (ou já ter) uma intenção reservada de
+      encerramento (ex. slug "encerrar", description "não precisa de mais nada, quer encerrar ou
+      agradecer") ligada a uma message curta de despedida (ex. "Foi um prazer ajudar! Até mais 👋")
+      e SÓ DEPOIS pro "end" — nunca ligue direto no "end" sem essa despedida, senão termina em
+      silêncio. Se o fluxo que você está editando ainda não tem esse padrão E a instrução pedir
+      algo que crie/reordene um "end", aplique esse mecanismo agora.
 6. Se a instrução referenciar um card que não existe na lista, pedir algo contraditório, ou for
    ambígua demais pra agir com segurança, NÃO invente uma interpretação — devolva "nodes":[],
    "edges": a MESMA lista de edges atual (repita de volta), e explique o problema em "say".
@@ -68,7 +83,8 @@ Textos em português, naturais, prontos para WhatsApp (*negrito* ok).`;
 function nodeSummaryLine(n: FlowNode, i: number): string {
   const d = n.data || {};
   const label = String(d.label ?? d.text ?? d.prompt ?? d.message ?? d.context ?? "").slice(0, 90);
-  return `${i + 1}. [${n.type}] id=${n.id} — ${label}`;
+  const tag = d.capturesIntent ? " (capturesIntent: liga de volta pro llm_intent)" : "";
+  return `${i + 1}. [${n.type}] id=${n.id} — ${label}${tag}`;
 }
 
 function edgeSummaryLine(e: FlowEdge, indexOf: Map<string, number>): string {
@@ -145,7 +161,7 @@ export async function editFlowFromInstruction(input: {
     body: JSON.stringify({
       model: llmModel(),
       temperature: 0.2,
-      max_tokens: 2600,
+      max_tokens: 3200,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: EDIT_SYSTEM },
