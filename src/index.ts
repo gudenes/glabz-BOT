@@ -1318,12 +1318,19 @@ const server = createServer(async (req, res) => {
       const clientId = actingClientId(req, auth);
       const client = clientId ? await getClient(clientId) : null;
       const body = parseJson<{ text?: string }>(await readBody(req));
-      const text = String(body?.text || "").trim();
+      let text = String(body?.text || "").trim();
       if (!text) {
         json(res, 400, { ok: false, reason: "cole um texto" });
         return;
       }
       try {
+        // Se o campo inteiro for só uma URL, trata como "site do cliente":
+        // busca a página no lugar do dono colar o texto manualmente (item
+        // 5b — só o site próprio, nunca redes sociais/scraping de terceiro).
+        if (/^https?:\/\/\S+$/i.test(text)) {
+          const { fetchSiteText } = await import("./rag/fetch-site-text.js");
+          text = await fetchSiteText(text);
+        }
         const ctx = studioContextFor(client);
         const { extractKnowledgeFromText } = await import("./rag/knowledge-extraction.js");
         const pairs = await extractKnowledgeFromText(text, ctx);
