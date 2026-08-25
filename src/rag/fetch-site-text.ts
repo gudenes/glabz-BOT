@@ -74,7 +74,7 @@ export function htmlToText(html: string): string {
     .trim();
 }
 
-export async function fetchSiteText(rawUrl: string): Promise<string> {
+async function fetchRawHtml(rawUrl: string): Promise<string> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -120,11 +120,98 @@ export async function fetchSiteText(rawUrl: string): Promise<string> {
         chunks.push(value);
       }
     }
-    const html = Buffer.concat(chunks).toString("utf-8");
-    const text = htmlToText(html);
-    if (text.length < 20) throw new Error("não achei texto legível nessa página");
-    return text;
+    return Buffer.concat(chunks).toString("utf-8");
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function fetchSiteText(rawUrl: string): Promise<string> {
+  const text = htmlToText(await fetchRawHtml(rawUrl));
+  if (text.length < 20) throw new Error("não achei texto legível nessa página");
+  return text;
+}
+
+const MAX_EXTRA_PAGES = 3;
+const PER_PAGE_TEXT_CAP = 3000; // cada página cede espaço pras outras terem chance no teto do LLM
+
+// Trechos de URL/texto de link que sinalizam página com conhecimento de
+// atendimento (não é exaustivo, é heurística — melhor perder um link
+// relevante do que virar um crawler genérico do site inteiro).
+const RELEVANT_LINK_HINTS = [
+  "sobre", "about", "quem-somos", "quemsomos",
+  "contato", "contact", "fale-conosco", "faleconosco",
+  "faq", "perguntas", "duvidas", "dúvidas",
+  "servico", "serviço", "service",
+  "preco", "preço", "price", "planos",
+  "horario", "horário", "atendimento",
+];
+
+function sameHost(a: string, b: string): boolean {
+  try {
+    const na = new URL(a).hostname.replace(/^www\./, "");
+    const nb = new URL(b).hostname.replace(/^www\./, "");
+    return na === nb;
+  } catch {
+    return false;
+  }
+}
+
+/** Acha até `max` links do MESMO domínio cujo endereço ou texto visível
+ * sugere conteúdo relevante (sobre/contato/faq/etc.) — via regex, não um
+ * parser de HTML de verdade (o projeto não tem um; suficiente pra achar
+ * `<a href>`). */
+function pickRelevantLinks(html: string, baseUrl: string, max: number): string[] {
+  const seen = new Set<string>([baseUrl]);
+  const found: string[] = [];
+  const re = /<a\b[^>]*href\s*=\s*["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) && found.length < max) {
+    let abs: string;
+    try {
+      abs = new URL(m[1].trim(), baseUrl).toString();
+    } catch {
+      continue;
+    }
+    if (seen.has(abs) || !sameHost(abs, baseUrl)) continue;
+    const linkText = m[2].replace(/<[^>]+>/g, " ").toLowerCase();
+    const haystack = (abs + " " + linkText).toLowerCase();
+    if (!RELEVANT_LINK_HINTS.some((hint) => haystack.includes(hint))) continue;
+    seen.add(abs);
+    found.push(abs);
+  }
+  return found;
+}
+
+/**
+ * Busca a home do site + até `maxExtraPages` páginas relacionadas do MESMO
+ * domínio (sobre/contato/faq/etc., achadas a partir dos links da home) —
+ * item 5b, "procurar em outras páginas do domínio". As páginas extras
+ * buscam em paralelo e falha individual não derruba o resto (Promise.
+ * allSettled) — só a home é obrigatória.
+ */
+export async function fetchSiteKnowledgeText(
+  rootUrl: string,
+  opts?: { maxExtraPages?: number }
+): Promise<string> {
+  const maxExtra = opts?.maxExtraPages ?? MAX_EXTRA_PAGES;
+  const rootHtml = await fetchRawHtml(rootUrl);
+  const rootText = htmlToText(rootHtml).slice(0, PER_PAGE_TEXT_CAP);
+  if (rootText.length < 20) throw new Error("não achei texto legível nessa página");
+
+  const extraUrls = maxExtra > 0 ? pickRelevantLinks(rootHtml, rootUrl, maxExtra) : [];
+  const extraResults = await Promise.allSettled(
+    extraUrls.map(async (u) => ({
+      url: u,
+      text: htmlToText(await fetchRawHtml(u)).slice(0, PER_PAGE_TEXT_CAP),
+    }))
+  );
+
+  const parts = [`--- Página principal: ${rootUrl} ---\n${rootText}`];
+  for (const r of extraResults) {
+    if (r.status === "fulfilled" && r.value.text.length >= 20) {
+      parts.push(`--- ${r.value.url} ---\n${r.value.text}`);
+    }
+  }
+  return parts.join("\n\n");
 }
