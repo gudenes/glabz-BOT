@@ -1294,10 +1294,11 @@ const server = createServer(async (req, res) => {
         json(res, 400, { ok: false, reason: "nenhum par válido" });
         return;
       }
-      // Default "onboarding" preserva o comportamento anterior (única chamada
-      // até aqui); "pasted" quando vem do "colar texto e extrair" na aba
-      // Conhecimento (ver /v1/rag/extract-from-text).
-      const origin = body?.origin === "pasted" ? "pasted" : "onboarding";
+      // Default "onboarding" preserva o comportamento anterior; "pasted" e
+      // "website" vêm dos outros dois jeitos de gerar candidatos na aba
+      // Conhecimento (ver /v1/rag/extract-from-text e /v1/rag/extract-from-website).
+      const origin =
+        body?.origin === "pasted" ? "pasted" : body?.origin === "website" ? "website" : "onboarding";
       const { teachManual } = await import("./rag/index-store.js");
       let saved = 0;
       for (const p of pairs) {
@@ -1318,19 +1319,39 @@ const server = createServer(async (req, res) => {
       const clientId = actingClientId(req, auth);
       const client = clientId ? await getClient(clientId) : null;
       const body = parseJson<{ text?: string }>(await readBody(req));
-      let text = String(body?.text || "").trim();
+      const text = String(body?.text || "").trim();
       if (!text) {
         json(res, 400, { ok: false, reason: "cole um texto" });
         return;
       }
       try {
-        // Se o campo inteiro for só uma URL, trata como "site do cliente":
-        // busca a página no lugar do dono colar o texto manualmente (item
-        // 5b — só o site próprio, nunca redes sociais/scraping de terceiro).
-        if (/^https?:\/\/\S+$/i.test(text)) {
-          const { fetchSiteText } = await import("./rag/fetch-site-text.js");
-          text = await fetchSiteText(text);
-        }
+        const ctx = studioContextFor(client);
+        const { extractKnowledgeFromText } = await import("./rag/knowledge-extraction.js");
+        const pairs = await extractKnowledgeFromText(text, ctx);
+        json(res, 200, { ok: true, pairs });
+      } catch (e) {
+        json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "ia" });
+      }
+      return;
+    }
+
+    // Mesma extração de conhecimento do texto colado, só que a fonte é o
+    // site do próprio cliente — endpoint próprio (em vez de detectar "isso
+    // parece uma URL" dentro do texto colado) porque fica mais claro pro
+    // usuário o que cada campo faz, e porque a origem salva difere (ver
+    // teach-batch abaixo: origin='website', tag própria "do site").
+    if (method === "POST" && path === "/v1/rag/extract-from-website") {
+      const clientId = actingClientId(req, auth);
+      const client = clientId ? await getClient(clientId) : null;
+      const body = parseJson<{ url?: string }>(await readBody(req));
+      const url = String(body?.url || "").trim();
+      if (!url) {
+        json(res, 400, { ok: false, reason: "informe a URL do site" });
+        return;
+      }
+      try {
+        const { fetchSiteText } = await import("./rag/fetch-site-text.js");
+        const text = await fetchSiteText(url);
         const ctx = studioContextFor(client);
         const { extractKnowledgeFromText } = await import("./rag/knowledge-extraction.js");
         const pairs = await extractKnowledgeFromText(text, ctx);

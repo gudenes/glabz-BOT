@@ -744,6 +744,17 @@ async function loadKnowledge() {
   }
 }
 
+// De onde um item da Base de Conhecimento veio — usado só pra exibir a tag
+// (não muda como a busca funciona). 'manual' é o default no banco, cobre
+// tanto ensino avulso quanto qualquer origin desconhecida/futura.
+const KNOWLEDGE_ORIGINS = {
+  onboarding: { key: "portal.knowledge.originOnboarding", tone: "ok" },
+  website: { key: "portal.knowledge.originWebsite", tone: "ok" },
+  pasted: { key: "portal.knowledge.originPasted", tone: "ok" },
+  imported: { key: "portal.knowledge.originImported", tone: "off" },
+  manual: { key: "portal.knowledge.originManual", tone: "off" },
+};
+
 function renderKnowledge(chunks) {
   const box = $("kb-list");
   if (!box) return;
@@ -753,14 +764,8 @@ function renderKnowledge(chunks) {
   }
   box.innerHTML = chunks
     .map((c) => {
-      const originTag =
-        c.origin === "onboarding"
-          ? `<span class="ai-tag ok">${t("portal.knowledge.originOnboarding")}</span>`
-          : c.origin === "imported"
-            ? `<span class="ai-tag off">${t("portal.knowledge.originImported")}</span>`
-            : c.origin === "pasted"
-              ? `<span class="ai-tag ok">${t("portal.knowledge.originPasted")}</span>`
-              : `<span class="ai-tag off">${t("portal.knowledge.originManual")}</span>`;
+      const origin = KNOWLEDGE_ORIGINS[c.origin] || KNOWLEDGE_ORIGINS.manual;
+      const originTag = `<span class="ai-tag ${origin.tone}">${t(origin.key)}</span>`;
       return `
       <div class="kb-item" data-id="${escapeHtml(c.id)}">
         <div class="kb-body">
@@ -898,6 +903,39 @@ $("kb-paste")?.addEventListener("submit", async (ev) => {
   } finally {
     btn?.removeAttribute("disabled");
     if (btn) btn.textContent = t("portal.knowledge.pasteSubmit");
+  }
+});
+
+$("btn-kb-website-toggle")?.addEventListener("click", () => {
+  $("kb-website")?.classList.toggle("hidden");
+  $("kb-website-url")?.focus();
+});
+
+$("kb-website")?.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const url = $("kb-website-url")?.value.trim();
+  if (!url) return;
+  const btn = $("kb-website-submit");
+  btn?.setAttribute("disabled", "true");
+  if (btn) btn.textContent = t("portal.knowledge.review.extracting");
+  try {
+    const data = await api("/v1/rag/extract-from-website", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    });
+    const pairs = data.pairs || [];
+    if (pairs.length) {
+      $("kb-website")?.classList.add("hidden");
+      $("kb-website-url").value = "";
+      renderKnowledgeReview(pairs, "website");
+    } else {
+      toast(t("portal.knowledge.pasteEmpty"));
+    }
+  } catch (e) {
+    toast(e.message, "err");
+  } finally {
+    btn?.removeAttribute("disabled");
+    if (btn) btn.textContent = t("portal.knowledge.websiteSubmit");
   }
 });
 
