@@ -414,6 +414,7 @@
               <button type="button" class="btn-lime" id="btn-kb-reindex" data-i18n="portal.knowledge.reindex">Atualizar com as conversas recentes</button>
               <button type="button" class="btn-ghost" id="btn-kb-teach-toggle" data-i18n="portal.knowledge.teach">Ensinar uma resposta</button>
               <button type="button" class="btn-ghost" id="btn-kb-paste-toggle" data-i18n="portal.knowledge.pasteToggle">Colar texto e deixar a IA extrair</button>
+              <button type="button" class="btn-ghost" id="btn-kb-website-toggle" data-i18n="portal.knowledge.websiteToggle">URL do seu site</button>
               <span id="kb-status" class="hint-muted"></span>
             </div>
 
@@ -431,12 +432,21 @@
             </form>
 
             <form id="kb-paste" class="kb-teach hidden">
-              <p class="hint-muted" data-i18n="portal.knowledge.pasteHint">Cole um texto que vocês já têm por aí — o "sobre nós" do site, um cardápio, uma política de trocas, uma mensagem padrão do WhatsApp. A IA lê e sugere o que pode virar conhecimento; você revisa antes de salvar.</p>
+              <p class="hint-muted" data-i18n="portal.knowledge.pasteHint">Cole um texto que vocês já têm por aí — um cardápio, uma política de trocas, uma mensagem padrão do WhatsApp. A IA lê e sugere o que pode virar conhecimento; você revisa antes de salvar.</p>
               <div class="field">
                 <span data-i18n="portal.knowledge.pasteLabel">Texto pra analisar</span>
                 <textarea id="kb-paste-text" rows="8" maxlength="8000" required placeholder="Cole aqui…"></textarea>
               </div>
               <button type="submit" class="btn-lime" id="kb-paste-submit" data-i18n="portal.knowledge.pasteSubmit">Extrair conhecimento</button>
+            </form>
+
+            <form id="kb-website" class="kb-teach hidden">
+              <p class="hint-muted" data-i18n="portal.knowledge.websiteHint">Informe o link do seu site — a gente lê a página (e algumas outras do mesmo site, tipo "sobre" ou "contato") e sugere o que pode virar conhecimento. Você revisa antes de salvar.</p>
+              <div class="field">
+                <span data-i18n="portal.knowledge.websiteLabel">URL do seu site</span>
+                <input id="kb-website-url" type="url" required placeholder="https://seusite.com.br" />
+              </div>
+              <button type="submit" class="btn-lime" id="kb-website-submit" data-i18n="portal.knowledge.websiteSubmit">Buscar do site</button>
             </form>
             <div id="kb-list" class="kb-list"></div>
           </div>
