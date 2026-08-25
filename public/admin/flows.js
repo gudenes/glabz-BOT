@@ -42,6 +42,10 @@ const state = {
   /** Assistente de IA (edição do fluxo por instrução) */
   aiEditOpen: false,
   aiEditBusy: false,
+  /** Validação automática (testa cada ramo contra o motor real) */
+  validateOpen: false,
+  validateReport: null,
+  validateBusy: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -2230,6 +2234,7 @@ function openHistory() {
     toast(t("builder.history.toast.loadFirst"), "err");
     return;
   }
+  closeValidate();
   state.historyOpen = true;
   $("history-panel").classList.remove("hidden");
   loadHistory();
@@ -2312,3 +2317,94 @@ $("btn-history").onclick = () => {
   else openHistory();
 };
 $("history-close").onclick = () => closeHistory();
+
+/**
+ * Validação automática — dirige uma conversa sintética por ramo de intenção
+ * contra o motor REAL (POST /v1/flows/validate, mesmo runFlowStep do
+ * simulador) pra pegar fluxo "nascendo quebrado" (loop, ramo pulado,
+ * resposta genérica) antes do dono descobrir sozinho testando na mão.
+ * Reaproveita a moldura visual do Histórico (.history-*, mesma posição
+ * bottom-left) — os dois painéis não abrem juntos de propósito.
+ */
+function openValidate() {
+  if (!state.flow) {
+    toast(t("builder.validate.needFlow"), "err");
+    return;
+  }
+  closeHistory();
+  state.validateOpen = true;
+  $("validate-panel").classList.remove("hidden");
+  void runValidate();
+}
+
+function closeValidate() {
+  state.validateOpen = false;
+  $("validate-panel").classList.add("hidden");
+}
+
+async function runValidate() {
+  if (!state.flow || state.validateBusy) return;
+  const list = $("validate-list");
+  $("validate-sub").textContent = state.flow.name || "";
+  list.innerHTML = `<div class="history-empty">${t("common.loading")}</div>`;
+  state.validateBusy = true;
+  try {
+    const data = await api("/v1/flows/validate", {
+      method: "POST",
+      body: JSON.stringify({
+        flowId: state.flow.id || undefined,
+        name: state.flow.name,
+        product: state.flow.product,
+        nodes: state.flow.nodes,
+        edges: state.flow.edges,
+      }),
+    });
+    state.validateReport = data.report;
+    renderValidateList();
+  } catch (e) {
+    list.innerHTML = `<div class="history-empty">${t("builder.validate.loadError", { message: e.message })}</div>`;
+  } finally {
+    state.validateBusy = false;
+  }
+}
+
+function renderValidateList() {
+  const list = $("validate-list");
+  const report = state.validateReport;
+  list.innerHTML = "";
+  if (!report) return;
+
+  $("validate-sub").textContent = t("builder.validate.summary", { passed: report.passed, total: report.total });
+
+  if (!report.cases.length) {
+    const empty = document.createElement("div");
+    empty.className = "history-empty";
+    empty.textContent = t("builder.validate.empty");
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const c of report.cases) {
+    const el = document.createElement("div");
+    el.className = "history-item";
+    const issuesHtml = c.issues.length
+      ? `<ul class="validate-issues">${c.issues
+          .map((i) => `<li class="${i.severity}">${escapeHtml(i.message)}</li>`)
+          .join("")}</ul>`
+      : "";
+    el.innerHTML = `
+      <div class="history-item-top">
+        <span class="history-item-when">${escapeHtml(c.label)}</span>
+        <span class="history-badge${c.ok ? "" : " fail"}">${c.ok ? t("builder.validate.pass") : t("builder.validate.fail")}</span>
+      </div>
+      <div class="validate-trace">${escapeHtml(c.trace.map((step) => step.type).join(" → "))}</div>
+      ${issuesHtml}`;
+    list.appendChild(el);
+  }
+}
+
+$("btn-validate")?.addEventListener("click", () => {
+  if (state.validateOpen) closeValidate();
+  else openValidate();
+});
+$("validate-close")?.addEventListener("click", () => closeValidate());

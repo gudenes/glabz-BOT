@@ -1435,7 +1435,7 @@ async function applyStudioReply(data) {
   if (data.phase) state.studio.phase = data.phase;
 }
 
-async function revealBuiltFlow() {
+async function revealBuiltFlow(flow) {
   state.studio.phase = "ready";
   toast(t("portal.studio.flowReadyHint"));
   await refresh();
@@ -1447,6 +1447,41 @@ async function revealBuiltFlow() {
   // de recompensa da conversa) antes de qualquer coisa sobre conhecimento
   // aparecer. Roda em paralelo — se falhar ou não achar nada, não incomoda.
   void offerKnowledgeReview();
+  // Idem pra validação automática — testa cada ramo contra o motor real
+  // antes do dono descobrir sozinho testando na mão (ver PRs #69/#70:
+  // fluxo "nascendo quebrado" foi exatamente o que motivou isso).
+  if (flow) void validateBuiltFlow(flow);
+}
+
+/**
+ * Testa automaticamente o fluxo recém-montado (mesmo mecanismo do botão
+ * "Validar fluxo" dentro do builder) — bônus pós-build, nunca bloqueia,
+ * silencioso em qualquer falha. Só avisa via toast; o detalhe completo por
+ * ramo fica no botão "Validar fluxo" dentro do builder, que o dono já está
+ * prestes a ver (openBuilder() já rodou antes desta chamada).
+ */
+async function validateBuiltFlow(flow) {
+  try {
+    const data = await api("/v1/flows/validate", {
+      method: "POST",
+      body: JSON.stringify({
+        flowId: flow.id,
+        name: flow.name,
+        product: flow.product,
+        nodes: flow.nodes,
+        edges: flow.edges,
+      }),
+    });
+    const report = data.report;
+    if (!report || !report.total) return;
+    if (report.passed === report.total) {
+      toast(t("portal.studio.validatePassed", { passed: report.passed, total: report.total }));
+    } else {
+      toast(t("portal.studio.validateFailed", { passed: report.passed, total: report.total }), "err");
+    }
+  } catch {
+    // Bônus pulável — nunca incomoda se falhar.
+  }
 }
 
 /**
@@ -1640,7 +1675,7 @@ async function sendStudio(_text, action = "chat") {
     pending?.remove();
     await applyStudioReply(data);
     if (data.kind === "flow") {
-      await revealBuiltFlow();
+      await revealBuiltFlow(data.flow);
       return;
     }
     if (state.studio.mode === "knowledge" && state.studio.phase === "ready") {

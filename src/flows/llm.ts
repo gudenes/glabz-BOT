@@ -313,3 +313,56 @@ export async function answerFreeform(opts: {
     return { ok: false, reason: "falha_na_chamada" };
   }
 }
+
+/**
+ * Julgamento barato (poucos tokens, mesmo perfil de custo de classifyIntent
+ * — não é uma segunda chamada cara) de se uma resposta de llm_answer parece
+ * útil/específica ou vazia/genérica — usado pela validação automática de
+ * fluxo (src/flows/validate.ts) pra sinalizar card "Responder com IA" sem
+ * contexto suficiente. Sem chave configurada, ou se a chamada falhar, não
+ * reprova por conta própria: devolve `ok:true` (sem sinal, não é "ruim",
+ * é "não avaliado") — a validação nunca deve travar nem reportar falso
+ * negativo só porque o julgamento em si não rodou.
+ */
+export async function judgeAnswerQuality(opts: {
+  question: string;
+  answer: string;
+}): Promise<{ ok: boolean; note?: string }> {
+  const key = llmApiKey();
+  if (!key) return { ok: true };
+  if (!opts.answer.trim()) return { ok: false, note: "resposta vazia" };
+
+  try {
+    const res = await fetch(`${llmBaseUrl().replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: llmModel(),
+        temperature: 0,
+        max_tokens: 20,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Você avalia se a RESPOSTA de um atendente de WhatsApp responde de fato a PERGUNTA " +
+              "do cliente com informação específica (não vale só 'vou verificar'/'vou chamar a " +
+              "equipe' quando a pergunta parecia simples). Responda APENAS uma palavra: " +
+              '"ok" se a resposta é específica e útil, ou "generica" se é vaga/evasiva/deflete.',
+          },
+          { role: "user", content: `Pergunta: ${opts.question.slice(0, 400)}\nResposta: ${opts.answer.slice(0, 600)}` },
+        ],
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return { ok: true };
+    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    const raw = (data.choices?.[0]?.message?.content || "").trim().toLowerCase();
+    // "gener" (não "generic") de propósito — cobre "generica" e "genérica"
+    // (o modelo às vezes "corrige" a acentuação apesar do prompt pedir sem).
+    if (raw.includes("gener")) return { ok: false, note: "resposta parece genérica/evasiva" };
+    return { ok: true };
+  } catch (e) {
+    console.warn("[flow/llm] judge failed", (e as Error).message);
+    return { ok: true };
+  }
+}

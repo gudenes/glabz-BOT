@@ -1184,6 +1184,40 @@
   border-radius: 999px;
   flex-shrink: 0;
 }
+.history-badge.fail {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.28);
+}
+
+/* ── Validação de fluxo — reaproveita .history-* (mesma moldura, mesma
+   posição bottom-left; validate-panel e history-panel nunca abrem juntos,
+   ver flows.js) ── */
+.validate-summary {
+  font-size: 12.5px;
+  color: #94a3b8;
+}
+.validate-trace {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 4px;
+  word-break: break-word;
+}
+.validate-issues {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: #e2e8f0;
+}
+.validate-issues li {
+  margin-bottom: 2px;
+}
+.validate-issues li.fail {
+  color: #fca5a5;
+}
+.validate-issues li.warn {
+  color: #fcd34d;
+}
 
 /* Props panel */
 .fb-props-empty {
