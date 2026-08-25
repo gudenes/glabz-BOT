@@ -1381,13 +1381,22 @@
   background: #e2e8f0; color: #475569; border-radius: 999px;
   padding: 1px 7px; font-size: 10.5px; margin-left: auto;
 }
-.fb-vars-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+/* Uma linha por variável: nome (botão, insere no texto) + onde foi criada e
+   onde é usada, pelo NÚMERO do card (mesma numeração do badge no canvas). */
+.fb-vars-list { display: flex; flex-direction: column; gap: 4px; margin-top: 9px; }
+.fb-var-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .fb-var {
   border: 1px solid #cbd5e1; background: #fff; color: #334155;
   border-radius: 6px; padding: 3px 7px; cursor: pointer;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+  flex-shrink: 0;
 }
 .fb-var:hover { border-color: #94a3b8; background: #f1f5f9; }
+.fb-var-where { font-size: 11px; color: #64748b; line-height: 1.4; }
+/* Discreto de propósito: a maioria das variáveis é produzida automaticamente
+   (slots_json, pre_answer, pushName…) e nunca ser usada é o normal — destacar
+   em cor de alerta viraria alarme falso na maior parte das linhas. */
+.fb-var-unused { font-style: italic; opacity: 0.75; }
 .fb-vars .fb-hint { margin: 8px 0 2px; }
 .fb-vars-warn {
   margin: 8px 0 0; font-size: 11.5px; line-height: 1.45;

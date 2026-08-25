@@ -11,12 +11,42 @@
  * partir do nó selecionado e junta o que cada passo anterior produz.
  */
 
-/** Sempre disponíveis — o engine injeta em toda conversa. */
+/** Sempre disponíveis — o engine injeta em toda conversa. Sem nodeId: não
+ * nascem de nenhum card, o próprio motor coloca. */
 const SYSTEM_VARS = [
-  { name: "name_greet", from: "sistema", hint: "Nome do contato já formatado (', João' ou vazio)" },
-  { name: "pushName", from: "sistema", hint: "Nome que o contato usa no WhatsApp" },
-  { name: "last", from: "sistema", hint: "Última mensagem enviada pelo cliente" },
+  { name: "name_greet", from: "sistema", nodeId: null, hint: "Nome do contato já formatado (', João' ou vazio)" },
+  { name: "pushName", from: "sistema", nodeId: null, hint: "Nome que o contato usa no WhatsApp" },
+  { name: "last", from: "sistema", nodeId: null, hint: "Última mensagem enviada pelo cliente" },
 ];
+
+/**
+ * Campos que o motor de fato interpola (`render()` em src/flows/engine.ts):
+ * texto da Mensagem, pergunta do Perguntar e texto do Atendente. Escrever
+ * {{var}} em qualquer OUTRO campo (ex.: título do evento na Ação, contexto do
+ * Responder com IA) não substitui nada — por isso esses ficam de fora do
+ * índice de uso: dizer "usada" ali seria mentira útil pra ninguém.
+ */
+const INTERPOLATED_FIELDS = ["text", "prompt", "message"];
+
+/**
+ * Índice reverso: qual variável é usada por quais cards. Complementa
+ * producedBy/varsAvailableAt, que só dizem de onde a variável VEM.
+ * Devolve Map<nomeDaVar, string[] de nodeIds> na ordem dos nós do fluxo.
+ */
+export function varUsageIndex(flow) {
+  const index = new Map();
+  for (const node of flow?.nodes || []) {
+    const d = node.data || {};
+    const used = new Set(
+      INTERPOLATED_FIELDS.flatMap((f) => (typeof d[f] === "string" ? varsUsedIn(d[f]) : []))
+    );
+    for (const name of used) {
+      if (!index.has(name)) index.set(name, []);
+      index.get(name).push(node.id);
+    }
+  }
+  return index;
+}
 
 /** Variáveis que cada tipo de passo produz. */
 function producedBy(node) {
@@ -98,7 +128,7 @@ export function varsAvailableAt(flow, nodeId) {
     if (!node) continue;
     for (const v of producedBy(node)) {
       // Primeiro passo que produz a variável fica como origem exibida.
-      if (!seen.has(v.name)) seen.set(v.name, v);
+      if (!seen.has(v.name)) seen.set(v.name, { ...v, nodeId: node.id });
     }
   }
   return [...seen.values()];
