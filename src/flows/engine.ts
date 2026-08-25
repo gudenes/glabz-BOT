@@ -121,6 +121,13 @@ export async function runFlowStep(opts: {
   let lastIntent: string | undefined;
   let intentSource: string | undefined;
   let node: FlowNode | null = null;
+  // A mensagem desta rodada foi consumida por um "ask" que não é o llm_intent
+  // (ex.: pergunta de nome no tronco, antes de saber a intenção) — sinaliza
+  // pro llm_intent não reaproveitar esse texto como se fosse o pedido do
+  // cliente. Bug real visto em produção: resposta de nome ("Carlos") virava
+  // a "dúvida" classificada, pulando pra uma resposta desconexa e o fim do
+  // fluxo sem nunca perguntar o que o cliente queria de verdade.
+  let skipIntentText = false;
 
   // Continuação de ask
   if (state.waitingFor && state.nodeId) {
@@ -134,6 +141,7 @@ export async function runFlowStep(opts: {
         detail: `salvou ${varName}="${text.slice(0, 60)}"`,
       });
       node = nextNode(flow, askNode.id);
+      skipIntentText = true;
     } else {
       node = triggerNode(flow);
       if (node) node = nextNode(flow, node.id) || node;
@@ -222,6 +230,27 @@ export async function runFlowStep(opts: {
     }
 
     if (node.type === "llm_intent") {
+      const consumedByAsk = skipIntentText;
+      skipIntentText = false;
+
+      if (consumedByAsk) {
+        // O texto desta rodada já virou a resposta de um ask anterior (ex.:
+        // nome) — não é um pedido de verdade, não classifica em cima dele.
+        // Manda uma ponte natural e PARA — a próxima mensagem reentra aqui
+        // via "mensagem no meio" (topo da função), com texto fresco de
+        // verdade dessa vez. {{name_greet}} aproveita o que acabou de ser
+        // salvo (ex.: nome) quando fizer sentido, e some sozinho quando não.
+        const bridge = render("Perfeito{{name_greet}}! Como posso te ajudar?", vars);
+        replies.push(bridge);
+        trace.push({
+          nodeId: node.id,
+          type: "llm_intent",
+          detail: "aguardando pedido de verdade (resposta anterior não era um pedido)",
+          reply: bridge,
+        });
+        break;
+      }
+
       const intents = (
         Array.isArray(node.data.intents) ? node.data.intents : []
       ) as { slug: string; description: string }[];
