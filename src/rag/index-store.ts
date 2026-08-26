@@ -188,6 +188,39 @@ export async function suppressChunk(clientId: string, chunkId: string): Promise<
   return rows.length > 0;
 }
 
+/**
+ * Mesma marcação negativa de suppressChunk, em lote — um UPDATE só em vez de
+ * N chamadas (a lista da aba Conhecimento pode ter dezenas de itens). Continua
+ * sendo remoção SUAVE: sai da busca, o histórico de origem fica (§5.2).
+ */
+export async function suppressChunks(clientId: string, chunkIds: string[]): Promise<number> {
+  if (!hasDatabase() || !isVectorReady()) return 0;
+  const ids = chunkIds.filter((id) => typeof id === "string" && id.trim());
+  if (!ids.length) return 0;
+  const rows = await db()`
+    UPDATE knowledge_chunks SET suppressed = true, updated_at = now()
+    WHERE client_id = ${clientId} AND id = ANY(${ids}) AND NOT suppressed
+    RETURNING id
+  `;
+  return rows.length;
+}
+
+/**
+ * Limpa a base inteira do cliente. Endpoint separado do lote por ids de
+ * propósito: listKnowledge devolve no máximo `limit` itens, então "limpar
+ * tudo" mandando os ids visíveis deixaria pra trás o que não coube na tela —
+ * exatamente o oposto do que o nome promete.
+ */
+export async function suppressAllKnowledge(clientId: string): Promise<number> {
+  if (!hasDatabase() || !isVectorReady()) return 0;
+  const rows = await db()`
+    UPDATE knowledge_chunks SET suppressed = true, updated_at = now()
+    WHERE client_id = ${clientId} AND NOT suppressed
+    RETURNING id
+  `;
+  return rows.length;
+}
+
 export async function listKnowledge(clientId: string, limit = 100): Promise<KnowledgeHit[]> {
   if (!hasDatabase() || !isVectorReady()) return [];
   return (await db()`

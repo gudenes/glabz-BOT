@@ -1142,6 +1142,34 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 @media (max-width: 620px) {
   .kb-item { flex-direction: column; }
 }
+
+/* Seleção múltipla + limpeza da base */
+.kb-pick { margin-top: 3px; flex-shrink: 0; width: 16px; height: 16px; cursor: pointer; }
+.kb-bulk {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 8px 12px; margin-top: 12px; background: #fafaf7;
+}
+.kb-bulk.hidden { display: none; }
+.kb-bulk-all { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; }
+.kb-bulk-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.btn-danger {
+  border: 0; background: #b42318; color: #fff; font: inherit; font-weight: 700;
+  border-radius: 999px; padding: 9px 16px; cursor: pointer; font-size: 13px;
+}
+.btn-danger:hover { background: #911d13; }
+.btn-danger[disabled] { opacity: 0.45; cursor: not-allowed; }
+.btn-danger.hidden { display: none; }
+.kb-danger-text { color: #b42318 !important; }
+/* Confirmação de exclusão — reaproveita .onboard (backdrop + card) */
+.kb-confirm-card { max-width: 460px; text-align: left; }
+.kb-confirm-card h2 { text-align: center; }
+.kb-confirm-warn {
+  margin: 0 0 14px; font-size: 12.5px; line-height: 1.45;
+  color: #b42318; background: #fdf3f2; border: 1px solid #f5d5d2;
+  border-radius: 10px; padding: 9px 11px;
+}
+.kb-confirm-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
 .kb-teach { border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 12px; background: #fafaf7; display: grid; gap: 10px; }
 .kb-teach.hidden { display: none; }
 .kb-teach .hint-muted { margin: 0 0 4px; }

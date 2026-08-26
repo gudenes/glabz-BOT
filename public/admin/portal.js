@@ -870,6 +870,8 @@ const KNOWLEDGE_ORIGINS = {
 function renderKnowledge(chunks) {
   const box = $("kb-list");
   if (!box) return;
+  // Barra de seleção/limpeza só faz sentido com item na lista.
+  $("kb-bulk")?.classList.toggle("hidden", !chunks.length);
   if (!chunks.length) {
     box.innerHTML = `<p class="hint-muted">${t("portal.knowledge.empty")}</p>`;
     return;
@@ -880,6 +882,7 @@ function renderKnowledge(chunks) {
       const originTag = `<span class="ai-tag ${origin.tone}">${t(origin.key)}</span>`;
       return `
       <div class="kb-item" data-id="${escapeHtml(c.id)}">
+        <input type="checkbox" class="kb-pick" data-pick="${escapeHtml(c.id)}" aria-label="${t("portal.knowledge.selectItem")}" />
         <div class="kb-body">
           <b>${escapeHtml(c.question)}</b>
           <p>${escapeHtml(c.answer)}</p>
@@ -892,6 +895,11 @@ function renderKnowledge(chunks) {
       </div>`;
     })
     .join("");
+
+  box.querySelectorAll("[data-pick]").forEach((cb) => {
+    cb.addEventListener("change", syncKbSelection);
+  });
+  syncKbSelection();
 
   box.querySelectorAll("[data-remove]").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -906,6 +914,115 @@ function renderKnowledge(chunks) {
     });
   });
 }
+
+/* ── Exclusão em lote da base de conhecimento ───────────────
+ * Remoção aqui é SUAVE no backend (marca suppressed, preserva o histórico de
+ * origem — docs/rag-desenho.md §5.2), mas pela tela não tem como desfazer:
+ * por isso a confirmação exige digitar a palavra, não é só um confirm().
+ */
+
+/** Ids marcados na lista, na ordem em que aparecem. */
+function kbSelectedIds() {
+  return [...document.querySelectorAll("#kb-list [data-pick]:checked")].map((cb) => cb.dataset.pick);
+}
+
+function syncKbSelection() {
+  const total = document.querySelectorAll("#kb-list [data-pick]").length;
+  const picked = kbSelectedIds().length;
+  const all = $("kb-select-all");
+  if (all) {
+    all.checked = total > 0 && picked === total;
+    // Estado "alguns marcados" — sem isso o checkbox mestre parece desmarcado
+    // mesmo com seleção parcial.
+    all.indeterminate = picked > 0 && picked < total;
+  }
+  $("btn-kb-delete-selected")?.classList.toggle("hidden", picked === 0);
+  const label = $("kb-bulk-count");
+  if (label) label.textContent = picked ? t("portal.knowledge.nSelected", { n: picked }) : "";
+}
+
+$("kb-select-all")?.addEventListener("change", (ev) => {
+  const on = ev.target.checked;
+  document.querySelectorAll("#kb-list [data-pick]").forEach((cb) => {
+    cb.checked = on;
+  });
+  syncKbSelection();
+});
+
+/** Palavra que o dono digita pra confirmar — maiúscula pra não sair no
+ * automático, e traduzida (quem usa em inglês digita DELETE, não EXCLUIR). */
+const kbConfirmWord = () => t("portal.knowledge.confirm.word");
+/** O que fazer quando a confirmação for aceita — definido por quem abriu. */
+let kbConfirmAction = null;
+
+function openKbConfirm({ sub, action }) {
+  kbConfirmAction = action;
+  $("kb-confirm-sub").textContent = sub;
+  $("kb-confirm-label").textContent = t("portal.knowledge.confirm.type", { word: kbConfirmWord() });
+  const input = $("kb-confirm-input");
+  if (input) input.value = "";
+  $("kb-confirm-go")?.setAttribute("disabled", "true");
+  $("kb-confirm")?.classList.remove("hidden");
+  input?.focus();
+}
+
+function closeKbConfirm() {
+  kbConfirmAction = null;
+  $("kb-confirm")?.classList.add("hidden");
+}
+
+$("kb-confirm-input")?.addEventListener("input", (ev) => {
+  const ok = ev.target.value.trim().toUpperCase() === kbConfirmWord().toUpperCase();
+  const go = $("kb-confirm-go");
+  if (!go) return;
+  if (ok) go.removeAttribute("disabled");
+  else go.setAttribute("disabled", "true");
+});
+
+$("kb-confirm-cancel")?.addEventListener("click", () => closeKbConfirm());
+$("kb-confirm")?.addEventListener("click", (ev) => {
+  if (ev.target === $("kb-confirm")) closeKbConfirm();
+});
+
+$("kb-confirm-go")?.addEventListener("click", async () => {
+  const action = kbConfirmAction;
+  if (!action) return;
+  $("kb-confirm-go")?.setAttribute("disabled", "true");
+  try {
+    const removed = await action();
+    toast(t("portal.knowledge.removedN", { n: removed }));
+    closeKbConfirm();
+    await loadKnowledge();
+  } catch (e) {
+    toast(e.message, "err");
+    closeKbConfirm();
+  }
+});
+
+$("btn-kb-delete-selected")?.addEventListener("click", () => {
+  const ids = kbSelectedIds();
+  if (!ids.length) return;
+  openKbConfirm({
+    sub: t("portal.knowledge.confirm.subSelected", { n: ids.length }),
+    action: async () => {
+      const r = await api("/v1/rag/knowledge/suppress-batch", {
+        method: "POST",
+        body: JSON.stringify({ ids }),
+      });
+      return r.removed ?? ids.length;
+    },
+  });
+});
+
+$("btn-kb-clear-all")?.addEventListener("click", () => {
+  openKbConfirm({
+    sub: t("portal.knowledge.confirm.subAll"),
+    action: async () => {
+      const r = await api("/v1/rag/knowledge/suppress-all", { method: "POST" });
+      return r.removed ?? 0;
+    },
+  });
+});
 
 // Abaixo disso o score é ruído de domínio (ex.: perguntas do mesmo negócio,
 // mas sobre outro assunto) — a busca ainda traz como candidato pro prompt
@@ -1563,6 +1680,11 @@ function finishKnowledgeReview() {
       void renderTemplatePicker();
     }
   }
+  // Quem está OLHANDO a aba Conhecimento acabou de salvar itens novos — sem
+  // isso a lista só mostrava o que havia antes, e o dono achava que não tinha
+  // salvo (precisava de F5 ou "Atualizar"). Fora dessa aba não custa nada:
+  // loadKnowledge só roda quando a aba está aberta.
+  if (state.view === "knowledge") void loadKnowledge();
   void nudgeIfKnowledgeEmpty();
 }
 

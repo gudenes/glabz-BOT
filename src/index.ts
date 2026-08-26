@@ -1410,6 +1410,38 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // Exclusão em lote e "limpar tudo" — rotas próprias, antes do match de id
+    // único abaixo (senão "suppress-batch" cairia no regex de :id).
+    if (method === "POST" && path === "/v1/rag/knowledge/suppress-batch") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const body = parseJson<{ ids?: string[] }>(await readBody(req));
+      const ids = Array.isArray(body?.ids) ? body.ids : [];
+      if (!ids.length) {
+        json(res, 400, { ok: false, reason: "nenhum item selecionado" });
+        return;
+      }
+      const { suppressChunks } = await import("./rag/index-store.js");
+      const removed = await suppressChunks(clientId, ids);
+      json(res, 200, { ok: true, removed });
+      return;
+    }
+
+    if (method === "POST" && path === "/v1/rag/knowledge/suppress-all") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const { suppressAllKnowledge } = await import("./rag/index-store.js");
+      const removed = await suppressAllKnowledge(clientId);
+      json(res, 200, { ok: true, removed });
+      return;
+    }
+
     const ragSuppress = path.match(/^\/v1\/rag\/knowledge\/([\w-]+)\/suppress$/);
     if (method === "POST" && ragSuppress) {
       const clientId = actingClientId(req, auth);
