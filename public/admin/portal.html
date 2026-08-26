@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=32" />
+    <link rel="stylesheet" href="/admin/portal.css?v=33" />
   </head>
   <body class="portal-body">
     <div class="app">
@@ -452,6 +452,17 @@
               </div>
               <button type="submit" class="btn-lime" id="kb-website-submit" data-i18n="portal.knowledge.websiteSubmit">Buscar do site</button>
             </form>
+            <div id="kb-bulk" class="kb-bulk hidden">
+              <label class="kb-bulk-all">
+                <input type="checkbox" id="kb-select-all" />
+                <span data-i18n="portal.knowledge.selectAll">Selecionar todos</span>
+              </label>
+              <span id="kb-bulk-count" class="hint-muted"></span>
+              <div class="kb-bulk-actions">
+                <button type="button" class="btn-danger hidden" id="btn-kb-delete-selected" data-i18n="portal.knowledge.deleteSelected">Excluir selecionados</button>
+                <button type="button" class="btn-text kb-danger-text" id="btn-kb-clear-all" data-i18n="portal.knowledge.clearAll">Limpar tudo</button>
+              </div>
+            </div>
             <div id="kb-list" class="kb-list"></div>
           </div>
 
@@ -474,6 +485,24 @@
       <button type="button" data-view="account" data-i18n="portal.nav.account">Dados da conta</button>
       <button type="button" data-view="integrations" data-i18n="portal.nav.integrations">Integrações</button>
     </nav>
+
+    <!-- Confirmação de exclusão: exige digitar a palavra pra evitar clique
+         acidental que apagaria conhecimento sem volta na prática. -->
+    <div id="kb-confirm" class="onboard hidden" role="dialog" aria-modal="true" aria-labelledby="kb-confirm-title">
+      <div class="onboard-card kb-confirm-card">
+        <h2 id="kb-confirm-title" data-i18n="portal.knowledge.confirm.title">Excluir da base</h2>
+        <p id="kb-confirm-sub"></p>
+        <p class="kb-confirm-warn" data-i18n="portal.knowledge.confirm.warn">A IA deixa de usar esses itens para responder. Isso não pode ser desfeito pela tela.</p>
+        <div class="field">
+          <span id="kb-confirm-label"></span>
+          <input id="kb-confirm-input" type="text" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="kb-confirm-actions">
+          <button type="button" class="btn-ghost" id="kb-confirm-cancel" data-i18n="common.cancel">Cancelar</button>
+          <button type="button" class="btn-danger" id="kb-confirm-go" disabled data-i18n="portal.knowledge.confirm.go">Excluir</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Tour guiado de 1º acesso: 2 passos (conectar WhatsApp → aba Fluxo) antes do
          onboarding acima. Aparece só uma vez por cliente (ver tourKey() em portal.js). -->
@@ -512,6 +541,6 @@
       </div>
     </div>
 
-    <script src="/admin/portal.js?v=34" type="module"></script>
+    <script src="/admin/portal.js?v=35" type="module"></script>
   </body>
 </html>
