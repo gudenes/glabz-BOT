@@ -46,14 +46,22 @@ Arquitetura obrigatória (tronco + ramos, sem cruzar):
 3. Cada ramo (exceto o de encerramento) é uma linha reta para baixo: ask? → message? →
    (handoff|llm_answer) e, se NÃO terminar em handoff, sempre seguido do ask de "mais alguma
    coisa?" da regra 10 antes de qualquer end — nenhum ramo (fora handoff) termina direto num end.
-4. Se o ramo for uma DÚVIDA/pergunta geral sobre o negócio (não uma ação estruturada tipo
-   marcar/cancelar/comprar), prefira terminar o ramo em llm_answer em vez de ir direto pro
-   handoff — é exatamente pra isso que esse nó existe. llm_answer SEMPRE tem duas saídas: edge
-   label "ok" → (ask "mais alguma coisa?" da regra 10), edge label "erro" → handoff (fallback
-   humano se a IA não souber responder). Preencha "context" do llm_answer com os fatos que JÁ
-   apareceram na conversa/briefing (horário, preço, política, diferenciais) — nunca invente fato
-   que não foi dito; se nada foi dito, deixe "context" como string vazia mesmo assim (o nó
-   continua funcionando via base de conhecimento em tempo real, não depende só do "context").
+4. TODO fluxo tem PELO MENOS UM llm_answer. Não é opcional, não é "se fizer sentido", não depende
+   do segmento do negócio. Esse card responde usando a BASE DE CONHECIMENTO coletada no
+   onboarding, e é o que evita resposta evasiva: quando a IA não sabe, a saída "erro" manda pro
+   atendente humano. Sem ele, qualquer pergunta fora do script não tem pra onde ir.
+   Dois usos, e os DOIS valem:
+   a. Ramo de DÚVIDA/pergunta geral sobre o negócio (não ação estruturada tipo marcar/cancelar/
+      comprar) termina em llm_answer em vez de ir direto pro handoff.
+   b. Se NENHUM ramo for naturalmente de dúvida (ex.: negócio só de agendamento), crie um ramo
+      dedicado a mais — "outras dúvidas", "informações sobre o negócio" — que termine em
+      llm_answer. É esse ramo que segura pergunta fora do script.
+   llm_answer SEMPRE tem duas saídas: edge label "ok" → (ask "mais alguma coisa?" da regra 10),
+   edge label "erro" → handoff (fallback humano se a IA não souber responder). Preencha "context"
+   do llm_answer com os fatos que JÁ apareceram na conversa/briefing (horário, preço, política,
+   diferenciais) — nunca invente fato que não foi dito; se nada foi dito, deixe "context" como
+   string vazia mesmo assim (o nó continua funcionando via base de conhecimento em tempo real,
+   não depende só do "context").
 5. NÃO use condition nem action.
 6. NÓ linear (trigger, message, ask, handoff, end) tem no máximo 1 saída. llm_answer tem exatamente
    as duas saídas descritas acima, nunca mais que isso.
@@ -185,6 +193,84 @@ export const KNOWN_NODE_TYPES = new Set([
   "condition",
 ]);
 
+/**
+ * Garantia estrutural: todo fluxo gerado SAI com pelo menos um llm_answer.
+ *
+ * Por que existe, e por que em código e não só no prompt: esse card já ficou
+ * de fora de fluxos gerados duas vezes (o mesmo erro primário reincidindo).
+ * Prompt é probabilístico — quanto mais regras, mais fácil uma se perder,
+ * ainda mais trocando de modelo. Aqui é determinístico: se faltou, a gente
+ * põe. É o card que responde pela base de conhecimento coletada no
+ * onboarding e o que evita resposta evasiva (saída "erro" → atendente).
+ *
+ * Só ACRESCENTA um ramo novo no llm_intent — nunca mexe nos ramos que o
+ * modelo criou, pra não desmontar um fluxo que no resto está correto.
+ * O `context` sai vazio (não temos como inventar fatos aqui), e tudo bem: o
+ * nó funciona via RAG em tempo de execução, que não depende do context.
+ */
+export function ensureLlmAnswer(nodes: FlowNode[], edges: FlowEdge[]): {
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+  repaired: boolean;
+} {
+  if (nodes.some((n) => n.type === "llm_answer")) {
+    return { nodes, edges, repaired: false };
+  }
+  const intent = nodes.find((n) => n.type === "llm_intent");
+  // Sem llm_intent não há onde pendurar um ramo novo sem redesenhar o fluxo
+  // inteiro — nesse caso é mais honesto não mexer do que inventar estrutura.
+  if (!intent) return { nodes, edges, repaired: false };
+
+  const usedIds = new Set(nodes.map((n) => n.id));
+  let answerId = "n_faq";
+  let i = 2;
+  while (usedIds.has(answerId)) answerId = `n_faq${i++}`;
+
+  const slugs = new Set(
+    ((intent.data.intents as { slug?: string }[] | undefined) || []).map((x) => String(x.slug || ""))
+  );
+  let slug = "duvida";
+  let k = 2;
+  while (slugs.has(slug)) slug = `duvida${k++}`;
+
+  const answer: FlowNode = {
+    id: answerId,
+    type: "llm_answer",
+    x: 0,
+    y: 0,
+    data: {
+      label: "Responder com IA",
+      context: "",
+      varName: "resposta_ia",
+      maxChars: 400,
+    },
+  };
+
+  // "ok" cai no ask de "mais alguma coisa?" quando ele existe (mantém o
+  // padrão de não encerrar seco); senão, no primeiro end. "erro" vai pro
+  // handoff — é o fallback humano que dá sentido ao card.
+  const backAsk = nodes.find((n) => n.type === "ask" && n.data.capturesIntent === true);
+  const anEnd = nodes.find((n) => n.type === "end");
+  const aHandoff = nodes.find((n) => n.type === "handoff");
+  const okTarget = backAsk?.id || anEnd?.id || null;
+  const errTarget = aHandoff?.id || okTarget;
+
+  const nextNodes = [...nodes, answer];
+  const nextEdges: FlowEdge[] = [
+    ...edges,
+    { id: `e_faq_in`, from: intent.id, to: answerId, label: slug },
+  ];
+  if (okTarget) nextEdges.push({ id: `e_faq_ok`, from: answerId, to: okTarget, label: "ok" });
+  if (errTarget) nextEdges.push({ id: `e_faq_err`, from: answerId, to: errTarget, label: "erro" });
+
+  intent.data.intents = [
+    ...((intent.data.intents as unknown[] | undefined) || []),
+    { slug, description: "tem uma dúvida ou quer informação sobre o negócio" },
+  ];
+
+  return { nodes: nextNodes, edges: nextEdges, repaired: true };
+}
+
 export function sanitizeEdges(nodes: FlowNode[], edges: FlowEdge[]): FlowEdge[] {
   const ids = new Set(nodes.map((n) => n.id));
   const typeOf = new Map(nodes.map((n) => [n.id, n.type]));
@@ -258,9 +344,23 @@ export async function generateFlowFromPrompt(prompt: string): Promise<GeneratedF
     }))
   );
 
+  // Rede de segurança determinística: o prompt (regra 4) exige llm_answer,
+  // mas prompt não garante nada — esse card já ficou de fora duas vezes.
+  const guaranteed = ensureLlmAnswer(nodes, edges);
+  if (guaranteed.repaired) {
+    console.warn(
+      "[from-prompt] fluxo veio sem llm_answer — ramo de dúvida adicionado automaticamente"
+    );
+  }
+  // sanitizeEdges de novo: as edges novas precisam passar pelas mesmas
+  // regras (llm_answer com 2 saídas, sem duplicata) que as do modelo.
+  const finalEdges = guaranteed.repaired
+    ? sanitizeEdges(guaranteed.nodes, guaranteed.edges)
+    : edges;
+
   return {
     name: parsed.name?.trim() || "Atendimento",
-    nodes: layoutFlow(nodes, edges),
-    edges,
+    nodes: layoutFlow(guaranteed.nodes, finalEdges),
+    edges: finalEdges,
   };
 }
