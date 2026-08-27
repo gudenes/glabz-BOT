@@ -2,7 +2,10 @@ import { llmApiKey, llmBaseUrl, llmModel } from "../config.js";
 import { generateFlowFromPrompt, type FlowBuildMode, type GeneratedFlow } from "./from-prompt.js";
 
 export type StudioMsg = { role: "user" | "assistant"; content: string };
-export type StudioPhase = "ask" | "offer" | "preview" | "debrief" | "ready";
+/** O ensaio (offer/preview/debrief) foi removido do onboarding em 27/08 —
+ * ele passou a acontecer depois, pelo fluxo simples, dentro do tour guiado.
+ * Sobraram as duas fases que importam: coletar e montar. */
+export type StudioPhase = "ask" | "ready";
 /** flow = briefing normal (monta fluxo no fim). knowledge = mini-briefing
  * reduzido, só pra quem não escolheu "Montar com IA" no onboarding — nunca
  * builda, só alimenta a Base de Conhecimento. */
@@ -81,7 +84,7 @@ const SYSTEM = `Você é o coach da GLABZ. Ajuda o dono a DEFINIR o atendimento.
 
 Responda APENAS um JSON:
 {
-  "phase": "ask" | "offer" | "preview" | "debrief" | "ready",
+  "phase": "ask" | "ready",
   "as": "coach" | "bot",
   "say": "texto curto em português"
 }
@@ -104,15 +107,11 @@ Fases — siga esta ordem, sem pular:
    - No máximo UMA pergunta de conhecimento por vez, misturada naturalmente ao briefing — nunca
      uma bateria separada nem anuncie "agora vou perguntar sobre conhecimento". Se o dono já
      respondeu isso espontaneamente antes, não repita.
-2. offer — as=coach. Quando já souber o essencial, NÃO comece o ensaio. Diga no espírito: "Acho que já tenho tudo. Vamos testar agora?". Se o dono já contou algo de conhecimento nesta conversa (horário, preço, política, diferencial, dúvida frequente), sugira testar EXATAMENTE isso: "Tenta perguntar sobre [o que ele contou]." — ver o bot usar o que ele acabou de ensinar dá confiança. Se nada disso foi coletado ainda, ofereça o teste normalmente, sem sugestão. Espere o dono confirmar.
-3. preview — as=bot. Só depois do dono aceitar o teste. Você interpreta o BOT. O dono fala como CLIENTE. Mensagens dele NÃO são pedido de mudança no fluxo — continue o ensaio. Se o "cliente" perguntar sobre algo que o dono já contou nesta conversa (horário, preço, política, diferencial, dúvida frequente), responda com essa informação real, como o bot faria de verdade — é isso que prova que o que foi ensinado funciona. Máximo 2 respostas do bot. Não feche pedido de verdade. Não invente integração real.
-4. debrief — as=coach. Depois do ensaio (ou se o dono disser "para", "chega", "muda"). Volte a ser coach: "Isso era só o ensaio. Quer ajustar o tom ou monto o fluxo?" NÃO continue o papel de bot.
-5. ready — as=coach. Só se o dono pedir para montar/criar o fluxo DEPOIS do ensaio. "Ótimo — montando o fluxo agora. Vamos revisar?"
+2. ready — as=coach. Quando já souber o essencial e tiver coletado o conhecimento, diga no espírito: "Acho que já tenho o que preciso. Posso montar seu atendimento?" e espere o dono confirmar.
 
 Regras:
 - Se o histórico já tem abertura do coach, NÃO cumprimente de novo. Vá direto à próxima pergunta ou ao conteúdo.
-- Nunca trate fala de cliente no ensaio como alteração de briefing.
-- Alteração de fluxo só na fase debrief/ask, quando o dono fala como dono.
+- NUNCA proponha ensaio, teste ou simulação, e NUNCA fale como se fosse o bot. Isso acontece em outro momento, fora desta conversa.
 - Nunca descreva nós, JSON ou canvas.
 - As respostas de conhecimento (horário, política, diferenciais, dúvidas frequentes) valem só o que o dono disser — nunca proponha valores nem preencha lacuna com achismo.
 - Pergunta de conhecimento sem resposta clara (dono não soube, pulou, mudou de assunto) não vira fato — segue em frente sem tentar "fechar" aquele tópico.
@@ -206,7 +205,8 @@ function parseTurn(raw: string): StudioTurn {
   try {
     const parsed = JSON.parse(extractJson(raw)) as { phase?: string; as?: string; say?: string };
     const phase = normalizePhase(parsed.phase);
-    const as: "coach" | "bot" = parsed.as === "bot" || phase === "preview" ? "bot" : "coach";
+    // Sem ensaio, o coach nunca fala como bot nesta conversa.
+    const as: "coach" | "bot" = "coach";
     const say = String(parsed.say || "").trim();
     if (say) return { phase, as, say };
   } catch {
@@ -218,17 +218,14 @@ function parseTurn(raw: string): StudioTurn {
 }
 
 function normalizePhase(raw?: string): StudioPhase {
-  if (raw === "offer") return "offer";
-  if (raw === "preview" || raw === "simulate") return "preview";
-  if (raw === "debrief") return "debrief";
+  // offer/preview/debrief eram as fases do ensaio removido. Um modelo pode
+  // ainda devolvê-las (o prompt mudou, o modelo é probabilístico) — mapear
+  // pra "ask" mantém a conversa andando em vez de quebrar o layout.
+  if (raw === "offer" || raw === "preview" || raw === "simulate" || raw === "debrief") return "ask";
   if (raw === "ready") return "ready";
   return "ask";
 }
 
-export function wantsTest(text: string): boolean {
-  const t = text.toLowerCase();
-  return /\b(vamos testar|pode testar|quero testar|testa agora|bora testar|sim,? vamos)\b/.test(t);
-}
 
 export function wantsBuild(text: string): boolean {
   const t = text.toLowerCase();

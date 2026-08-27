@@ -52,7 +52,6 @@ const state = {
     busy: false,
     phase: "ask",
     messages: [],
-    previewTurns: 0,
     mode: "flow",
     // O que fazer quando o mini-briefing de conhecimento (mode:"knowledge")
     // termina ou é pulado: "template" reabre o picker, "close" só fecha.
@@ -531,7 +530,6 @@ function studioLayout() {
     // Mini-briefing só de conhecimento: nunca oferece template/ensaio/build
     // (isso é papel do chat normal, mode "flow") — só pergunta e deixa pular.
     $("studio-alts")?.classList.add("hidden");
-    $("studio-offer")?.classList.add("hidden");
     $("studio-ready")?.classList.add("hidden");
     $("studio-knowledge-banner")?.classList.toggle("hidden", !open);
     $("studio-knowledge-skip")?.classList.toggle("hidden", !open || state.studio.busy);
@@ -548,40 +546,20 @@ function studioLayout() {
   // como provisionClient já cria um fluxo inicial no onboarding, isso escondia
   // o catálogo justamente de quem ainda não montou nada.
   $("studio-alts")?.classList.toggle("hidden", !open);
-  const phase = state.studio.phase;
-  const kick =
-    phase === "ready"
-      ? [t("portal.studio.kicker.ready"), "ready"]
-      : phase === "debrief"
-        ? [t("portal.studio.kicker.afterRehearsal"), "ready"]
-        : phase === "preview"
-          ? [t("portal.studio.kicker.rehearsal"), "preview"]
-          : phase === "offer"
-            ? [t("portal.studio.kicker.testQuestion"), "preview"]
-            : [t("portal.studio.kicker.briefing"), ""];
-  $("studio-kicker").textContent = kick[0];
-  $("studio-kicker").className = "studio-kicker" + (kick[1] ? " " + kick[1] : "");
-  $("studio-title").textContent =
-    phase === "preview"
-      ? t("portal.studio.title.rehearsal")
-      : phase === "offer"
-        ? t("portal.studio.title.essentials")
-        : phase === "debrief" || phase === "ready"
-          ? t("portal.studio.title.feedback")
-          : t("portal.studio.title.default");
-  $("studio-sub").textContent =
-    phase === "preview"
-      ? t("portal.studio.sub.rehearsal")
-      : phase === "offer"
-        ? t("portal.studio.sub.offer")
-        : phase === "debrief" || phase === "ready"
-          ? t("portal.studio.sub.afterRehearsal")
-          : t("portal.studio.sub.ask");
-  $("studio-offer")?.classList.toggle("hidden", phase !== "offer" || state.studio.busy);
-  $("studio-ready")?.classList.toggle(
-    "hidden",
-    (phase !== "debrief" && phase !== "ready") || state.studio.busy
-  );
+  // Sem ensaio, sobraram duas fases: coletando (ask) e pronto pra montar
+  // (ready). Os ramos de offer/preview/debrief saíram junto com ele.
+  const ready = state.studio.phase === "ready";
+  $("studio-kicker").textContent = ready
+    ? t("portal.studio.kicker.ready")
+    : t("portal.studio.kicker.briefing");
+  $("studio-kicker").className = "studio-kicker" + (ready ? " ready" : "");
+  $("studio-title").textContent = ready
+    ? t("portal.studio.title.feedback")
+    : t("portal.studio.title.default");
+  $("studio-sub").textContent = ready
+    ? t("portal.studio.sub.afterRehearsal")
+    : t("portal.studio.sub.ask");
+  $("studio-ready")?.classList.toggle("hidden", !ready || state.studio.busy);
 }
 
 function syncFlowPane() {
@@ -1708,8 +1686,7 @@ function openStudio({ expand = true, mode = "flow" } = {}) {
     state.studio.messages = [];
     state.studio.phase = "ask";
     state.studio.welcomed = false;
-    state.studio.previewTurns = 0;
-    state.studio.mode = mode;
+      state.studio.mode = mode;
   }
   state.studio.open = true;
   state.studio.expanded = expand || !hasOwnFlows();
@@ -1970,17 +1947,12 @@ $("studio-skip-knowledge")?.addEventListener("click", () => finishKnowledgeChat(
 async function sendStudio(_text, action = "chat") {
   if (state.studio.busy) return;
   const pending = studioThink(
-    action === "build"
-      ? t("portal.studio.buildingFlow")
-      : action === "test"
-        ? t("portal.studio.openingRehearsal")
-        : t("portal.studio.thinking")
+    action === "build" ? t("portal.studio.buildingFlow") : t("portal.studio.thinking")
   );
   state.studio.busy = true;
   studioLayout();
   $("studio-form")?.querySelector("button[type=submit]")?.setAttribute("disabled", "true");
   $("studio-build")?.setAttribute("disabled", "true");
-  $("studio-test")?.setAttribute("disabled", "true");
   try {
     const data = await api("/v1/flows/studio", {
       method: "POST",
@@ -2001,13 +1973,6 @@ async function sendStudio(_text, action = "chat") {
       await finishKnowledgeChat();
       return;
     }
-    if (data.phase === "preview") {
-      state.studio.previewTurns += 1;
-      if (state.studio.previewTurns >= 2) {
-        state.studio.phase = "debrief";
-        studioSay(t("portal.studio.rehearsalEndedNote"), "sys");
-      }
-    }
     studioLayout();
   } catch (ex) {
     pending?.remove();
@@ -2017,7 +1982,6 @@ async function sendStudio(_text, action = "chat") {
     state.studio.busy = false;
     $("studio-form")?.querySelector("button[type=submit]")?.removeAttribute("disabled");
     $("studio-build")?.removeAttribute("disabled");
-    $("studio-test")?.removeAttribute("disabled");
     studioLayout();
   }
 }
@@ -2169,14 +2133,6 @@ $("studio-form")?.addEventListener("submit", async (e) => {
 $("studio-build")?.addEventListener("click", async () => {
   if (state.studio.busy) return;
   await sendStudio("", "build");
-});
-$("studio-test")?.addEventListener("click", async () => {
-  if (state.studio.busy) return;
-  const msg = t("portal.studio.testNowMsg");
-  studioSay(msg, "user");
-  state.studio.messages.push({ role: "user", content: msg });
-  state.studio.previewTurns = 0;
-  await sendStudio(msg, "test");
 });
 
 function setMicUi(on) {
