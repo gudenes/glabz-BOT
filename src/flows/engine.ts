@@ -5,7 +5,7 @@ import {
   getFlow,
   upsertConversationState,
 } from "./store.js";
-import { answerFreeform, classifyIntent, extractDate } from "./llm.js";
+import { answerFreeform, classifyIntent, extractDate, normalizeTone } from "./llm.js";
 import { runAction } from "./connectors/index.js";
 
 function render(template: string, vars: Record<string, string>): string {
@@ -97,6 +97,44 @@ export type FlowStepResult = EngineResult & {
  * Executa um passo do fluxo em memória (produção e simulador).
  * Não exige status=live — o simulador testa rascunhos.
  */
+/**
+ * Escolhe o trecho da base que pode ser devolvido AO PÉ DA LETRA (tom
+ * "literal"), ou null pra deixar a IA responder normalmente.
+ *
+ * docs/rag-desenho.md §4.3 rejeita limiar absoluto de relevância, e por um
+ * motivo medido: a margem entre o pior relevante e o melhor irrelevante
+ * fica em 0,020–0,060, então um corte calibrado num negócio quebra no
+ * outro. Por isso aqui NÃO se usa só o score: exige-se também FOLGA sobre o
+ * segundo colocado. Sem folga, os dois candidatos são igualmente plausíveis
+ * e devolver um deles ao pé da letra é chute com cara de certeza.
+ *
+ * Também só aceita conhecimento ensinado à mão pelo dono (origin "manual"):
+ * o que vem de histórico importado passa por anonimização, e devolver isso
+ * literalmente entregaria o texto com as marcas da anonimização no lugar dos
+ * dados removidos.
+ */
+const LITERAL_MIN_SCORE = 0.75;
+const LITERAL_MIN_MARGIN = 0.08;
+
+function pickLiteralHit(
+  hits: { question: string; answer: string; score: number | string; origin?: string }[],
+  tone: string
+): { answer: string; score: number } | null {
+  if (tone.trim().toLowerCase() !== "literal") return null;
+  const top = hits[0];
+  if (!top) return null;
+  if (top.origin && top.origin !== "manual") return null;
+  const score = Number(top.score);
+  if (!Number.isFinite(score) || score < LITERAL_MIN_SCORE) return null;
+  const second = hits[1] ? Number(hits[1].score) : 0;
+  // Comparação de ponto flutuante bem no limite pode cair dos dois lados
+  // (0.75 - 0.67 dá 0.0799…). Cair pro lado conservador é o certo aqui:
+  // na dúvida, a IA responde em vez de repetir texto que talvez não sirva.
+  if (score - second < LITERAL_MIN_MARGIN) return null;
+  const answer = String(top.answer || "").trim();
+  return answer ? { answer, score } : null;
+}
+
 export async function runFlowStep(opts: {
   flow: Flow;
   state: FlowSimState;
@@ -375,6 +413,8 @@ export async function runFlowStep(opts: {
       // despercebido no simulador do builder.
       const ragLog: Record<string, unknown> = { node: node.id, flowId: flow.id };
       let ragHits: { question: string; score: number }[] = [];
+      /** Preenchido só no modo literal, e só com correspondência forte. */
+      let literalHit: { answer: string; score: number } | null = null;
 
       if (!flow.clientId) {
         ragLog.rag = "pulado";
@@ -396,6 +436,7 @@ export async function runFlowStep(opts: {
             ragLog.trechos = hits.length;
             ragLog.scores = hits.map((h) => Number(h.score).toFixed(3));
             ragHits = hits.map((h) => ({ question: h.question, score: Number(h.score) }));
+            literalHit = pickLiteralHit(hits, String(node.data.tone || ""));
             if (hits.length) {
               const trechos = hits
                 .map((h) => `- Pergunta parecida: ${h.question}\n  Resposta dada pela equipe: ${h.answer}`)
@@ -416,10 +457,33 @@ export async function runFlowStep(opts: {
       }
       console.log(`[ia] ${JSON.stringify({ ...ragLog, pergunta: text.slice(0, 80) })}`);
 
+      // Modo literal: devolve o texto ensinado ao pé da letra, sem chamar o
+      // modelo. Mais rápido, sem custo de token e impossível de alucinar —
+      // é o ponto do modo. Só entra com correspondência forte (ver
+      // pickLiteralHit); fora disso segue pra geração normal, nunca pro
+      // ramo "erro": responder literalmente uma resposta que não corresponde
+      // à pergunta seria pior do que reformular.
+      if (literalHit) {
+        const varNameLit = String(node.data.varName || "resposta_ia");
+        vars[varNameLit] = literalHit.answer;
+        replies.push(literalHit.answer);
+        trace.push({
+          nodeId: node.id,
+          type: "llm_answer",
+          reply: literalHit.answer,
+          detail: `respondeu ao pé da letra (${literalHit.score.toFixed(3)})`,
+        });
+        node = nextNode(flow, node.id, "ok");
+        continue;
+      }
+
       const result = await answerFreeform({
         question: text,
         context,
-        maxChars: Number(node.data.maxChars) || 400,
+        // Sem maxChars no card, o padrão vem do tom (cordial precisa de mais
+        // espaço que direta) — por isso undefined em vez de 400 fixo.
+        maxChars: Number(node.data.maxChars) || undefined,
+        tone: normalizeTone(node.data.tone),
       });
       // Rastro persistido: o console some, e "por que respondeu isso?" precisa
       // de resposta depois. Fire-and-forget — gravar log não pode atrasar nem
