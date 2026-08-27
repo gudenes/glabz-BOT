@@ -25,6 +25,42 @@ export type RawFlowNode = {
 
 export type RawFlowEdge = { from?: string; to?: string; label?: string };
 
+/** Qual desenho de fluxo gerar. Ver SYSTEM x SYSTEM_SIMPLES. */
+export type FlowBuildMode = "simples" | "completo";
+
+/**
+ * Fluxo enxuto: resolve UMA prioridade do negócio no menor número de cards.
+ * Não é o completo podado — é outro desenho. Sem boas-vindas e sem perguntar
+ * nome de propósito (decisão do usuário, 27/08): essas etapas são do fluxo
+ * completo, e num fluxo de 5 cards elas consumiriam quase tudo sem entregar
+ * a resposta que o cliente veio buscar.
+ */
+const SYSTEM_SIMPLES = `Você monta fluxos de atendimento WhatsApp da GLABZ, no modo ENXUTO.
+Responda APENAS um JSON válido, sem markdown:
+{
+  "name": "nome curto do fluxo",
+  "nodes": [
+    { "id": "n1", "type": "trigger|message|ask|llm_answer|handoff|end", "text": "texto visível", "varName": "opcional", "context": "opcional, só pra llm_answer" }
+  ],
+  "edges": [
+    { "from": "n1", "to": "n2", "label": "opcional" }
+  ]
+}
+
+Regras (todas obrigatórias):
+1. NO MÁXIMO 5 cards no total, contando o trigger e o fim. Menos é melhor.
+2. Comece pelo trigger. NÃO use boas-vindas nem pergunte o nome — esse fluxo vai direto ao ponto.
+3. TEM que existir um card llm_answer: é ele que responde de verdade, usando a base de conhecimento
+   do negócio, e é o que dá valor ao fluxo. Preencha "context" com os fatos que JÁ apareceram no
+   briefing (horário, preço, endereço, política) — nunca invente; se nada foi dito, deixe "" mesmo,
+   o card continua funcionando pela base de conhecimento em tempo real.
+4. llm_answer SEMPRE tem duas saídas: edge label "ok" e edge label "erro". A "erro" vai pra um
+   handoff (atendente humano) — é a rede de segurança quando a IA não sabe responder.
+5. NÃO use llm_intent, condition nem action. Este fluxo não ramifica por intenção: ele atende UMA
+   necessidade principal, a que o dono indicou como mais relevante.
+6. NÓ linear (trigger, message, ask, handoff, end) tem no máximo 1 saída.
+Textos em português, naturais, prontos para WhatsApp (*negrito* ok).`;
+
 const SYSTEM = `Você monta fluxos de atendimento WhatsApp da GLABZ.
 Responda APENAS um JSON válido, sem markdown:
 {
@@ -193,6 +229,51 @@ export const KNOWN_NODE_TYPES = new Set([
   "condition",
 ]);
 
+/** Cria o nó llm_answer padrão do reparo, com id que não colide. */
+function makeAnswerNode(nodes: FlowNode[]): FlowNode {
+  const usedIds = new Set(nodes.map((n) => n.id));
+  let id = "n_faq";
+  let i = 2;
+  while (usedIds.has(id)) id = `n_faq${i++}`;
+  return {
+    id,
+    type: "llm_answer",
+    x: 0,
+    y: 0,
+    data: { label: "Responder com IA", context: "", varName: "resposta_ia", maxChars: 400 },
+  };
+}
+
+/**
+ * Reparo para fluxo SEM llm_intent (típico do modo simples): insere o
+ * llm_answer em linha logo após o trigger, reaproveitando o destino que o
+ * trigger já tinha como saída "ok". "erro" vai pro handoff se houver, senão
+ * pro mesmo destino — nunca deixa a saída solta.
+ */
+function insertLlmAnswerInline(
+  nodes: FlowNode[],
+  edges: FlowEdge[]
+): { nodes: FlowNode[]; edges: FlowEdge[]; repaired: boolean } {
+  const trigger = nodes.find((n) => n.type === "trigger");
+  if (!trigger) return { nodes, edges, repaired: false };
+
+  const answer = makeAnswerNode(nodes);
+  const fromTrigger = edges.find((e) => e.from === trigger.id);
+  const anEnd = nodes.find((n) => n.type === "end");
+  const aHandoff = nodes.find((n) => n.type === "handoff");
+  const okTarget = fromTrigger?.to || anEnd?.id || null;
+  const errTarget = aHandoff?.id || okTarget;
+
+  // O trigger passa a apontar pro llm_answer; o que vinha depois dele vira o
+  // destino da saída "ok" — o resto do fluxo continua intacto.
+  const nextEdges = edges.filter((e) => e !== fromTrigger);
+  nextEdges.push({ id: "e_faq_in", from: trigger.id, to: answer.id });
+  if (okTarget) nextEdges.push({ id: "e_faq_ok", from: answer.id, to: okTarget, label: "ok" });
+  if (errTarget) nextEdges.push({ id: "e_faq_err", from: answer.id, to: errTarget, label: "erro" });
+
+  return { nodes: [...nodes, answer], edges: nextEdges, repaired: true };
+}
+
 /**
  * Garantia estrutural: todo fluxo gerado SAI com pelo menos um llm_answer.
  *
@@ -217,9 +298,11 @@ export function ensureLlmAnswer(nodes: FlowNode[], edges: FlowEdge[]): {
     return { nodes, edges, repaired: false };
   }
   const intent = nodes.find((n) => n.type === "llm_intent");
-  // Sem llm_intent não há onde pendurar um ramo novo sem redesenhar o fluxo
-  // inteiro — nesse caso é mais honesto não mexer do que inventar estrutura.
-  if (!intent) return { nodes, edges, repaired: false };
+  // Sem llm_intent (caso normal no fluxo simples, que não ramifica por
+  // intenção) o reparo entra em LINHA, logo depois do trigger, em vez de
+  // pendurar um ramo. Antes essa situação fazia a garantia desistir — e um
+  // fluxo simples sem llm_answer é exatamente o que ela existe pra impedir.
+  if (!intent) return insertLlmAnswerInline(nodes, edges);
 
   const usedIds = new Set(nodes.map((n) => n.id));
   let answerId = "n_faq";
@@ -297,9 +380,13 @@ export function sanitizeEdges(nodes: FlowNode[], edges: FlowEdge[]): FlowEdge[] 
   return out;
 }
 
-export async function generateFlowFromPrompt(prompt: string): Promise<GeneratedFlow> {
+export async function generateFlowFromPrompt(
+  prompt: string,
+  mode: FlowBuildMode = "completo"
+): Promise<GeneratedFlow> {
   const key = llmApiKey();
   if (!key) throw new Error("LLM não configurada (XAI_API_KEY).");
+  const simples = mode === "simples";
   const res = await fetch(`${llmBaseUrl().replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
@@ -309,10 +396,11 @@ export async function generateFlowFromPrompt(prompt: string): Promise<GeneratedF
     body: JSON.stringify({
       model: llmModel(),
       temperature: 0.3,
-      max_tokens: 3200,
+      // O simples cabe em muito menos: no máximo 5 cards contra 14.
+      max_tokens: simples ? 1200 : 3200,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: SYSTEM },
+        { role: "system", content: simples ? SYSTEM_SIMPLES : SYSTEM },
         { role: "user", content: prompt.slice(0, 4000) },
       ],
     }),

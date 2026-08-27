@@ -1,5 +1,5 @@
 import { llmApiKey, llmBaseUrl, llmModel } from "../config.js";
-import { generateFlowFromPrompt, type GeneratedFlow } from "./from-prompt.js";
+import { generateFlowFromPrompt, type FlowBuildMode, type GeneratedFlow } from "./from-prompt.js";
 
 export type StudioMsg = { role: "user" | "assistant"; content: string };
 export type StudioPhase = "ask" | "offer" | "preview" | "debrief" | "ready";
@@ -238,16 +238,29 @@ export function wantsBuild(text: string): boolean {
   );
 }
 
-export function briefFromMessages(messages: StudioMsg[], ctx?: ClientContext | null): string {
+export function briefFromMessages(
+  messages: StudioMsg[],
+  ctx?: ClientContext | null,
+  mode: FlowBuildMode = "completo"
+): string {
   const lines = messages
     .map((m) => (m.role === "user" ? `Dono: ${m.content}` : `Assistente: ${m.content}`))
     .join("\n");
-  return `${clientContextBlock(ctx)}\n\nCom base neste BRIEFING (ignore falas de ensaio em que o dono fingiu ser cliente), monte o fluxo de WhatsApp.\nArquitetura: tronco trigger→boas-vindas→intent, depois um ramo vertical por pedido, sem cruzar linhas.\nUse o nome do negócio nas boas-vindas se já estiver no contexto.\n\n${lines}`;
+  // O preâmbulo descreve a arquitetura esperada e precisa concordar com o
+  // SYSTEM usado (from-prompt.ts). No modo simples ele mandava montar
+  // "tronco→boas-vindas→intent", que é justamente o que o simples NÃO deve
+  // ter — os dois brigariam.
+  const arch =
+    mode === "simples"
+      ? "Monte o fluxo MAIS CURTO possível que resolva a prioridade principal do dono: sem boas-vindas, sem perguntar nome, no máximo 5 cards."
+      : "Arquitetura: tronco trigger→boas-vindas→pergunta de nome→intent, depois um ramo vertical por pedido, sem cruzar linhas.\nUse o nome do negócio nas boas-vindas se já estiver no contexto.";
+  return `${clientContextBlock(ctx)}\n\nCom base neste BRIEFING (ignore falas de ensaio em que o dono fingiu ser cliente), monte o fluxo de WhatsApp.\n${arch}\n\n${lines}`;
 }
 
 export async function buildFlowFromStudio(
   messages: StudioMsg[],
-  ctx?: ClientContext | null
+  ctx?: ClientContext | null,
+  mode: FlowBuildMode = "completo"
 ): Promise<GeneratedFlow> {
-  return generateFlowFromPrompt(briefFromMessages(messages, ctx).slice(0, 6000));
+  return generateFlowFromPrompt(briefFromMessages(messages, ctx, mode).slice(0, 6000), mode);
 }
