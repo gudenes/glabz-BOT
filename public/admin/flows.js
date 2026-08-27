@@ -15,6 +15,7 @@ const STORAGE_KEY = "glabs_bot_secret";
 const qs = new URLSearchParams(location.search);
 const EMBED = qs.has("embed");
 const URL_CLIENT = qs.get("client") || "";
+const URL_FLOW = qs.get("flow") || "";
 if (EMBED) document.body.classList.add("portal-embed");
 
 const state = {
@@ -384,7 +385,11 @@ async function loadAll() {
   }
 
   if (!state.flow && state.flows.length) {
-    selectFlow(state.flows[0].id);
+    // O portal manda ?flow=<id> pra dizer QUAL fluxo abrir (o do modo ativo
+    // no painel de modos). Sem isso o builder abria sempre o mais recente,
+    // que não tem relação com o modo que o dono selecionou.
+    const wanted = URL_FLOW && state.flows.find((f) => f.id === URL_FLOW);
+    selectFlow((wanted || state.flows[0]).id);
   } else if (!state.flow) {
     if (EMBED) {
       window.parent.postMessage({ type: "glabs-flows-changed" }, "*");
