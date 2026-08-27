@@ -125,7 +125,6 @@ import {
   buildFlowFromStudio,
   studioTurn,
   wantsBuild,
-  wantsTest,
   type StudioMsg,
   type StudioMode,
 } from "./flows/studio.js";
@@ -1092,15 +1091,10 @@ const server = createServer(async (req, res) => {
         return;
       }
       const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content || "";
-      const inPreview = body?.phase === "preview";
-      const action =
-        mode === "knowledge"
-          ? "chat"
-          : body?.action === "build" || (!inPreview && body?.action !== "test" && wantsBuild(lastUser))
-            ? "build"
-            : body?.action === "test" || (!inPreview && wantsTest(lastUser))
-              ? "test"
-              : "chat";
+      // O ensaio dentro do onboarding foi removido (decisão do usuário,
+      // 27/08): ele agora acontece depois, pelo fluxo simples, dentro do
+      // tour. Com isso somem a ação "test" e as fases offer/preview/debrief.
+      const action = mode === "knowledge" ? "chat" : body?.action === "build" || wantsBuild(lastUser) ? "build" : "chat";
       try {
         const ctx = studioContextFor(client);
         if (action === "build") {
@@ -1131,37 +1125,7 @@ const server = createServer(async (req, res) => {
           });
           return;
         }
-        if (action === "test") {
-          const turn = await studioTurn(
-            [
-              ...messages,
-              {
-                role: "user",
-                content:
-                  "Sim. Vamos testar agora. A partir daqui eu falo como o cliente. Não altere o fluxo no meio do ensaio — só interpreta o bot.",
-              },
-            ],
-            ctx
-          );
-          json(res, 200, {
-            ok: true,
-            kind: "chat",
-            phase: "preview",
-            as: "bot",
-            say: turn.say,
-          });
-          return;
-        }
-        const history = inPreview
-          ? messages.map((m, i, arr) =>
-              m.role === "user" && i === arr.length - 1
-                ? {
-                    ...m,
-                    content: `[ensaio — falo como cliente, não é pedido de mudança]\n${m.content}`,
-                  }
-                : m
-            )
-          : messages;
+        const history = messages;
         const turn = await studioTurn(history, ctx, mode);
         json(res, 200, { ok: true, kind: "chat", ...turn });
       } catch (e) {
