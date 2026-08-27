@@ -251,38 +251,110 @@ $("onboard")?.addEventListener("click", (ev) => {
 });
 
 /**
- * Tour guiado de 1º acesso — roda ANTES do onboarding acima, uma única vez
- * por cliente (mesmo padrão de onboardKey/dismissOnboard: localStorage por
- * client.id, nunca por sessionStorage['glabs_client_id']/role, pra ficar
- * idêntico em impersonation e cliente real). 2 passos com spotlight num
- * alvo real da tela: conectar WhatsApp → aba Fluxo. Ao terminar o passo 2,
- * entrega pro .onboard existente via setView("flow") — não duplica a
- * escolha template x IA que o .onboard já oferece.
+ * Jornada guiada de 1º acesso.
+ *
+ * Antes eram 2 passos fixos (QR → aba Fluxo) com um booleano "já viu". A
+ * jornada pedida pelo usuário (27/08) é maior: primeiro ambientar — mostrar
+ * o menu, o que é cada área — e só DEPOIS perguntar o objetivo e conduzir
+ * até o fim (WhatsApp conectado, ou primeiro fluxo pronto).
+ *
+ * Isso exigiu três coisas que o motor antigo não tinha:
+ *  • `view` por passo, pra trocar de aba antes de destacar o alvo;
+ *  • RAMIFICAÇÃO — a partir da escolha de objetivo os caminhos divergem;
+ *  • PROGRESSO PERSISTIDO, não um booleano. A conexão do WhatsApp faz
+ *    refresh() a cada 4s e o dono pode recarregar a página no meio; sem
+ *    guardar onde parou, a jornada recomeçava ou sumia.
  */
 function tourKey() {
   const cid = state.portal?.client?.id || "anon";
   return `glabs_tour_done_${cid}`;
 }
+function tourProgressKey() {
+  const cid = state.portal?.client?.id || "anon";
+  return `glabs_journey_${cid}`;
+}
 
-/** No breakpoint mobile a sidebar (.side) some e vira .mobile-nav — pega
- * qual dos dois data-view="flow" está de fato visível pra apontar o
- * spotlight certo. offsetParent não serve aqui: some elementos são
- * position:fixed (.mobile-nav), e offsetParent é sempre null nesse caso
- * mesmo visível. */
-function visibleFlowNavLink() {
-  const links = [...document.querySelectorAll('[data-view="flow"]')];
+/** Elemento de nav visível pra uma view. No breakpoint mobile a sidebar some
+ * e vira .mobile-nav; offsetParent não serve porque .mobile-nav é fixed
+ * (offsetParent é sempre null nesse caso, mesmo visível). */
+function visibleNavLink(view) {
+  const links = [...document.querySelectorAll(`[data-view="${view}"]`)];
   return links.find((el) => getComputedStyle(el).display !== "none") || links[0] || null;
 }
 
-const TOUR_STEPS = [
-  { target: () => $("btn-connect"), titleKey: "portal.tour.step1Title", bodyKey: "portal.tour.step1Body" },
-  { target: () => visibleFlowNavLink(), titleKey: "portal.tour.step2Title", bodyKey: "portal.tour.step2Body" },
+/**
+ * Passos da jornada. `id` é o que fica salvo no progresso — por isso são
+ * nomes, não índices: inserir um passo no meio não pode teleportar quem
+ * está no meio da jornada.
+ * `choices` transforma o passo numa bifurcação; `next` liga o passo
+ * seguinte; `done` encerra a jornada ali.
+ */
+const JOURNEY = [
+  {
+    id: "menu",
+    view: "status",
+    target: () => visibleNavLink("status"),
+    titleKey: "portal.tour.menuTitle",
+    bodyKey: "portal.tour.menuBody",
+    next: "conhecimento",
+  },
+  {
+    id: "conhecimento",
+    view: "status",
+    target: () => visibleNavLink("knowledge") || visibleNavLink("account"),
+    titleKey: "portal.tour.knowTitle",
+    bodyKey: "portal.tour.knowBody",
+    next: "conta",
+  },
+  {
+    id: "conta",
+    view: "status",
+    target: () => visibleNavLink("account"),
+    titleKey: "portal.tour.accountTitle",
+    bodyKey: "portal.tour.accountBody",
+    next: "objetivo",
+  },
+  {
+    // Bifurcação: os dois caminhos que o usuário definiu. Migrar de outro
+    // provedor caiu em "conectar" de propósito — ele concluiu que separar
+    // seria "complexidade que não existe".
+    id: "objetivo",
+    view: "status",
+    target: () => $("wa-hero") || visibleNavLink("status"),
+    titleKey: "portal.tour.goalTitle",
+    bodyKey: "portal.tour.goalBody",
+    choices: [
+      { labelKey: "portal.tour.goalConnect", next: "conectar" },
+      { labelKey: "portal.tour.goalFlow", next: "fluxo" },
+    ],
+  },
+  {
+    id: "conectar",
+    view: "status",
+    target: () => $("btn-connect"),
+    titleKey: "portal.tour.step1Title",
+    bodyKey: "portal.tour.step1Body",
+    done: true,
+  },
+  {
+    id: "fluxo",
+    view: "flow",
+    target: () => visibleNavLink("flow"),
+    titleKey: "portal.tour.step2Title",
+    bodyKey: "portal.tour.step2Body",
+    // Fim da condução: entrega pro #onboard, que já oferece a escolha
+    // template x IA — não faz sentido duplicar aqui.
+    done: true,
+    handoffToOnboard: true,
+  },
 ];
 
-let tourStep = 0;
+const journeyStep = (id) => JOURNEY.find((s) => s.id === id) || null;
+
+let tourStepId = null;
 
 function positionTour() {
-  const target = TOUR_STEPS[tourStep]?.target();
+  const target = journeyStep(tourStepId)?.target();
   const hole = $("tour-hole");
   const bubble = $("tour-bubble");
   if (!target || !hole || !bubble) return;
@@ -298,58 +370,97 @@ function positionTour() {
   const bubbleWidth = 320;
   const left = Math.max(12, Math.min(r.left, window.innerWidth - bubbleWidth - 12));
   const spaceBelow = window.innerHeight - r.bottom;
-  const top = spaceBelow > 170 ? r.bottom + pad + 12 : Math.max(12, r.top - 150);
+  const top = spaceBelow > 200 ? r.bottom + pad + 12 : Math.max(12, r.top - 180);
   bubble.style.left = `${left}px`;
   bubble.style.top = `${top}px`;
 }
 
-function showTourStep(i) {
-  const step = TOUR_STEPS[i];
-  const target = step?.target();
-  if (!step || !target) {
-    // Alvo não existe (não devia acontecer, markup é estático) — não força
-    // nada nem marca como visto, só desiste silenciosamente desta vez.
-    dismissTour(false);
-    return;
+function showTourStep(id) {
+  const step = journeyStep(id);
+  if (!step) return dismissTour(false);
+  if (step.view && state.view !== step.view) setView(step.view);
+
+  const target = step.target();
+  if (!target) {
+    // Alvo não existe nesta tela (ex.: item de menu ausente no mobile) —
+    // pula pro próximo em vez de travar a jornada num passo invisível.
+    const nxt = step.next || step.choices?.[0]?.next;
+    if (nxt) return showTourStep(nxt);
+    return dismissTour(false);
   }
-  tourStep = i;
+
+  tourStepId = id;
+  localStorage.setItem(tourProgressKey(), id);
   $("tour")?.classList.remove("hidden");
-  $("tour-step-label").textContent = t("portal.tour.stepLabel", { n: i + 1 });
+
+  const idx = JOURNEY.findIndex((sp) => sp.id === id) + 1;
+  $("tour-step-label").textContent = t("portal.tour.stepLabel", { n: idx, total: JOURNEY.length });
   $("tour-title").textContent = t(step.titleKey);
   $("tour-body").textContent = t(step.bodyKey);
-  $("tour-next").textContent = i === TOUR_STEPS.length - 1 ? t("portal.tour.goToFlow") : t("portal.tour.next");
+  renderTourActions(step);
   positionTour();
 }
 
+/** Botões do balão: uma escolha por opção quando o passo bifurca, senão o
+ * "Próxima"/"Concluir" de sempre. */
+function renderTourActions(step) {
+  const wrap = $("tour-actions-dyn");
+  const next = $("tour-next");
+  if (!wrap || !next) return;
+  wrap.innerHTML = "";
+  if (step.choices) {
+    next.classList.add("hidden");
+    for (const c of step.choices) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn-lime tour-choice";
+      b.textContent = t(c.labelKey);
+      b.addEventListener("click", () => showTourStep(c.next));
+      wrap.appendChild(b);
+    }
+    return;
+  }
+  next.classList.remove("hidden");
+  next.textContent = step.done ? t("portal.tour.finish") : t("portal.tour.next");
+}
+
+function advanceTour() {
+  const step = journeyStep(tourStepId);
+  if (!step) return dismissTour();
+  if (step.done) {
+    dismissTour();
+    if (step.handoffToOnboard) setView("flow"); // aciona maybeOnboard()
+    return;
+  }
+  if (step.next) showTourStep(step.next);
+  else dismissTour();
+}
+
 function dismissTour(remember = true) {
-  if (remember) localStorage.setItem(tourKey(), "1");
+  if (remember) {
+    localStorage.setItem(tourKey(), "1");
+    localStorage.removeItem(tourProgressKey());
+  }
   $("tour")?.classList.add("hidden");
 }
 
-/** Chamado uma vez no boot, depois que refresh() resolve — o tour só faz
- * sentido pré-conexão (ver state.lastWa, já populado nesse ponto por
- * render()); depois disso o dono já passou dessa etapa. */
+/** Chamado uma vez no boot, depois que refresh() resolve. Retoma de onde
+ * parou quando há progresso salvo — o dono pode ter recarregado a página no
+ * meio da conexão do WhatsApp. */
 function maybeTour() {
   if (localStorage.getItem(tourKey()) === "1") return;
   if (state.lastWa === "connected") return;
-  showTourStep(0);
+  const saved = localStorage.getItem(tourProgressKey());
+  showTourStep(saved && journeyStep(saved) ? saved : JOURNEY[0].id);
 }
 
 $("tour-skip")?.addEventListener("click", () => dismissTour());
 // Clicar fora (fora do balão) fecha, mas sem marcar como "já resolvi" —
-// mesmo padrão do .onboard: volta na próxima visita. .tour-hole tem
-// pointer-events:none, então cliques nele já chegam aqui como alvo #tour.
+// mesmo padrão do .onboard: volta na próxima visita, retomando o progresso.
 $("tour")?.addEventListener("click", (ev) => {
   if (ev.target === $("tour")) dismissTour(false);
 });
-$("tour-next")?.addEventListener("click", () => {
-  if (tourStep < TOUR_STEPS.length - 1) {
-    showTourStep(tourStep + 1);
-  } else {
-    dismissTour();
-    setView("flow"); // aciona maybeOnboard() naturalmente — ver setView()
-  }
-});
+$("tour-next")?.addEventListener("click", () => advanceTour());
 window.addEventListener("resize", () => {
   if (!$("tour")?.classList.contains("hidden")) positionTour();
 });

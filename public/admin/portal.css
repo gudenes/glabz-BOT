@@ -597,7 +597,12 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 }
 .tour-bubble h3 { margin: 0 0 6px; font-size: 16px; }
 .tour-bubble p:not(.tour-step) { margin: 0 0 16px; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
-.tour-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+.tour-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* Escolhas do passo de bifurcação (conectar WhatsApp x criar fluxo) —
+   empilham no balão estreito em vez de espremer lado a lado. */
+.tour-actions-dyn { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.tour-choice { font-size: 13px; padding: 8px 14px; }
+#tour-next.hidden { display: none; }
 
 /* Onboarding — dois caminhos de partida na primeira visita à aba Fluxo */
 .onboard {
