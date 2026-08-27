@@ -108,6 +108,7 @@ import {
 } from "./session.js";
 import {
   deleteFlow,
+  findFlowByClientAndMode,
   getFlow,
   listFlows,
   listFlowVersions,
@@ -1100,7 +1101,12 @@ const server = createServer(async (req, res) => {
         const ctx = studioContextFor(client);
         if (action === "build") {
           const gen = await buildFlowFromStudio(messages, ctx);
+          // Reaproveita o fluxo deste modo se já existir, em vez de criar
+          // outro — sem isso, gerar de novo empilharia fluxos (é o bug do
+          // fluxo duplicado, PR #79, na sua versão por modo).
+          const existingSame = clientId ? findFlowByClientAndMode(clientId, "completo") : null;
           const flow = saveFlow({
+            id: existingSame?.id,
             name: gen.name,
             product: client?.slug || "gestor",
             accountId: clientId ? listAccounts({ clientId })[0]?.id ?? null : null,
@@ -1108,6 +1114,7 @@ const server = createServer(async (req, res) => {
             status: "draft",
             nodes: gen.nodes,
             edges: gen.edges,
+            mode: "completo",
           });
           json(res, 200, {
             ok: true,
@@ -1169,7 +1176,11 @@ const server = createServer(async (req, res) => {
       }
       try {
         const gen = await generateFlowFromPrompt(prompt);
+        // Gerar por prompt livre conta como o fluxo "completo" do cliente —
+        // reaproveita o existente desse modo em vez de acumular.
+        const existingSame = clientId ? findFlowByClientAndMode(clientId, "completo") : null;
         const flow = saveFlow({
+          id: existingSame?.id,
           name: gen.name,
           product: client?.slug || "gestor",
           accountId: clientId ? listAccounts({ clientId })[0]?.id ?? null : null,
@@ -1177,6 +1188,7 @@ const server = createServer(async (req, res) => {
           status: "draft",
           nodes: gen.nodes,
           edges: gen.edges,
+          mode: "completo",
         });
         json(res, 200, { ok: true, flow });
       } catch (e) {
@@ -1477,7 +1489,11 @@ const server = createServer(async (req, res) => {
       // primeiro do array).
       const seed = pickCatalogFlow(body?.template);
       try {
+        // Trocar de template substitui o fluxo do modo "template" em vez de
+        // criar mais um — o dono espera um fluxo por modo, não um por escolha.
+        const existingSame = clientId ? findFlowByClientAndMode(clientId, "template") : null;
         const flow = saveFlow({
+          id: existingSame?.id,
           name: seed ? seed.name : "Novo fluxo",
           product: client?.slug || "gestor",
           accountId: clientId ? listAccounts({ clientId })[0]?.id ?? null : null,
@@ -1485,6 +1501,7 @@ const server = createServer(async (req, res) => {
           status: "draft",
           nodes: seed ? seed.nodes : blankFlow().nodes,
           edges: seed ? seed.edges : blankFlow().edges,
+          mode: "template",
         });
         json(res, 200, { ok: true, flow });
       } catch (e) {
@@ -1712,9 +1729,14 @@ const server = createServer(async (req, res) => {
             product: body?.product ?? existing.product,
             accountId:
               body?.accountId !== undefined ? body.accountId : existing.accountId,
+            // Mesmo motivo do restoreFlowVersion: enumerar campos aqui fazia
+            // o PUT perder clientId e faria perder o mode. saveFlow recuperava
+            // por acaso via `existing?.`; explícito é mais seguro.
+            clientId: existing.clientId,
             status: body?.status ?? existing.status,
             nodes: body?.nodes ?? existing.nodes,
             edges: body?.edges ?? existing.edges,
+            mode: existing.mode,
           });
           json(res, 200, { ok: true, flow });
         } catch (e) {
