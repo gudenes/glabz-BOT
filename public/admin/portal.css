@@ -1212,6 +1212,11 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 }
 .flow-mode:hover { border-color: var(--gold); }
 .flow-mode.on { background: var(--gold); border-color: var(--gold); color: var(--gold-ink); }
+/* Modo que o dono ainda não tem — convite, não estado. */
+.flow-mode.ghost { border-style: dashed; color: var(--muted); font-weight: 600; }
+.flow-mode.ghost:hover { color: var(--ink); border-color: var(--gold); }
+/* Contagem de cards: contexto do tamanho direto no botão. */
+.flow-mode-n { opacity: .55; font-weight: 700; font-size: 11px; }
 .flow-mode-live {
   font-size: 10px; font-weight: 800; letter-spacing: .04em;
   text-transform: uppercase; opacity: .75; margin-left: 4px;

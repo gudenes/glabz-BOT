@@ -341,10 +341,24 @@ const JOURNEY = [
     target: () => visibleNavLink("flow"),
     titleKey: "portal.tour.step2Title",
     bodyKey: "portal.tour.step2Body",
-    // Fim da condução: entrega pro #onboard, que já oferece a escolha
-    // template x IA — não faz sentido duplicar aqui.
+    // Entrega pro #onboard (que já oferece template x IA) e SAI DA TELA —
+    // mas a jornada NÃO acaba aqui: retoma no passo "modos" assim que o
+    // fluxo existir. O usuário pediu tour "até ele finalizar o primeiro
+    // fluxo", e terminar antes de o fluxo existir deixava ele sozinho
+    // justamente no momento em que mais precisa de orientação.
+    pauseForOnboard: true,
+  },
+  {
+    // Alcançado por CÓDIGO, não por ligação: quem traz aqui é
+    // resumeJourneyAfterFlow(), disparado quando o primeiro fluxo fica
+    // pronto. Por isso não há `next` apontando pra ele.
+    id: "modos",
+    resumedAfterFlow: true,
+    view: "flow",
+    target: () => $("flow-modes"),
+    titleKey: "portal.tour.modesTitle",
+    bodyKey: "portal.tour.modesBody",
     done: true,
-    handoffToOnboard: true,
   },
 ];
 
@@ -426,13 +440,31 @@ function renderTourActions(step) {
 function advanceTour() {
   const step = journeyStep(tourStepId);
   if (!step) return dismissTour();
-  if (step.done) {
-    dismissTour();
-    if (step.handoffToOnboard) setView("flow"); // aciona maybeOnboard()
+  if (step.pauseForOnboard) {
+    // Some da tela mas MANTÉM o progresso salvo: o dono vai conversar com o
+    // coach agora, e a jornada volta quando o fluxo estiver pronto.
+    $("tour")?.classList.add("hidden");
+    setView("flow"); // aciona maybeOnboard()
     return;
   }
+  if (step.done) return dismissTour();
   if (step.next) showTourStep(step.next);
   else dismissTour();
+}
+
+/**
+ * Retoma a jornada depois que o primeiro fluxo fica pronto — é o "até ele
+ * finalizar o primeiro fluxo" que o usuário pediu. Mostra o painel de modos,
+ * que é onde ele descobre QUAL fluxo tem e como trocar. Só roda se a jornada
+ * estava mesmo pausada nesse ponto: quem já dispensou o tour não é
+ * interrompido de novo.
+ */
+function resumeJourneyAfterFlow() {
+  if (localStorage.getItem(tourKey()) === "1") return;
+  if (localStorage.getItem(tourProgressKey()) !== "fluxo") return;
+  // O painel de modos precisa existir na tela antes de virar alvo.
+  renderModeSwitch();
+  setTimeout(() => showTourStep("modos"), 400);
 }
 
 function dismissTour(remember = true) {
@@ -572,29 +604,41 @@ function syncFlowPane() {
 }
 
 /**
- * Painel de modos: mostra qual fluxo está ativo e deixa trocar. Só aparece
- * quando há mais de um modo disponível — com um só, seria um seletor de uma
- * opção. Trocar não regenera nada: cada modo é um fluxo salvo, e alternar só
+ * Painel de modos: mostra qual fluxo está ativo e deixa trocar.
+ *
+ * Aparece SEMPRE que existe pelo menos um fluxo — inclusive com um só.
+ * Antes escondia com menos de dois modos ("seria um seletor de uma opção"),
+ * e isso estava errado do ponto de vista de quem usa: terminando o
+ * onboarding o dono ficava com um fluxo grande, sem saber que modo era
+ * aquele nem que existiam outros. O painel é o que ANUNCIA os modos, não só
+ * o que alterna entre eles — por isso o que ainda não existe aparece como
+ * convite ("montar"), não some.
+ *
+ * Trocar não regenera nada: cada modo é um fluxo salvo, e alternar só
  * recarrega o builder apontando pro outro (decisão do usuário, 27/08).
  */
 function renderModeSwitch() {
   const box = $("flow-modes");
   if (!box) return;
-  const available = FLOW_MODES.filter((m) => flowForMode(m));
-  box.classList.toggle("hidden", available.length < 2);
-  if (available.length < 2) return;
+  const existing = FLOW_MODES.filter((m) => flowForMode(m));
+  box.classList.toggle("hidden", existing.length === 0);
+  if (!existing.length) return;
 
   const current = activeMode();
   box.innerHTML =
     `<span class="flow-modes-label">${t("portal.flowMode.label")}</span>` +
-    available
-      .map((m) => {
-        const f = flowForMode(m);
-        const live = f?.status === "live" ? ` <span class="flow-mode-live">${t("portal.flowMode.live")}</span>` : "";
-        return `<button type="button" class="flow-mode${m === current ? " on" : ""}" data-mode="${m}"
-          title="${escapeHtml(f?.name || "")}">${t(`portal.flowMode.${m}`)}${live}</button>`;
-      })
-      .join("");
+    FLOW_MODES.map((m) => {
+      const f = flowForMode(m);
+      if (!f) {
+        // Modo que o dono ainda não tem: vira convite pra criar.
+        return `<button type="button" class="flow-mode ghost" data-make="${m}"
+          title="${escapeHtml(t("portal.flowMode.makeHint"))}">+ ${t(`portal.flowMode.${m}`)}</button>`;
+      }
+      const live = f.status === "live" ? ` <span class="flow-mode-live">${t("portal.flowMode.live")}</span>` : "";
+      const cards = (f.nodes || []).length;
+      return `<button type="button" class="flow-mode${m === current ? " on" : ""}" data-mode="${m}"
+        title="${escapeHtml(f.name || "")}">${t(`portal.flowMode.${m}`)} <span class="flow-mode-n">${cards}</span>${live}</button>`;
+    }).join("");
 
   box.querySelectorAll("[data-mode]").forEach((b) => {
     b.addEventListener("click", () => {
@@ -606,6 +650,51 @@ function renderModeSwitch() {
       if (f) openBuilder(f.id);
     });
   });
+
+  box.querySelectorAll("[data-make]").forEach((b) => {
+    b.addEventListener("click", () => makeMissingMode(b.dataset.make));
+  });
+}
+
+/**
+ * Cria o fluxo de um modo que o dono ainda não tem.
+ * - template: abre o catálogo, que é onde ele escolhe qual.
+ * - simples/completo: gera a partir da MESMA conversa de onboarding que já
+ *   aconteceu (state.studio.messages). Sem histórico não dá pra gerar nada
+ *   com fundamento — nesse caso reabre o Studio pra conversar primeiro.
+ */
+async function makeMissingMode(mode) {
+  if (mode === "template") {
+    openStudio({ expand: true, mode: "flow" });
+    const box = $("tpl-pick");
+    if (box) {
+      box.classList.remove("hidden");
+      void renderTemplatePicker();
+    }
+    return;
+  }
+  const history = studioHistory();
+  if (history.length < 2) {
+    toast(t("portal.flowMode.needBriefing"));
+    openStudio({ expand: true, mode: "flow" });
+    return;
+  }
+  toast(t("portal.flowMode.building"));
+  try {
+    const data = await api("/v1/flows/studio", {
+      method: "POST",
+      body: JSON.stringify({ messages: history, action: "build", buildMode: mode }),
+    });
+    if (data.flow) {
+      await refresh();
+      setActiveMode(mode);
+      renderModeSwitch();
+      openBuilder(data.flow.id);
+      studioLayout();
+    }
+  } catch (e) {
+    toast(e.message, "err");
+  }
 }
 
 function ensureStudioWelcome() {
@@ -1734,6 +1823,7 @@ async function revealBuiltFlow(flow) {
   renderModeSwitch();
   openBuilder(flow?.id);
   studioLayout();
+  resumeJourneyAfterFlow();
   // Bônus pós-build, nunca bloqueia: o dono já viu o fluxo pronto (o momento
   // de recompensa da conversa) antes de qualquer coisa sobre conhecimento
   // aparecer. Roda em paralelo — se falhar ou não achar nada, não incomoda.
@@ -2094,6 +2184,7 @@ async function useTemplate(kind) {
     renderModeSwitch();
     openBuilder(flowForMode("template")?.id);
     studioLayout();
+    resumeJourneyAfterFlow();
   } catch (e) {
     toast(e.message, "err");
   }
