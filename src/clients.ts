@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { db, hasDatabase } from "./db.js";
 import { createUser, generateTempPassword, newId, type UserRecord } from "./auth.js";
 import {
@@ -8,9 +7,7 @@ import {
   upsertProduct,
   type AccountRecord,
 } from "./registry.js";
-import { deleteFlowsForClient, saveFlow } from "./flows/store.js";
-import { blankFlow, pickCatalogFlow } from "./flows/catalog.js";
-import type { Flow } from "./flows/types.js";
+import { deleteFlowsForClient } from "./flows/store.js";
 
 export type ClientRecord = {
   id: string;
@@ -241,25 +238,17 @@ export async function listClientUsers(clientId: string): Promise<UserRecord[]> {
   }));
 }
 
-/**
- * Fluxo inicial do cliente novo. A escolha do template em si vive em
- * catalog.ts (`pickCatalogFlow`) — antes essa lógica estava duplicada aqui e
- * no endpoint /v1/flows/from-template, com defaults diferentes entre si.
- */
-function pickTemplate(kind?: string): Flow {
-  return pickCatalogFlow(kind) ?? blankFlow();
-}
-
 export async function provisionClient(input: {
   name: string;
   email: string;
+  /** Aceito por compatibilidade com o admin (o `<select>` ainda manda), mas
+   * não semeia mais fluxo nenhum — ver comentário em provisionClient. */
   template?: string;
 }): Promise<{
   client: ClientRecord;
   account: AccountRecord;
   user: UserRecord;
   tempPassword: string;
-  flow: Flow;
 }> {
   if (!hasDatabase()) throw new Error("Postgres obrigatório para criar cliente");
   const name = input.name.trim();
@@ -312,18 +301,12 @@ export async function provisionClient(input: {
     UPDATE accounts SET client_id = ${client.id} WHERE id = ${account.id}
   `.catch(() => undefined);
 
-  const seed = pickTemplate(input.template);
-  const flow = saveFlow({
-    id: randomUUID(),
-    name: seed.name.replace(/^Demo ·\s*/i, "") || "Atendimento",
-    product: slug,
-    accountId: account.id,
-    status: "draft",
-    nodes: seed.nodes,
-    edges: seed.edges,
-    clientId: client.id,
-  });
-
+  // NÃO semeia fluxo aqui (decisão do usuário, 27/08). Antes o cliente nascia
+  // com um fluxo vindo do catálogo, e o onboarding criava OUTRO por cima —
+  // todo cliente terminava com dois fluxos, um deles nunca usado. A duplicação
+  // não era só do caminho "Montar com IA": /v1/flows/from-template e
+  // /v1/flows/from-prompt também criam sem reaproveitar. Sem semeadura, o
+  // primeiro fluxo do cliente é o que o onboarding gerar, em qualquer caminho.
   const tempPassword = generateTempPassword();
   const user = await createUser({
     email,
@@ -334,7 +317,7 @@ export async function provisionClient(input: {
     mustChangePassword: true,
   });
 
-  return { client, account, user, tempPassword, flow };
+  return { client, account, user, tempPassword };
 }
 
 export async function deleteClient(id: string): Promise<boolean> {
