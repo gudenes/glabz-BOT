@@ -1393,6 +1393,17 @@
 }
 .fb-var:hover { border-color: #94a3b8; background: #f1f5f9; }
 .fb-var-where { font-size: 11px; color: #64748b; line-height: 1.4; }
+/* Bloco recolhido das que ainda não são usadas — a maioria da lista, e quase
+   sempre ruído (variáveis produzidas automaticamente). Fica acessível, mas
+   fora do caminho de quem procura o que está em uso. */
+.fb-vars-idle { margin-top: 8px; }
+.fb-vars-idle > summary {
+  cursor: pointer; font-size: 11.5px; color: #64748b;
+  display: flex; align-items: center; gap: 6px; list-style: none;
+}
+.fb-vars-idle > summary::-webkit-details-marker { display: none; }
+.fb-vars-idle > summary::before { content: "▸"; font-size: 9px; transition: transform .15s; }
+.fb-vars-idle[open] > summary::before { transform: rotate(90deg); }
 /* Discreto de propósito: a maioria das variáveis é produzida automaticamente
    (slots_json, pre_answer, pushName…) e nunca ser usada é o normal — destacar
    em cor de alerta viraria alarme falso na maior parte das linhas. */
