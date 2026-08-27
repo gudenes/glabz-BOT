@@ -282,6 +282,12 @@ function visibleOnboard() {
   return el && !el.classList.contains("hidden") ? el : null;
 }
 
+/** A tela "Confere antes de salvar", idem. */
+function visibleKnowledgeReview() {
+  const el = $("knowledge-review");
+  return el && !el.classList.contains("hidden") ? el : null;
+}
+
 function visibleNavLink(view) {
   const links = [...document.querySelectorAll(`[data-view="${view}"]`)];
   return links.find((el) => getComputedStyle(el).display !== "none") || links[0] || null;
@@ -358,6 +364,23 @@ const JOURNEY = [
     // fluxo", e terminar antes de o fluxo existir deixava ele sozinho
     // justamente no momento em que mais precisa de orientação.
     pauseForOnboard: true,
+  },
+  {
+    // Aparece SOBRE a tela "Confere antes de salvar", logo que o fluxo fica
+    // pronto — o momento em que o dono está olhando aquelas perguntas sem
+    // saber pra que servem. Explica e sai da frente: quem decide salvar ou
+    // pular é ele, e a demonstração dos cards só começa depois disso.
+    //
+    // Fora da numeração de propósito: a revisão só abre quando a extração
+    // acha algo, e um passo condicional dentro do "Passo N de M" faria o
+    // total mentir justamente nas vezes em que ela não abre.
+    id: "revisao",
+    view: "flow",
+    target: () => visibleKnowledgeReview(),
+    labelKey: "portal.tour.reviewLabel",
+    titleKey: "portal.tour.reviewTitle",
+    bodyKey: "portal.tour.reviewBody",
+    pauseForReview: true,
   },
   {
     // Alcançado por CÓDIGO, não por ligação: quem traz aqui é
@@ -517,7 +540,10 @@ function showTourStep(id) {
   }
 
   tourStepId = id;
-  localStorage.setItem(tourProgressKey(), id);
+  // "revisao" não vira progresso salvo: é condicional e o diálogo não existe
+  // mais depois de fechado — restaurar nele deixaria a jornada num passo sem
+  // alvo. O progresso segue valendo "fluxo", que é o ponto real de retomada.
+  if (!step.pauseForReview) localStorage.setItem(tourProgressKey(), id);
   $("tour")?.classList.remove("hidden");
 
   // Numera pelo CAMINHO, não pelo array — ver journeyPathTo. Passo dinâmico
@@ -525,7 +551,7 @@ function showTourStep(id) {
   const path = journeyPathTo(id);
   $("tour-step-label").textContent = path
     ? t("portal.tour.stepLabel", { n: path.length, total: path.length + stepsAhead(step) })
-    : t("portal.demo.label");
+    : t(step.labelKey || "portal.demo.label");
   // Passo dinâmico (demonstração) já traz o texto pronto; os fixos vêm por
   // chave i18n.
   $("tour-title").textContent = step.title ?? t(step.titleKey);
@@ -569,6 +595,12 @@ function advanceTour() {
     setView("flow"); // aciona maybeOnboard()
     return;
   }
+  if (step.pauseForReview) {
+    // Idem: sai da frente pro dono conferir/editar os itens em paz. Quem
+    // retoma é releaseJourneyAfterReview(), quando ele salva ou pula.
+    $("tour")?.classList.add("hidden");
+    return;
+  }
   if (step.done) return dismissTour();
   if (step.next) showTourStep(step.next);
   else dismissTour();
@@ -587,6 +619,18 @@ function advanceTour() {
  * de texto colado, e nesses a jornada não tem nada pra retomar ali.
  */
 let journeyWaitsForReview = false;
+
+/**
+ * Explica a tela "Confere antes de salvar" enquanto ela está aberta. Só
+ * aparece pra quem está mesmo na jornada — quem já dispensou o tour, ou já
+ * passou desse ponto, confere os itens sem interrupção.
+ */
+function showKnowledgeReviewStep() {
+  if (!journeyWaitsForReview) return;
+  if (localStorage.getItem(tourKey()) === "1") return;
+  if (localStorage.getItem(tourProgressKey()) !== "fluxo") return;
+  showTourStep("revisao");
+}
 
 /** Revisão terminou (ou nem abriu): a jornada pode seguir. */
 function releaseJourneyAfterReview() {
@@ -2039,7 +2083,8 @@ async function revealBuiltFlow(flow) {
   // ela nem chegou a abrir.
   journeyWaitsForReview = true;
   void offerKnowledgeReview().then((opened) => {
-    if (!opened) releaseJourneyAfterReview();
+    if (opened) showKnowledgeReviewStep();
+    else releaseJourneyAfterReview();
   });
   // Idem pra validação automática — testa cada ramo contra o motor real
   // antes do dono descobrir sozinho testando na mão (ver PRs #69/#70:
