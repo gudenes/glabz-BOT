@@ -71,7 +71,25 @@ export type Flow = {
    * é isso que impede o boot seguinte de sobrescrever o trabalho dele.
    */
   seedRevision?: number | null;
+  /**
+   * Qual "modo" de fluxo este é, na visão do dono do negócio: um enxuto
+   * gerado a partir da prioridade única dele (`simples`), o completo gerado
+   * de todo o briefing (`completo`), ou um do catálogo (`template`).
+   * Os três coexistem salvos e ele alterna entre eles sem perder edição —
+   * por isso é campo próprio e não `seedSlug`, que é load-bearing pra
+   * ensureSeedTemplates decidir sobrescrever nós.
+   * `undefined` = fluxo anterior a este campo; ler como `completo`.
+   */
+  mode?: FlowMode;
 };
+
+/** Ver Flow.mode. */
+export type FlowMode = "simples" | "completo" | "template";
+
+/** Modo de um fluxo já salvo, tratando o legado sem campo como completo. */
+export function flowModeOf(flow: Pick<Flow, "mode">): FlowMode {
+  return flow.mode ?? "completo";
+}
 
 /** Estado por conversa (account + telefone). */
 export type FlowConversationState = {

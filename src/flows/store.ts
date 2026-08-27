@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { flowHistoryPath, flowStatesPath, flowsPath } from "../config.js";
-import type { Flow, FlowConversationState, FlowEdge, FlowNode } from "./types.js";
+import { flowModeOf, type Flow, type FlowConversationState, type FlowEdge, type FlowMode, type FlowNode } from "./types.js";
 import { allSeedTemplates } from "./templates.js";
 
 type FlowsFile = { version: 1; flows: Flow[] };
@@ -171,14 +171,21 @@ export function getFlowVersion(versionId: string): FlowVersion | null {
 export function restoreFlowVersion(flowId: string, versionId: string): Flow | null {
   const version = getFlowVersion(versionId);
   if (!version || version.flowId !== flowId) return null;
+  // clientId e mode vêm do snapshot: enumerar campos aqui já fazia o restore
+  // PERDER o clientId (o fluxo restaurado deixava de pertencer ao cliente e
+  // sumia do portal dele). saveFlow recuperava via `existing?.clientId`, mas
+  // por acidente, não por desenho — passar explicitamente deixa correto nos
+  // dois caminhos e evita o mesmo com `mode`.
   return saveFlow({
     id: flowId,
     name: version.snapshot.name,
     product: version.snapshot.product,
     accountId: version.snapshot.accountId,
+    clientId: version.snapshot.clientId,
     status: version.snapshot.status,
     nodes: version.snapshot.nodes,
     edges: version.snapshot.edges,
+    mode: version.snapshot.mode,
   });
 }
 
@@ -203,6 +210,25 @@ export function listFlows(filter?: {
     );
   }
   return flows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+/**
+ * O fluxo de um cliente num modo específico, se já existir.
+ *
+ * Existe pra que gerar/trocar de modo SUBSTITUA o fluxo daquele modo em vez
+ * de criar mais um. Sem isso, cada alternância acumularia fluxos — que é
+ * exatamente o bug do fluxo duplicado (PR #79) generalizado pra três modos.
+ * Legado sem `mode` conta como "completo" (ver flowModeOf).
+ */
+export function findFlowByClientAndMode(clientId: string, mode: FlowMode): Flow | null {
+  if (!clientId) return null;
+  return (
+    loadFlows()
+      .flows.filter((f) => f.clientId === clientId && flowModeOf(f) === mode)
+      // Mais recente primeiro: se por algum motivo houver mais de um, o
+      // último editado é o que o dono considera "o daquele modo".
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
+  );
 }
 
 export function getFlow(id: string): Flow | null {
@@ -232,6 +258,8 @@ export function saveFlow(input: {
   /** Só o catálogo (templates.ts) preenche — ver ensureSeedTemplates. */
   seedSlug?: string;
   seedRevision?: number | null;
+  /** Ver Flow.mode. Ausente num update preserva o modo já gravado. */
+  mode?: FlowMode;
 }): Flow {
   const file = loadFlows();
   const now = new Date().toISOString();
@@ -269,6 +297,7 @@ export function saveFlow(input: {
     publishedAt:
       status === "live" ? now : status === "draft" ? existing?.publishedAt ?? null : existing?.publishedAt ?? null,
     seedSlug: input.seedSlug ?? existing?.seedSlug,
+    mode: input.mode ?? existing?.mode,
     // Qualquer save que não venha do próprio catálogo marca o fluxo como
     // customizado (seedRevision = null) — é o que protege a edição do usuário
     // de ser sobrescrita por ensureSeedTemplates no próximo boot.
