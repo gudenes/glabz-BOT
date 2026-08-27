@@ -25,6 +25,11 @@ export type RawFlowNode = {
 
 export type RawFlowEdge = { from?: string; to?: string; label?: string };
 
+/** Tetos declarados nos prompts. Usados só pra registrar estouro — ver
+ * generateFlowFromPrompt. */
+export const MAX_NODES_SIMPLES = 5;
+export const MAX_NODES_COMPLETO = 14;
+
 /** Qual desenho de fluxo gerar. Ver SYSTEM x SYSTEM_SIMPLES. */
 export type FlowBuildMode = "simples" | "completo";
 
@@ -445,6 +450,18 @@ export async function generateFlowFromPrompt(
   const finalEdges = guaranteed.repaired
     ? sanitizeEdges(guaranteed.nodes, guaranteed.edges)
     : edges;
+
+  // Teto de tamanho: o prompt pede no máximo 5 (simples) ou 14 (completo)
+  // nós, mas isso é instrução — o modelo estourou na prática (fluxo com 15+
+  // cards reportado pelo usuário em 27/08). Não dá pra podar sem quebrar o
+  // grafo, então aqui só REGISTRA: o dono continua com o fluxo que a IA fez,
+  // e a gente fica sabendo que o teto não está sendo respeitado.
+  const cap = simples ? MAX_NODES_SIMPLES : MAX_NODES_COMPLETO;
+  if (guaranteed.nodes.length > cap) {
+    console.warn(
+      `[from-prompt] fluxo ${mode} veio com ${guaranteed.nodes.length} nós (teto do prompt: ${cap})`
+    );
+  }
 
   return {
     name: parsed.name?.trim() || "Atendimento",
