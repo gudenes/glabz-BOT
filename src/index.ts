@@ -1098,30 +1098,63 @@ const server = createServer(async (req, res) => {
       try {
         const ctx = studioContextFor(client);
         if (action === "build") {
-          const buildMode: FlowBuildMode = body?.buildMode === "simples" ? "simples" : "completo";
-          const gen = await buildFlowFromStudio(messages, ctx, buildMode);
-          // Reaproveita o fluxo deste modo se já existir, em vez de criar
-          // outro — sem isso, gerar de novo empilharia fluxos (é o bug do
-          // fluxo duplicado, PR #79, na sua versão por modo).
-          const existingSame = clientId ? findFlowByClientAndMode(clientId, buildMode) : null;
-          const flow = saveFlow({
-            id: existingSame?.id,
-            name: gen.name,
-            product: client?.slug || "gestor",
-            accountId: clientId ? listAccounts({ clientId })[0]?.id ?? null : null,
-            clientId,
-            status: "draft",
-            nodes: gen.nodes,
-            edges: gen.edges,
-            mode: buildMode,
-          });
+          // Gera OS DOIS modos de uma vez (decisão do usuário, 27/08): o dono
+          // sai do onboarding no simples, e se alternar pro completo ele já
+          // está pronto — sem espera no meio do caminho.
+          //
+          // Em paralelo de propósito: são duas chamadas à LLM, e em série
+          // dobrariam o tempo de espera justamente no momento em que o dono
+          // está olhando a tela esperando o fluxo aparecer.
+          //
+          // allSettled e não all: se um dos dois falhar, o outro ainda vale.
+          // Ficar sem NENHUM fluxo por causa de uma geração ruim seria bem
+          // pior do que ficar com um.
+          const wanted: FlowBuildMode[] =
+            body?.buildMode === "simples" || body?.buildMode === "completo"
+              ? [body.buildMode]
+              : ["simples", "completo"];
+          const results = await Promise.allSettled(
+            wanted.map((m) => buildFlowFromStudio(messages, ctx, m))
+          );
+          const accountId = clientId ? listAccounts({ clientId })[0]?.id ?? null : null;
+          const saved: Partial<Record<FlowBuildMode, Flow>> = {};
+          for (let i = 0; i < wanted.length; i++) {
+            const r = results[i];
+            const m = wanted[i];
+            if (r.status !== "fulfilled") {
+              console.warn(`[studio] geração do modo ${m} falhou:`, r.reason);
+              continue;
+            }
+            // Reaproveita o fluxo deste modo se já existir, em vez de criar
+            // outro — sem isso, gerar de novo empilharia fluxos (é o bug do
+            // fluxo duplicado, PR #79, na sua versão por modo).
+            const existingSame = clientId ? findFlowByClientAndMode(clientId, m) : null;
+            saved[m] = saveFlow({
+              id: existingSame?.id,
+              name: r.value.name,
+              product: client?.slug || "gestor",
+              accountId,
+              clientId,
+              status: "draft",
+              nodes: r.value.nodes,
+              edges: r.value.edges,
+              mode: m,
+            });
+          }
+          // O simples é o que o dono vê primeiro; sem ele, cai no completo.
+          const primary = saved.simples || saved.completo;
+          if (!primary) {
+            json(res, 400, { ok: false, reason: "não consegui montar o fluxo" });
+            return;
+          }
           json(res, 200, {
             ok: true,
             kind: "flow",
             phase: "ready",
             as: "coach",
-            say: "Pronto. Abri o fluxo no builder — ajusta o que quiser e publica.",
-            flow,
+            say: "Pronto. Montei uma versão enxuta pra começar — e a completa também, caso queira.",
+            flow: primary,
+            flows: Object.values(saved),
           });
           return;
         }
