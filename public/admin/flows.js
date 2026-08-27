@@ -160,18 +160,35 @@ function prettyPreview(text) {
     .slice(0, 90);
 }
 
+/**
+ * Nomes TÉCNICOS de tipo, que nunca são nome de card. A geração já os
+ * descarta (labelOr, from-prompt.ts), mas fluxos salvos ANTES desse fix
+ * continuam com "llm_answer"/"trigger" gravados no label — aqui o card
+ * volta a mostrar o nome certo sem precisar mexer no dado.
+ */
+const TYPE_WORDS = new Set([
+  "trigger", "message", "ask", "llm_intent", "llm_extract", "llm_answer",
+  "handoff", "end", "action", "condition",
+]);
+
+function cardLabel(label, fallback) {
+  const raw = (label || "").trim();
+  if (!raw) return fallback;
+  return TYPE_WORDS.has(raw.toLowerCase().replace(/[\s-]+/g, "_")) ? fallback : raw;
+}
+
 function nodeTitle(node) {
   const d = node.data || {};
   if (node.type === "message") return prettyPreview(d.text || "Mensagem") || "Mensagem";
   if (node.type === "ask") return prettyPreview(d.prompt || "Pergunta") || "Pergunta";
-  if (node.type === "llm_intent") return d.label || "Entender intenção";
-  if (node.type === "llm_extract") return d.label || "Extrair data";
-  if (node.type === "llm_answer") return d.label || "Responder com IA";
+  if (node.type === "llm_intent") return cardLabel(d.label, "Entender intenção");
+  if (node.type === "llm_extract") return cardLabel(d.label, "Extrair data");
+  if (node.type === "llm_answer") return cardLabel(d.label, "Responder com IA");
   if (node.type === "condition")
     return `${d.field || "texto"} ${d.op || "contém"} “${d.value || ""}”`;
   if (node.type === "action") {
     return (
-      d.label ||
+      cardLabel(d.label, "") ||
       (d.connector === "http"
         ? "HTTP"
         : d.operation === "create_event"
@@ -182,8 +199,8 @@ function nodeTitle(node) {
     );
   }
   if (node.type === "handoff") return "Passar para atendente";
-  if (node.type === "end") return d.label || "Fim";
-  if (node.type === "trigger") return d.label || "Início";
+  if (node.type === "end") return cardLabel(d.label, "Fim");
+  if (node.type === "trigger") return cardLabel(d.label, "Início");
   return node.type;
 }
 

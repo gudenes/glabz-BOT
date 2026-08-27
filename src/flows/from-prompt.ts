@@ -192,6 +192,23 @@ export function layoutFlow(nodes: FlowNode[], edges: FlowEdge[]): FlowNode[] {
  * llm_answer/llm_intent válido. x/y ficam 0 — quem chama decide posição
  * (layoutFlow do zero, ou preservar/posicionar pontualmente numa edição).
  */
+/**
+ * Nome do card, descartando o nome TÉCNICO do tipo.
+ *
+ * A LLM às vezes preenche o `text` de um trigger/llm_answer com o próprio
+ * tipo ("trigger", "llm_answer"), e esse texto vira o título do card na tela
+ * (nodeTitle, flows.js) — o dono via "llm_answer" no meio de cards chamados
+ * "Mensagem recebida" e "Responder com IA". Nome de tipo interno nunca é um
+ * nome de card válido, então cai no padrão em vez de aceitar. Aceita as
+ * variações que a LLM produz ("LLM Answer", "llm-answer").
+ */
+function labelOr(text: string | undefined, fallback: string): string {
+  const raw = (text || "").trim();
+  if (!raw) return fallback;
+  const canon = raw.toLowerCase().replace(/[\s-]+/g, "_");
+  return KNOWN_NODE_TYPES.has(canon) ? fallback : raw;
+}
+
 export function materializeNode(n: RawFlowNode, i: number): FlowNode {
   const id = String(n.id || `n_${i + 1}`);
   const type = (n.type || "message") as FlowNode["type"];
@@ -203,18 +220,18 @@ export function materializeNode(n: RawFlowNode, i: number): FlowNode {
     if (n.capturesIntent) data.capturesIntent = true;
   }
   if (type === "llm_intent") {
-    data.label = n.text || "Entender o pedido";
+    data.label = labelOr(n.text, "Entender o pedido");
     data.intents = n.intents || [];
   }
   if (type === "llm_answer") {
-    data.label = n.text || "Responder com IA";
+    data.label = labelOr(n.text, "Responder com IA");
     data.context = n.context || "";
     data.varName = n.varName || "resposta_ia";
     data.maxChars = 400;
   }
-  if (type === "trigger") data.label = n.text || "Mensagem recebida";
-  if (type === "end") data.label = n.text || "Fim";
-  if (type === "action") data.label = n.text || "Ação";
+  if (type === "trigger") data.label = labelOr(n.text, "Mensagem recebida");
+  if (type === "end") data.label = labelOr(n.text, "Fim");
+  if (type === "action") data.label = labelOr(n.text, "Ação");
   if (type === "condition") data.field = "last";
   return { id, type, x: 0, y: 0, data };
 }

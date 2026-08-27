@@ -276,6 +276,12 @@ function tourProgressKey() {
 /** Elemento de nav visível pra uma view. No breakpoint mobile a sidebar some
  * e vira .mobile-nav; offsetParent não serve porque .mobile-nav é fixed
  * (offsetParent é sempre null nesse caso, mesmo visível). */
+/** O diálogo de primeiro fluxo, só quando está de fato na tela. */
+function visibleOnboard() {
+  const el = $("onboard");
+  return el && !el.classList.contains("hidden") ? el : null;
+}
+
 function visibleNavLink(view) {
   const links = [...document.querySelectorAll(`[data-view="${view}"]`)];
   return links.find((el) => getComputedStyle(el).display !== "none") || links[0] || null;
@@ -338,7 +344,12 @@ const JOURNEY = [
   {
     id: "fluxo",
     view: "flow",
-    target: () => visibleNavLink("flow"),
+    // Abrir esta view faz o #onboard tomar a tela (maybeOnboard). É NELE que
+    // está a decisão que o passo pede ("escolha uma das 2 opções"), então é
+    // ele que precisa do destaque: mirar no item de menu deixava o balão
+    // apontando pro canto enquanto o diálogo real dominava o centro, e o dono
+    // não conseguia ligar o texto ao que tinha que fazer.
+    target: () => visibleOnboard() || visibleNavLink("flow"),
     titleKey: "portal.tour.step2Title",
     bodyKey: "portal.tour.step2Body",
     // Entrega pro #onboard (que já oferece template x IA) e SAI DA TELA —
@@ -367,6 +378,50 @@ const JOURNEY = [
 
 const journeyStep = (id) =>
   JOURNEY.find((s) => s.id === id) || demoSteps.find((s) => s.id === id) || null;
+
+/** Para onde este passo pode levar: os ramos, o seguinte, ou a retomada. */
+function nextIdsOf(step) {
+  if (!step) return [];
+  if (step.choices) return step.choices.map((c) => c.next).filter(Boolean);
+  if (step.next) return [step.next];
+  // Pausa pro onboarding não é fim de jornada: ela volta no passo de retomada.
+  if (step.pauseForOnboard) {
+    const r = JOURNEY.find((s) => s.resumedAfterFlow);
+    return r ? [r.id] : [];
+  }
+  return [];
+}
+
+/**
+ * Caminho do início até `id`, seguindo as ligações reais.
+ *
+ * A jornada BIFURCA em "objetivo": quem escolhe montar o fluxo nunca passa
+ * por "conectar". Numerar pela posição no array fazia o passo 4 saltar direto
+ * pro 6, e o dono lia isso como "faltou alguma coisa" — foi exatamente o que
+ * aconteceu. Contar pelo caminho percorrido resolve, e sobrevive a recarregar
+ * a página (é derivado do id salvo, não de estado em memória).
+ */
+function journeyPathTo(id, from = JOURNEY[0]?.id, seen = new Set()) {
+  if (!from || seen.has(from)) return null;
+  if (from === id) return [from];
+  const ahead = new Set(seen).add(from);
+  for (const n of nextIdsOf(journeyStep(from))) {
+    const tail = journeyPathTo(id, n, ahead);
+    if (tail) return [from, ...tail];
+  }
+  return null;
+}
+
+/** Quantos passos ainda faltam pela frente (o ramo mais longo, se bifurcar). */
+function stepsAhead(step, seen = new Set()) {
+  if (!step || step.done || seen.has(step.id)) return 0;
+  const ahead = new Set(seen).add(step.id);
+  let longest = 0;
+  for (const n of nextIdsOf(step)) {
+    longest = Math.max(longest, 1 + stepsAhead(journeyStep(n), ahead));
+  }
+  return longest;
+}
 
 let tourStepId = null;
 
@@ -438,9 +493,11 @@ function showTourStep(id) {
   localStorage.setItem(tourProgressKey(), id);
   $("tour")?.classList.remove("hidden");
 
-  const idx = JOURNEY.findIndex((sp) => sp.id === id) + 1;
-  $("tour-step-label").textContent = idx
-    ? t("portal.tour.stepLabel", { n: idx, total: JOURNEY.length })
+  // Numera pelo CAMINHO, não pelo array — ver journeyPathTo. Passo dinâmico
+  // (demonstração) não está no grafo e usa o rótulo genérico.
+  const path = journeyPathTo(id);
+  $("tour-step-label").textContent = path
+    ? t("portal.tour.stepLabel", { n: path.length, total: path.length + stepsAhead(step) })
     : t("portal.demo.label");
   // Passo dinâmico (demonstração) já traz o texto pronto; os fixos vêm por
   // chave i18n.
@@ -497,6 +554,20 @@ function advanceTour() {
  * estava mesmo pausada nesse ponto: quem já dispensou o tour não é
  * interrompido de novo.
  */
+/**
+ * Ligado enquanto a revisão de conhecimento pós-build está no caminho. Só o
+ * caminho "Montar com IA" liga: a revisão também aparece vindo de template e
+ * de texto colado, e nesses a jornada não tem nada pra retomar ali.
+ */
+let journeyWaitsForReview = false;
+
+/** Revisão terminou (ou nem abriu): a jornada pode seguir. */
+function releaseJourneyAfterReview() {
+  if (!journeyWaitsForReview) return;
+  journeyWaitsForReview = false;
+  resumeJourneyAfterFlow();
+}
+
 function resumeJourneyAfterFlow() {
   if (localStorage.getItem(tourKey()) === "1") return;
   if (localStorage.getItem(tourProgressKey()) !== "fluxo") return;
@@ -1931,11 +2002,18 @@ async function revealBuiltFlow(flow) {
   if (flow?.mode) setActiveMode(flow.mode);
   openBuilder(flow?.id);
   studioLayout();
-  resumeJourneyAfterFlow();
   // Bônus pós-build, nunca bloqueia: o dono já viu o fluxo pronto (o momento
   // de recompensa da conversa) antes de qualquer coisa sobre conhecimento
   // aparecer. Roda em paralelo — se falhar ou não achar nada, não incomoda.
-  void offerKnowledgeReview();
+  //
+  // A jornada NÃO retoma junto: a revisão é modal e apareceria por cima da
+  // demonstração, com o destaque mirando cards atrás do diálogo (os dois na
+  // tela ao mesmo tempo). Espera a revisão terminar — ou retoma na hora, se
+  // ela nem chegou a abrir.
+  journeyWaitsForReview = true;
+  void offerKnowledgeReview().then((opened) => {
+    if (!opened) releaseJourneyAfterReview();
+  });
   // Idem pra validação automática — testa cada ramo contra o motor real
   // antes do dono descobrir sozinho testando na mão (ver PRs #69/#70:
   // fluxo "nascendo quebrado" foi exatamente o que motivou isso).
@@ -1977,6 +2055,9 @@ async function validateBuiltFlow(flow) {
  * Tenta extrair conhecimento da conversa que acabou de virar fluxo e, se
  * achar algo, abre a tela de revisão. Silencioso em qualquer falha ou lista
  * vazia — essa etapa é sempre um bônus pulável, nunca um requisito.
+ *
+ * Devolve se a revisão de fato ABRIU: quem chama precisa saber se ainda tem
+ * um diálogo modal na frente do dono antes de mostrar outra coisa.
  */
 async function offerKnowledgeReview() {
   try {
@@ -1985,15 +2066,20 @@ async function offerKnowledgeReview() {
       body: JSON.stringify({ messages: studioHistory(), action: "extract_knowledge" }),
     });
     const pairs = data.pairs || [];
-    if (pairs.length) renderKnowledgeReview(pairs);
+    if (pairs.length) {
+      renderKnowledgeReview(pairs);
+      return true;
+    }
     // Sem pairs (extração não achou nada reaproveitável — o cenário mais comum
     // hoje, dado o roteiro raso do coach): não abre revisão vazia, mas ainda
     // vale checar se a base ficou vazia, pra avisar.
-    else void nudgeIfKnowledgeEmpty();
+    void nudgeIfKnowledgeEmpty();
+    return false;
   } catch {
     // extração é bônus — falha aqui não pode incomodar quem só queria o fluxo
     // pronto — mas ainda assim vale a checagem de base vazia.
     void nudgeIfKnowledgeEmpty();
+    return false;
   }
 }
 
@@ -2042,6 +2128,9 @@ function closeKnowledgeReview() {
 function finishKnowledgeReview() {
   closeKnowledgeReview();
   krOrigin = "onboarding";
+  // A tela saiu da frente — agora sim dá pra demonstrar o fluxo. Não faz nada
+  // se a jornada não estava esperando por isso.
+  releaseJourneyAfterReview();
   const next = state.studio.afterKnowledge;
   state.studio.afterKnowledge = null;
   if (next === "template") {
