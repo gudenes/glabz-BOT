@@ -270,22 +270,57 @@ function keywordExtractDate(text: string, now: Date): DateExtraction {
  * então segue pelo ramo "erro" (tipicamente handoff), em vez de responder
  * qualquer coisa inventada.
  */
+/**
+ * Registro da resposta. Separa O QUE dizer (a base de conhecimento, que não
+ * se inventa) de COMO dizer (o tom, que o dono escolhe) — antes as duas
+ * coisas estavam coladas numa frase só do prompt.
+ * "literal" não passa por aqui: é resolvido antes, sem chamar o modelo
+ * (ver engine.ts).
+ */
+export type AnswerTone = "direta" | "mediana" | "cordial";
+
+const TONE_RULES: Record<AnswerTone, string> = {
+  direta: "Seja objetivo: uma ou duas frases, direto ao ponto, sem rodeio nem saudação.",
+  mediana: "Seja cordial e claro, sem formalidade excessiva.",
+  cordial:
+    "Seja formal e acolhedor: trate por senhor/senhora, use 'por gentileza'/'gostaria' quando couber, e explique com um pouco mais de contexto.",
+};
+
+/** Tamanho padrão por tom — cordial precisa de espaço, direta não. */
+const TONE_MAX_CHARS: Record<AnswerTone, number> = {
+  direta: 220,
+  mediana: 400,
+  cordial: 600,
+};
+
+export function normalizeTone(raw: unknown): AnswerTone {
+  const t = String(raw || "").trim().toLowerCase();
+  return t === "direta" || t === "cordial" ? t : "mediana";
+}
+
 export async function answerFreeform(opts: {
   question: string;
   /** O que a IA sabe sobre este negócio — escrito pelo dono no builder. */
   context: string;
   /** Limite de tamanho da resposta, em caracteres (WhatsApp fica ruim com textão). */
   maxChars?: number;
+  /** Registro da resposta — ver AnswerTone. */
+  tone?: AnswerTone;
   history?: { role: "user" | "assistant"; content: string }[];
 }): Promise<{ ok: true; answer: string } | { ok: false; reason: string }> {
   const key = llmApiKey();
   if (!key) return { ok: false, reason: "sem_ia_configurada" };
 
-  const maxChars = Math.min(Math.max(opts.maxChars ?? 400, 80), 1200);
+  const tone = normalizeTone(opts.tone);
+  // maxChars explícito do card vence; sem ele, o padrão do tom.
+  const maxChars = Math.min(Math.max(opts.maxChars ?? TONE_MAX_CHARS[tone], 80), 1200);
   const system = [
     "Você atende clientes deste negócio pelo WhatsApp, em português do Brasil.",
-    "Responda de forma curta, direta e cordial — no máximo " + maxChars + " caracteres.",
-    "Use SOMENTE as informações do contexto abaixo.",
+    TONE_RULES[tone] + " No máximo " + maxChars + " caracteres.",
+    // "Use SOMENTE as informações" cuida do CONTEÚDO; o tom acima cuida da
+    // forma. Sem essa separação o modelo tendia a devolver quase literal o
+    // que estava gravado na base, em vez de responder com o registro pedido.
+    "Use SOMENTE as informações do contexto abaixo — mas escreva com as SUAS palavras, no tom pedido, em vez de copiar o texto do contexto.",
     "Se a resposta não estiver no contexto, diga que vai chamar alguém da equipe;",
     "NUNCA invente preço, horário, prazo, endereço ou disponibilidade.",
     "Não use markdown além de *negrito* eventual.",

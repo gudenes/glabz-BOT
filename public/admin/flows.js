@@ -79,6 +79,21 @@ function uid(prefix = "n") {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** Registros de resposta do card "Responder com IA" (ver AnswerTone/llm.ts). */
+const TONE_OPTIONS = [
+  { v: "direta", t: "Direta — curta e objetiva" },
+  { v: "mediana", t: "Mediana — cordial e clara" },
+  { v: "cordial", t: "Cordial — formal, trata por senhor(a)" },
+  { v: "literal", t: "Literal — repete exatamente o que foi ensinado" },
+];
+const TONE_HINTS = {
+  direta: "Uma ou duas frases, direto ao ponto.",
+  mediana: "Equilíbrio entre simpatia e objetividade.",
+  cordial: "Mais formal e explicativa — bom pra clínica, escritório, consultório.",
+  literal:
+    "Devolve o texto ensinado ao pé da letra, sem reescrever — só quando encontra uma resposta claramente correspondente na base. Fora disso, responde normalmente.",
+};
+
 function defaultData(type) {
   switch (type) {
     case "trigger":
@@ -110,6 +125,7 @@ function defaultData(type) {
           "Escreva aqui o que a IA precisa saber pra responder: horários, preços, endereço, o que você faz e o que não faz.",
         varName: "resposta_ia",
         maxChars: 400,
+        tone: "mediana",
       };
     case "condition":
       return { field: "last", op: "contains", value: "sim" };
@@ -1442,6 +1458,14 @@ function renderProps() {
       <input id="p-label" value="${escapeHtml(String(d.label || ""))}" placeholder="Responder dúvida" /></div>
       <div class="field"><label>O que a IA sabe sobre o seu negócio</label>
       <textarea id="p-context" rows="8" placeholder="Horário: seg a sex 9h-18h&#10;Preços: plano X R$ 000&#10;Endereço: rua ...&#10;Não atendemos: ...">${escapeHtml(String(d.context || ""))}</textarea></div>
+      <div class="field"><label>Jeito de responder</label>
+      <select id="p-tone">
+        ${TONE_OPTIONS.map(
+          (o) =>
+            `<option value="${o.v}"${(d.tone || "mediana") === o.v ? " selected" : ""}>${o.t}</option>`
+        ).join("")}
+      </select>
+      <p class="fb-hint">${TONE_HINTS[String(d.tone || "mediana")] || ""}</p></div>
       <div class="field"><label>Tamanho máximo da resposta (caracteres)</label>
       <input id="p-maxchars" type="number" min="80" max="1200" value="${escapeHtml(String(d.maxChars || 400))}" /></div>
       <div class="field"><label>Salvar resposta em variável</label>
@@ -1639,6 +1663,7 @@ function renderProps() {
           context: $("p-context").value,
           maxChars: Number($("p-maxchars").value) || 400,
           varName: $("p-var").value.trim() || "resposta_ia",
+          tone: $("p-tone")?.value || "mediana",
         };
       }
       renderCanvas();
