@@ -585,7 +585,7 @@ function renderList() {
     el.appendChild(b);
   }
   if (!state.flows.length) {
-    el.innerHTML = `<p class="fb-palette-hint" style="margin:8px 4px">Nenhum fluxo ainda. O demo “Marcar consulta” aparece no primeiro uso.</p>`;
+    el.innerHTML = `<p class="fb-palette-hint" style="margin:8px 4px">${t("builder.list.empty")}</p>`;
   }
 }
 
