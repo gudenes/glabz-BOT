@@ -573,11 +573,13 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .studio-x:hover { background: rgba(255,255,255,0.08); color: #f4f4f0; }
 
 /* Tour guiado de 1º acesso — spotlight num alvo real da tela (buraco via
-   box-shadow gigante, sem SVG mask) + balão de explicação ao lado. Roda
-   ANTES do .onboard abaixo (2 passos: conectar WhatsApp → aba Fluxo),
-   entrega pro .onboard normalmente ao terminar — os dois nunca aparecem
-   juntos, por isso dividem o mesmo z-index. */
-.tour { position: fixed; inset: 0; z-index: 60; }
+   box-shadow gigante, sem SVG mask) + balão de explicação ao lado.
+
+   Fica ACIMA do .onboard (z 60) de propósito: o passo do fluxo destaca o
+   próprio diálogo de onboarding, então os dois aparecem juntos — dividindo o
+   mesmo z-index, o fundo escuro do .onboard (que vem depois no HTML) passava
+   por cima e deixava o balão apagado. */
+.tour { position: fixed; inset: 0; z-index: 70; }
 .tour.hidden { display: none; }
 .tour-hole {
   position: fixed; border-radius: 14px;
