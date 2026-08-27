@@ -355,7 +355,10 @@ const JOURNEY = [
     id: "modos",
     resumedAfterFlow: true,
     view: "flow",
-    target: () => $("flow-modes"),
+    // O painel vive DENTRO do iframe do builder (ver flows.js). Precisa do
+    // caminho especial abaixo pra virar coordenada da página de fora.
+    inFrame: "flow-modes",
+    target: () => $("flow-frame"),
     titleKey: "portal.tour.modesTitle",
     bodyKey: "portal.tour.modesBody",
     done: true,
@@ -366,12 +369,38 @@ const journeyStep = (id) => JOURNEY.find((s) => s.id === id) || null;
 
 let tourStepId = null;
 
+/**
+ * Retângulo do alvo em coordenadas DESTA página.
+ *
+ * Alvo pode estar dentro do iframe do builder (o painel de modos, por
+ * exemplo). Como é mesma origem, dá pra ler o elemento lá dentro e somar a
+ * posição do próprio iframe. Se ainda não carregou, cai no iframe inteiro —
+ * destaque menos preciso, mas melhor que o tour sumir sem explicação.
+ */
+function targetRect(step) {
+  const el = step?.target();
+  if (!el) return null;
+  if (step.inFrame) {
+    try {
+      const inner = el.contentDocument?.getElementById(step.inFrame);
+      if (inner) {
+        const f = el.getBoundingClientRect();
+        const i = inner.getBoundingClientRect();
+        return { left: f.left + i.left, top: f.top + i.top, width: i.width, height: i.height,
+                 right: f.left + i.right, bottom: f.top + i.bottom };
+      }
+    } catch {
+      /* mesma origem sempre — só falha enquanto o iframe ainda carrega */
+    }
+  }
+  return el.getBoundingClientRect();
+}
+
 function positionTour() {
-  const target = journeyStep(tourStepId)?.target();
   const hole = $("tour-hole");
   const bubble = $("tour-bubble");
-  if (!target || !hole || !bubble) return;
-  const r = target.getBoundingClientRect();
+  const r = targetRect(journeyStep(tourStepId));
+  if (!r || !hole || !bubble) return;
   const pad = 8;
   hole.style.left = `${r.left - pad}px`;
   hole.style.top = `${r.top - pad}px`;
@@ -393,8 +422,7 @@ function showTourStep(id) {
   if (!step) return dismissTour(false);
   if (step.view && state.view !== step.view) setView(step.view);
 
-  const target = step.target();
-  if (!target) {
+  if (!targetRect(step)) {
     // Alvo não existe nesta tela (ex.: item de menu ausente no mobile) —
     // pula pro próximo em vez de travar a jornada num passo invisível.
     const nxt = step.next || step.choices?.[0]?.next;
@@ -462,8 +490,6 @@ function advanceTour() {
 function resumeJourneyAfterFlow() {
   if (localStorage.getItem(tourKey()) === "1") return;
   if (localStorage.getItem(tourProgressKey()) !== "fluxo") return;
-  // O painel de modos precisa existir na tela antes de virar alvo.
-  renderModeSwitch();
   setTimeout(() => showTourStep("modos"), 400);
 }
 
@@ -599,63 +625,13 @@ function syncFlowPane() {
   // (maybeOnboard) — abrir o Studio à força aqui tirava a escolha do usuário
   // e o deixava sem saída.
   if (!hasOwnFlows()) ensureStudioWelcome();
-  renderModeSwitch();
   studioLayout();
 }
 
-/**
- * Painel de modos: mostra qual fluxo está ativo e deixa trocar.
- *
- * Aparece SEMPRE que existe pelo menos um fluxo — inclusive com um só.
- * Antes escondia com menos de dois modos ("seria um seletor de uma opção"),
- * e isso estava errado do ponto de vista de quem usa: terminando o
- * onboarding o dono ficava com um fluxo grande, sem saber que modo era
- * aquele nem que existiam outros. O painel é o que ANUNCIA os modos, não só
- * o que alterna entre eles — por isso o que ainda não existe aparece como
- * convite ("montar"), não some.
- *
- * Trocar não regenera nada: cada modo é um fluxo salvo, e alternar só
- * recarrega o builder apontando pro outro (decisão do usuário, 27/08).
+/* A UI de troca de modo vive no CABEÇALHO DO BUILDER (flows.js) — o portal
+ * só cuida de CRIAR um modo que ainda não existe, porque isso depende da
+ * conversa de onboarding, que mora aqui. O builder pede via postMessage.
  */
-function renderModeSwitch() {
-  const box = $("flow-modes");
-  if (!box) return;
-  const existing = FLOW_MODES.filter((m) => flowForMode(m));
-  box.classList.toggle("hidden", existing.length === 0);
-  if (!existing.length) return;
-
-  const current = activeMode();
-  box.innerHTML =
-    `<span class="flow-modes-label">${t("portal.flowMode.label")}</span>` +
-    FLOW_MODES.map((m) => {
-      const f = flowForMode(m);
-      if (!f) {
-        // Modo que o dono ainda não tem: vira convite pra criar.
-        return `<button type="button" class="flow-mode ghost" data-make="${m}"
-          title="${escapeHtml(t("portal.flowMode.makeHint"))}">+ ${t(`portal.flowMode.${m}`)}</button>`;
-      }
-      const live = f.status === "live" ? ` <span class="flow-mode-live">${t("portal.flowMode.live")}</span>` : "";
-      const cards = (f.nodes || []).length;
-      return `<button type="button" class="flow-mode${m === current ? " on" : ""}" data-mode="${m}"
-        title="${escapeHtml(f.name || "")}">${t(`portal.flowMode.${m}`)} <span class="flow-mode-n">${cards}</span>${live}</button>`;
-    }).join("");
-
-  box.querySelectorAll("[data-mode]").forEach((b) => {
-    b.addEventListener("click", () => {
-      const mode = b.dataset.mode;
-      if (mode === activeMode()) return;
-      setActiveMode(mode);
-      const f = flowForMode(mode);
-      renderModeSwitch();
-      if (f) openBuilder(f.id);
-    });
-  });
-
-  box.querySelectorAll("[data-make]").forEach((b) => {
-    b.addEventListener("click", () => makeMissingMode(b.dataset.make));
-  });
-}
-
 /**
  * Cria o fluxo de um modo que o dono ainda não tem.
  * - template: abre o catálogo, que é onde ele escolhe qual.
@@ -688,7 +664,6 @@ async function makeMissingMode(mode) {
     if (data.flow) {
       await refresh();
       setActiveMode(mode);
-      renderModeSwitch();
       openBuilder(data.flow.id);
       studioLayout();
     }
@@ -1820,7 +1795,6 @@ async function revealBuiltFlow(flow) {
   // O fluxo recém-gerado passa a ser o modo ativo — é o que o dono acabou de
   // mandar montar, seria estranho abrir outro.
   if (flow?.mode) setActiveMode(flow.mode);
-  renderModeSwitch();
   openBuilder(flow?.id);
   studioLayout();
   resumeJourneyAfterFlow();
@@ -2181,7 +2155,6 @@ async function useTemplate(kind) {
     await refresh();
     state.studio.open = false;
     setActiveMode("template");
-    renderModeSwitch();
     openBuilder(flowForMode("template")?.id);
     studioLayout();
     resumeJourneyAfterFlow();
@@ -2339,6 +2312,12 @@ $("studio-mic")?.addEventListener("click", async () => {
 });
 
 window.addEventListener("message", async (ev) => {
+  // Pedido do builder pra criar um modo que ainda não existe — a UI está
+  // lá, mas a geração depende do briefing, que vive aqui.
+  if (ev.data?.type === "glabs-make-mode") {
+    void makeMissingMode(ev.data.mode);
+    return;
+  }
   if (ev.data?.type !== "glabs-flows-changed") return;
   await refresh();
   if (!hasOwnFlows()) {
@@ -2350,7 +2329,6 @@ window.addEventListener("message", async (ev) => {
     }
     ensureStudioWelcome();
   }
-  renderModeSwitch();
   studioLayout();
 });
 

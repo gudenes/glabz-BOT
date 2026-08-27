@@ -422,6 +422,69 @@ async function loadAll() {
   }
 }
 
+/* ── Modos de fluxo (simples · completo · template) ─────────
+ * Vive no cabeçalho do builder, ao lado do "IA ligada", por pedido do
+ * usuário — e porque é aqui que ele já enxerga o fluxo. A primeira versão
+ * ficava no portal, ACIMA do iframe: como #view-flow é flex em linha, o
+ * painel virava uma coluna ao lado do builder e espremia a tela.
+ *
+ * O builder já tem todos os fluxos do cliente (state.flows), então trocar
+ * de modo é só selectFlow() local — sem conversa com o portal. Só CRIAR um
+ * modo que ainda não existe precisa do portal, porque depende da conversa
+ * de onboarding, que vive lá.
+ */
+const FLOW_MODES = ["simples", "completo", "template"];
+const MODE_LABEL = { simples: "Simples", completo: "Completo", template: "Modelo" };
+
+/** Fluxo legado (salvo antes do campo) conta como completo — mesma regra do
+ * backend (flowModeOf em src/flows/types.ts). */
+const modeOf = (f) => (FLOW_MODES.includes(f?.mode) ? f.mode : "completo");
+
+function flowOfMode(mode) {
+  return (
+    state.flows
+      .filter((f) => modeOf(f) === mode)
+      .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0] || null
+  );
+}
+
+function renderModeSwitch() {
+  const box = $("flow-modes");
+  if (!box) return;
+  // Só no portal do cliente: no builder glabs a lista é de todos os fluxos,
+  // e "modo" não quer dizer nada ali.
+  const cid = URL_CLIENT || sessionStorage.getItem("glabs_client_id");
+  const existing = FLOW_MODES.filter((m) => flowOfMode(m));
+  box.classList.toggle("hidden", !cid || !existing.length);
+  if (!cid || !existing.length) return;
+
+  const currentId = state.flow?.id;
+  box.innerHTML = FLOW_MODES.map((m) => {
+    const f = flowOfMode(m);
+    if (!f) {
+      return `<button type="button" class="fb-mode ghost" data-make="${m}"
+        title="Ainda não existe — clique para montar">+ ${MODE_LABEL[m]}</button>`;
+    }
+    const on = f.id === currentId ? " on" : "";
+    const live = f.status === "live" ? ' <i class="fb-mode-live">no ar</i>' : "";
+    return `<button type="button" class="fb-mode${on}" data-mode="${f.id}"
+      title="${escapeHtml(f.name || "")}">${MODE_LABEL[m]} <i class="fb-mode-n">${(f.nodes || []).length}</i>${live}</button>`;
+  }).join("");
+
+  box.querySelectorAll("[data-mode]").forEach((b) => {
+    b.onclick = () => {
+      if (b.dataset.mode !== state.flow?.id) selectFlow(b.dataset.mode);
+    };
+  });
+  box.querySelectorAll("[data-make]").forEach((b) => {
+    b.onclick = () => {
+      // Criar depende do briefing, que está no portal.
+      if (EMBED) window.parent.postMessage({ type: "glabs-make-mode", mode: b.dataset.make }, "*");
+      else toast("Disponível no portal do cliente", "err");
+    };
+  });
+}
+
 /** Popula o <select> de produto com o que existe hoje no servidor (sem hardcode). */
 function renderProductSelect() {
   const sel = $("flow-product");
@@ -580,6 +643,7 @@ function renderAll() {
   renderList();
   renderCanvas();
   renderProps();
+  renderModeSwitch();
   if (state.flow) {
     $("flow-name").value = state.flow.name;
     fitFlowName();
