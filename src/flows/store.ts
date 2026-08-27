@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { flowHistoryPath, flowStatesPath, flowsPath } from "../config.js";
 import { flowModeOf, type Flow, type FlowConversationState, type FlowEdge, type FlowMode, type FlowNode } from "./types.js";
-import { allSeedTemplates } from "./templates.js";
+import { catalogFlows } from "./catalog.js";
 
 type FlowsFile = { version: 1; flows: Flow[] };
 type StatesFile = { version: 1; states: FlowConversationState[] };
@@ -37,7 +37,7 @@ const MAX_VERSIONS_PER_FLOW = 30;
  */
 function ensureSeedTemplates(file: FlowsFile): boolean {
   let changed = false;
-  for (const seed of allSeedTemplates()) {
+  for (const seed of catalogFlows()) {
     let existing = file.flows.find((f) => f.seedSlug && f.seedSlug === seed.seedSlug);
     if (!existing) {
       const legacy = file.flows.find((f) => !f.seedSlug && f.name === seed.name);
@@ -66,27 +66,50 @@ function ensureSeedTemplates(file: FlowsFile): boolean {
     existing.updatedAt = new Date().toISOString();
     changed = true;
   }
+
+  // Poda de seed que saiu do catálogo. Sem isso o catálogo reescrito em
+  // 27/08 deixaria os 10 templates antigos pra sempre no disco, aparecendo
+  // na lista do builder glabs — ensureSeedTemplates só sabia ADICIONAR.
+  //
+  // Deliberadamente conservador: só remove o que é REGENERÁVEL a partir do
+  // código e comprovadamente nunca foi tocado por ninguém —
+  //   • tem seedSlug (nasceu do catálogo)
+  //   • o slug não existe mais no catálogo atual
+  //   • seedRevision != null (o primeiro save pelo builder zera isso, então
+  //     null significa "alguém editou" → é trabalho humano, não se apaga)
+  //   • sem clientId (fluxo de cliente nunca é seed, e nunca se apaga)
+  // Fluxo sem seedSlug fica intocado por definição: pode ser algo feito à
+  // mão, e apagar dado alheio por heurística não vale o risco.
+  const liveSlugs = new Set(catalogFlows().map((s) => s.seedSlug));
+  const before = file.flows.length;
+  file.flows = file.flows.filter(
+    (f) => !(f.seedSlug && !liveSlugs.has(f.seedSlug) && f.seedRevision != null && !f.clientId)
+  );
+  if (file.flows.length !== before) {
+    console.log(`[flows] podados ${before - file.flows.length} seed(s) que saíram do catálogo`);
+    changed = true;
+  }
   return changed;
 }
 
 function loadFlows(): FlowsFile {
   try {
     if (!existsSync(flowsPath())) {
-      const file: FlowsFile = { version: 1, flows: allSeedTemplates() };
+      const file: FlowsFile = { version: 1, flows: catalogFlows() };
       saveFlows(file);
       return file;
     }
     const raw = readFileSync(flowsPath(), "utf8");
     const data = JSON.parse(raw) as FlowsFile;
     if (!data?.flows || !Array.isArray(data.flows)) {
-      const file: FlowsFile = { version: 1, flows: allSeedTemplates() };
+      const file: FlowsFile = { version: 1, flows: catalogFlows() };
       saveFlows(file);
       return file;
     }
     if (ensureSeedTemplates(data)) saveFlows(data);
     return data;
   } catch {
-    return { version: 1, flows: allSeedTemplates() };
+    return { version: 1, flows: catalogFlows() };
   }
 }
 

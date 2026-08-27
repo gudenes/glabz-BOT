@@ -683,7 +683,6 @@ $("form-client")?.addEventListener("submit", async (e) => {
       body: JSON.stringify({
         name: $("cli-name").value.trim(),
         email: $("cli-email").value.trim(),
-        template: $("cli-template").value,
       }),
     });
     $("modal-client").close();
