@@ -546,6 +546,41 @@ async function postWebhook(accountId: string, payload: Record<string, unknown>):
   }
 }
 
+/**
+ * Mostra "digitando…" no WhatsApp do cliente enquanto o bot compõe a
+ * resposta — o card "Responder com IA" faz busca vetorial + chamada ao
+ * modelo, então há latência real e o silêncio parece travamento.
+ *
+ * A presença expira sozinha em ~10s no WhatsApp, mas a chamada ao modelo
+ * tem timeout de 20s (llm.ts) — por isso é reenviada periodicamente em vez
+ * de uma vez só, senão o indicador some no meio da espera.
+ *
+ * Nada aqui pode derrubar o atendimento: toda falha é engolida. Não
+ * conseguir mostrar "digitando" é cosmético; não responder, não.
+ */
+function startTyping(sock: any, jid: string): { stop: () => void } {
+  const send = (state: "composing" | "paused") => {
+    try {
+      void sock?.sendPresenceUpdate?.(state, jid)?.catch?.(() => undefined);
+    } catch {
+      /* presença é cosmética — nunca interrompe o fluxo */
+    }
+  };
+  send("composing");
+  const timer = setInterval(() => send("composing"), 8000);
+  // unref: um timer pendurado não pode segurar o processo vivo no shutdown.
+  timer.unref?.();
+  let stopped = false;
+  return {
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      clearInterval(timer);
+      send("paused");
+    },
+  };
+}
+
 async function handleInbound(accountId: string, m: any, sock: any): Promise<void> {
   try {
     const fromMe = Boolean(m?.key?.fromMe);
@@ -606,6 +641,15 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
       .catch(() => undefined);
 
     // ── Flow engine (atendimento automático) ───────────────
+    // "digitando…" enquanto o bot pensa. Só liga quando existe fluxo
+    // publicado: sem isso a conversa é só repassada pro app e o bot nunca
+    // responde — mostrar "digitando" ali seria mentira. Como a checagem é
+    // barata (leitura de arquivo em memória) e o trabalho lento vem depois,
+    // dá pra decidir ANTES de gastar a latência.
+    const { findLiveFlow } = await import("./flows/store.js");
+    const willAnswer = Boolean(findLiveFlow({ product, accountId }));
+    const typing = willAnswer ? startTyping(sock, jid) : null;
+
     try {
       const { processInboundFlow } = await import("./flows/engine.js");
       const flowResult = await processInboundFlow({
@@ -615,6 +659,7 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
         text: bodyText,
         pushName: m?.pushName ?? null,
       });
+      typing?.stop();
 
       if (flowResult) {
         for (const reply of flowResult.replies) {
@@ -669,6 +714,7 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
         return;
       }
     } catch (e) {
+      typing?.stop();
       console.warn(`[wa:${accountId}] flow engine:`, (e as Error).message);
     }
 
