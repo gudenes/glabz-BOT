@@ -193,20 +193,27 @@ export function layoutFlow(nodes: FlowNode[], edges: FlowEdge[]): FlowNode[] {
  * (layoutFlow do zero, ou preservar/posicionar pontualmente numa edição).
  */
 /**
+ * Jargão que nunca é nome de card, além dos nomes de tipo. Só termos que o
+ * dono jamais escreveria sozinhos como nome — "llm" apareceu num fluxo real
+ * depois do primeiro fix, que só barrava o nome exato do tipo.
+ */
+const TECH_LABELS = new Set(["llm", "ia", "ai", "node", "step", "nodo"]);
+
+/**
  * Nome do card, descartando o nome TÉCNICO do tipo.
  *
- * A LLM às vezes preenche o `text` de um trigger/llm_answer com o próprio
- * tipo ("trigger", "llm_answer"), e esse texto vira o título do card na tela
- * (nodeTitle, flows.js) — o dono via "llm_answer" no meio de cards chamados
- * "Mensagem recebida" e "Responder com IA". Nome de tipo interno nunca é um
- * nome de card válido, então cai no padrão em vez de aceitar. Aceita as
- * variações que a LLM produz ("LLM Answer", "llm-answer").
+ * A LLM às vezes preenche o `text` de um trigger/llm_answer com jargão do
+ * sistema ("trigger", "llm_answer", "llm"), e esse texto vira o título do
+ * card na tela (nodeTitle, flows.js) — o dono via "llm_answer" e "llm" no
+ * meio de cards chamados "Mensagem recebida" e "Responder com IA". Nada disso
+ * é nome de card válido, então cai no padrão em vez de aceitar. Cobre as
+ * variações que a LLM produz ("LLM Answer", "llm-answer", maiúsculas).
  */
 function labelOr(text: string | undefined, fallback: string): string {
   const raw = (text || "").trim();
   if (!raw) return fallback;
   const canon = raw.toLowerCase().replace(/[\s-]+/g, "_");
-  return KNOWN_NODE_TYPES.has(canon) ? fallback : raw;
+  return KNOWN_NODE_TYPES.has(canon) || TECH_LABELS.has(canon) ? fallback : raw;
 }
 
 export function materializeNode(n: RawFlowNode, i: number): FlowNode {
@@ -311,6 +318,73 @@ function insertLlmAnswerInline(
  * O `context` sai vazio (não temos como inventar fatos aqui), e tudo bem: o
  * nó funciona via RAG em tempo de execução, que não depende do context.
  */
+/**
+ * Garante que todo llm_answer tenha as DUAS saídas — "ok" e "erro".
+ *
+ * A regra 4 dos dois prompts já exige isso, mas prompt não garante nada: um
+ * fluxo simples real nasceu com trigger → llm_answer --erro--> handoff e mais
+ * nada. Como era a única saída, o motor a seguia mesmo quando a IA respondia
+ * BEM — o cliente recebia a resposta e era passado pra um humano em seguida,
+ * sem chance de continuar conversando com a IA. Era o card mais importante do
+ * fluxo virando um desvio pro atendente.
+ *
+ * "erro" faltando vira handoff (a rede de segurança de quando a IA não sabe).
+ * "ok" faltando vira end — e end aqui é o certo, não um beco: o motor
+ * reinicia pelo trigger na mensagem seguinte (ver "reentrada após end" em
+ * engine.ts), então o cliente pergunta de novo e é atendido de novo. Fechar
+ * o atendimento e reabrir na próxima pergunta é o comportamento natural de um
+ * fluxo de dúvidas, e não corre risco de laço dentro do mesmo turno.
+ */
+export function ensureAnswerBranches(
+  nodes: FlowNode[],
+  edges: FlowEdge[]
+): { nodes: FlowNode[]; edges: FlowEdge[]; repaired: string[] } {
+  const answers = nodes.filter((n) => n.type === "llm_answer");
+  if (!answers.length) return { nodes, edges, repaired: [] };
+
+  const outNodes = [...nodes];
+  const outEdges = [...edges];
+  const repaired: string[] = [];
+  const usedIds = new Set(nodes.map((n) => n.id));
+  const freshId = (base: string) => {
+    let id = base;
+    let i = 2;
+    while (usedIds.has(id)) id = `${base}${i++}`;
+    usedIds.add(id);
+    return id;
+  };
+  // Reaproveita um destino que já exista antes de criar card novo: o teto de
+  // cards do fluxo simples é apertado, e um handoff/end a mais por reparo
+  // estouraria à toa.
+  const reuse = (type: "handoff" | "end") => {
+    const found = outNodes.find((n) => n.type === type);
+    if (found) return found.id;
+    const id = freshId(type === "handoff" ? "n_handoff" : "n_end");
+    outNodes.push({
+      id,
+      type,
+      x: 0,
+      y: 0,
+      data:
+        type === "handoff"
+          ? { message: "Vou chamar alguém da equipe pra te ajudar." }
+          : { label: "Fim" },
+    });
+    return id;
+  };
+
+  for (const answer of answers) {
+    const out = outEdges.filter((e) => e.from === answer.id);
+    for (const branch of ["ok", "erro"] as const) {
+      if (out.some((e) => (e.label || "") === branch)) continue;
+      const to = reuse(branch === "erro" ? "handoff" : "end");
+      outEdges.push({ id: `e_${answer.id}_${branch}`, from: answer.id, to, label: branch });
+      repaired.push(`${answer.id}:${branch}`);
+    }
+  }
+  return { nodes: outNodes, edges: outEdges, repaired };
+}
+
 export function ensureLlmAnswer(nodes: FlowNode[], edges: FlowEdge[]): {
   nodes: FlowNode[];
   edges: FlowEdge[];
@@ -464,9 +538,18 @@ export async function generateFlowFromPrompt(
   }
   // sanitizeEdges de novo: as edges novas precisam passar pelas mesmas
   // regras (llm_answer com 2 saídas, sem duplicata) que as do modelo.
-  const finalEdges = guaranteed.repaired
-    ? sanitizeEdges(guaranteed.nodes, guaranteed.edges)
-    : edges;
+  // Segunda garantia: llm_answer com as duas saídas. Roda DEPOIS da primeira,
+  // que pode acabar de criar o card.
+  const branched = ensureAnswerBranches(guaranteed.nodes, guaranteed.edges);
+  if (branched.repaired.length) {
+    console.warn(
+      `[from-prompt] llm_answer sem saída completa — reparado: ${branched.repaired.join(", ")}`
+    );
+  }
+  const finalEdges =
+    guaranteed.repaired || branched.repaired.length
+      ? sanitizeEdges(branched.nodes, branched.edges)
+      : edges;
 
   // Teto de tamanho: o prompt pede no máximo 5 (simples) ou 14 (completo)
   // nós, mas isso é instrução — o modelo estourou na prática (fluxo com 15+
@@ -474,15 +557,15 @@ export async function generateFlowFromPrompt(
   // grafo, então aqui só REGISTRA: o dono continua com o fluxo que a IA fez,
   // e a gente fica sabendo que o teto não está sendo respeitado.
   const cap = simples ? MAX_NODES_SIMPLES : MAX_NODES_COMPLETO;
-  if (guaranteed.nodes.length > cap) {
+  if (branched.nodes.length > cap) {
     console.warn(
-      `[from-prompt] fluxo ${mode} veio com ${guaranteed.nodes.length} nós (teto do prompt: ${cap})`
+      `[from-prompt] fluxo ${mode} veio com ${branched.nodes.length} nós (teto do prompt: ${cap})`
     );
   }
 
   return {
     name: parsed.name?.trim() || "Atendimento",
-    nodes: layoutFlow(guaranteed.nodes, finalEdges),
+    nodes: layoutFlow(branched.nodes, finalEdges),
     edges: finalEdges,
   };
 }
