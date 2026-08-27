@@ -365,7 +365,8 @@ const JOURNEY = [
   },
 ];
 
-const journeyStep = (id) => JOURNEY.find((s) => s.id === id) || null;
+const journeyStep = (id) =>
+  JOURNEY.find((s) => s.id === id) || demoSteps.find((s) => s.id === id) || null;
 
 let tourStepId = null;
 
@@ -380,9 +381,12 @@ let tourStepId = null;
 function targetRect(step) {
   const el = step?.target();
   if (!el) return null;
-  if (step.inFrame) {
+  if (step.inFrame || step.inFrameSelector) {
     try {
-      const inner = el.contentDocument?.getElementById(step.inFrame);
+      const doc = el.contentDocument;
+      const inner = step.inFrameSelector
+        ? doc?.querySelector(step.inFrameSelector)
+        : doc?.getElementById(step.inFrame);
       if (inner) {
         const f = el.getBoundingClientRect();
         const i = inner.getBoundingClientRect();
@@ -435,9 +439,13 @@ function showTourStep(id) {
   $("tour")?.classList.remove("hidden");
 
   const idx = JOURNEY.findIndex((sp) => sp.id === id) + 1;
-  $("tour-step-label").textContent = t("portal.tour.stepLabel", { n: idx, total: JOURNEY.length });
-  $("tour-title").textContent = t(step.titleKey);
-  $("tour-body").textContent = t(step.bodyKey);
+  $("tour-step-label").textContent = idx
+    ? t("portal.tour.stepLabel", { n: idx, total: JOURNEY.length })
+    : t("portal.demo.label");
+  // Passo dinâmico (demonstração) já traz o texto pronto; os fixos vêm por
+  // chave i18n.
+  $("tour-title").textContent = step.title ?? t(step.titleKey);
+  $("tour-body").textContent = step.body ?? t(step.bodyKey);
   renderTourActions(step);
   positionTour();
 }
@@ -456,7 +464,9 @@ function renderTourActions(step) {
       b.type = "button";
       b.className = "btn-lime tour-choice";
       b.textContent = t(c.labelKey);
-      b.addEventListener("click", () => showTourStep(c.next));
+      b.addEventListener("click", () =>
+        c.action ? runDemoChoice(c.action) : showTourStep(c.next)
+      );
       wrap.appendChild(b);
     }
     return;
@@ -490,7 +500,131 @@ function advanceTour() {
 function resumeJourneyAfterFlow() {
   if (localStorage.getItem(tourKey()) === "1") return;
   if (localStorage.getItem(tourProgressKey()) !== "fluxo") return;
-  setTimeout(() => showTourStep("modos"), 400);
+  // Espera o iframe do builder pintar os cards — eles são o alvo da
+  // demonstração, e mirar num canvas ainda vazio destacaria o nada.
+  waitForFlowCards().then((ok) => (ok ? startFlowDemo() : showTourStep("modos")));
+}
+
+/**
+ * Resolve quando os cards do fluxo aparecem dentro do iframe. Desiste depois
+ * de ~6s: sem isso, um builder que demora ou falha deixaria a jornada
+ * pendurada pra sempre — melhor cair no passo simples (só o painel de modos)
+ * do que sumir sem explicação.
+ */
+function waitForFlowCards(timeoutMs = 6000) {
+  const started = Date.now();
+  return new Promise((resolve) => {
+    const tick = () => {
+      try {
+        const doc = $("flow-frame")?.contentDocument;
+        if (doc?.querySelector(".fb-node")) return resolve(true);
+      } catch {
+        /* mesma origem — só falha enquanto carrega */
+      }
+      if (Date.now() - started > timeoutMs) return resolve(false);
+      setTimeout(tick, 200);
+    };
+    tick();
+  });
+}
+
+/* ── Demonstração card a card do fluxo simples ─────────────
+ * Pedido do usuário: ao sair do onboarding, o tour percorre o fluxo simples
+ * mostrando o que cada card faz, e no fim oferece o completo ou um modelo.
+ *
+ * Roda no fluxo SIMPLES de propósito: são poucos cards, então dá pra
+ * explicar um a um sem cansar — no completo (14+) isso viraria tortura.
+ *
+ * Os cards vivem dentro do iframe do builder, então cada passo é gerado na
+ * hora a partir dos nós salvos e mira `.fb-node[data-id=...]` lá dentro
+ * (ver targetRect/inFrameSelector).
+ */
+
+/** Uma frase por tipo de card, na língua do dono — não do builder. */
+function describeCard(node) {
+  const d = node.data || {};
+  const txt = (v, max = 70) => {
+    const t2 = String(v || "").replace(/\s+/g, " ").trim();
+    return t2.length > max ? t2.slice(0, max) + "…" : t2;
+  };
+  switch (node.type) {
+    case "trigger":
+      return t("portal.demo.trigger");
+    case "message":
+      return t("portal.demo.message", { texto: txt(d.text) });
+    case "ask":
+      return t("portal.demo.ask", { pergunta: txt(d.prompt), var: String(d.varName || "") });
+    case "llm_intent":
+      return t("portal.demo.intent");
+    case "llm_answer":
+      return t("portal.demo.answer");
+    case "handoff":
+      return t("portal.demo.handoff");
+    case "end":
+      return t("portal.demo.end");
+    default:
+      return t("portal.demo.generic");
+  }
+}
+
+/** Passos da demonstração, montados na hora a partir do fluxo. */
+function buildDemoSteps(flow) {
+  const nodes = flow?.nodes || [];
+  if (!nodes.length) return [];
+  return nodes.map((n, i) => ({
+    id: `demo:${n.id}`,
+    view: "flow",
+    inFrameSelector: `.fb-node[data-id="${cssEscape(n.id)}"]`,
+    target: () => $("flow-frame"),
+    title: t("portal.demo.cardTitle", { n: i + 1, total: nodes.length }),
+    body: describeCard(n),
+    next: i < nodes.length - 1 ? `demo:${nodes[i + 1].id}` : "demo:fim",
+  }));
+}
+
+/** id de nó vem do nosso próprio gerador (n_xxx), mas escapar é barato e
+ * evita seletor quebrado se algum dia mudar. */
+function cssEscape(v) {
+  return String(v).replace(/["\\]/g, "\\$&");
+}
+
+let demoSteps = [];
+
+/** Chamado quando o fluxo simples fica pronto. */
+function startFlowDemo() {
+  const simples = flowForMode("simples") || activeModeFlow();
+  demoSteps = buildDemoSteps(simples);
+  if (!demoSteps.length) return dismissTour();
+  demoSteps.push({
+    id: "demo:fim",
+    view: "flow",
+    inFrameSelector: "#flow-modes",
+    target: () => $("flow-frame"),
+    title: t("portal.demo.doneTitle"),
+    body: t("portal.demo.doneBody"),
+    choices: [
+      { labelKey: "portal.demo.keepSimple", action: "close" },
+      { labelKey: "portal.demo.seeFull", action: "completo" },
+      { labelKey: "portal.demo.seeTemplate", action: "template" },
+    ],
+  });
+  showTourStep(demoSteps[0].id);
+}
+
+/** Ação do passo final da demonstração. */
+function runDemoChoice(action) {
+  dismissTour();
+  if (action === "completo") {
+    const f = flowForMode("completo");
+    if (f) {
+      setActiveMode("completo");
+      openBuilder(f.id);
+    } else {
+      void makeMissingMode("completo");
+    }
+    return;
+  }
+  if (action === "template") void makeMissingMode("template");
 }
 
 function dismissTour(remember = true) {
