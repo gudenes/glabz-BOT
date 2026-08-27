@@ -169,6 +169,8 @@ function prettyPreview(text) {
 const TYPE_WORDS = new Set([
   "trigger", "message", "ask", "llm_intent", "llm_extract", "llm_answer",
   "handoff", "end", "action", "condition",
+  // Jargão solto que a IA também usou como nome de card ("llm" num fluxo real).
+  "llm", "ia", "ai", "node", "step", "nodo",
 ]);
 
 function cardLabel(label, fallback) {

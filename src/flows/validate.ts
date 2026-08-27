@@ -172,6 +172,46 @@ async function runOneCase(
   return { id, label, ok, steps, trace, issues };
 }
 
+/**
+ * Checagem ESTRUTURAL do llm_answer, feita no grafo e não na conversa.
+ *
+ * A validação por conversa não pega isto: quando a IA falha (sem chave, sem
+ * base) o caso segue pelo "erro" e termina em handoff, que é desenho válido —
+ * o ramo "ok" nunca chega a ser exercitado. Foi assim que passou um fluxo
+ * simples com trigger → llm_answer --erro--> handoff e mais nada: o cliente
+ * recebia a resposta certa e era passado pra um humano em seguida, porque
+ * "erro" era a única saída e o motor a seguia até em caso de sucesso.
+ *
+ * Mesma lição do PR #74: severidade errada, ou checagem ausente, é tão ruim
+ * quanto não ter validação. Aqui é `fail`, não `warn` — um llm_answer sem a
+ * saída de sucesso torna o card inútil no melhor caso e enganoso no pior.
+ */
+function answerBranchIssues(flow: Flow): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  for (const node of flow.nodes) {
+    if (node.type !== "llm_answer") continue;
+    const outs = flow.edges.filter((e) => e.from === node.id);
+    const has = (label: string) => outs.some((e) => (e.label || "") === label);
+    if (!has("ok")) {
+      issues.push({
+        severity: "fail",
+        message:
+          `O card "Responder com IA" (${node.id}) não tem saída "ok": quando a IA responde ` +
+          `certo, o atendimento segue pelo caminho errado.`,
+      });
+    }
+    if (!has("erro")) {
+      issues.push({
+        severity: "fail",
+        message:
+          `O card "Responder com IA" (${node.id}) não tem saída "erro": quando a IA não souber ` +
+          `responder, não há para onde ir.`,
+      });
+    }
+  }
+  return issues;
+}
+
 export async function validateFlow(flow: Flow): Promise<ValidationReport> {
   const intentNode = flow.nodes.find((n) => n.type === "llm_intent");
   const intents = (
@@ -195,6 +235,17 @@ export async function validateFlow(flow: Flow): Promise<ValidationReport> {
       const slug = String(intent.slug).trim();
       const desc = String(intent.description || "").trim() || slug;
       cases.push(await runOneCase(flow, `intent:${slug}`, `Ramo: ${desc}`, slug, desc));
+    }
+  }
+
+  // Defeito de grafo vale pro fluxo inteiro, então entra em TODO caso: o
+  // relatório mostra caso a caso, e um problema estrutural invisível em
+  // metade deles esconderia a causa real.
+  const structural = answerBranchIssues(flow);
+  if (structural.length) {
+    for (const c of cases) {
+      c.issues = [...structural, ...c.issues];
+      c.ok = false;
     }
   }
 
