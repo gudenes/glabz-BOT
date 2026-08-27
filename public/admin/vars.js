@@ -134,20 +134,28 @@ export function varsAvailableAt(flow, nodeId) {
   return [...seen.values()];
 }
 
-/** Variáveis usadas num texto ({{assim}}). */
+/** Variáveis usadas num texto ({{assim}}).
+ * O padrão espelha o `render()` do motor (src/flows/engine.ts): só
+ * letras/números/underscore. Aceitar ponto aqui marcaria {{a.b}} como "usada"
+ * enquanto o motor a deixaria crua no texto — divergência silenciosa. */
 export function varsUsedIn(text) {
-  return [...String(text || "").matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((m) => m[1]);
+  return [...String(text || "").matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]);
 }
 
 /**
  * Variáveis citadas no nó que NÃO existem naquele ponto — a causa raiz do
  * "{{slots_text}}" aparecendo cru pro cliente final.
+ *
+ * Mesmos campos de INTERPOLATED_FIELDS, e pelo mesmo motivo: `config.title`
+ * (título do evento na Ação) ficava aqui, mas o motor NUNCA o interpola —
+ * avisar "essa variável não existe" num campo que não substitui variável
+ * nenhuma aponta pro problema errado.
  */
 export function unknownVarsIn(flow, node) {
   if (!node) return [];
   const available = new Set(varsAvailableAt(flow, node.id).map((v) => v.name));
   const d = node.data || {};
-  const texts = [d.text, d.prompt, d.message, d.config?.title].filter((x) => typeof x === "string");
+  const texts = INTERPOLATED_FIELDS.map((f) => d[f]).filter((x) => typeof x === "string");
   const used = new Set(texts.flatMap(varsUsedIn));
   return [...used].filter((v) => !available.has(v));
 }

@@ -1166,26 +1166,46 @@ function renderVarsPanel(node) {
   const cardNo = new Map(state.flow.nodes.map((n, i) => [n.id, i + 1]));
   const usage = varUsageIndex(state.flow);
 
-  const rows = vars
-    .map((v) => {
-      const createdAt = v.nodeId ? `card ${cardNo.get(v.nodeId)}` : "sistema";
-      const usedIn = (usage.get(v.name) || []).map((id) => `card ${cardNo.get(id)}`);
-      const usedTxt = usedIn.length
-        ? `Usado: ${listPt(usedIn)}`
-        : `<span class="fb-var-unused">ainda não usada</span>`;
-      return `<div class="fb-var-row">
-        <button type="button" class="fb-var" data-var="${escapeHtml(v.name)}"
-          title="${escapeHtml(v.hint)}">{{${escapeHtml(v.name)}}}</button>
-        <span class="fb-var-where">Criado: ${createdAt} · ${usedTxt}</span>
-      </div>`;
-    })
-    .join("");
+  const row = (v) => {
+    const createdAt = v.nodeId ? `card ${cardNo.get(v.nodeId)}` : "sistema";
+    const usedIn = (usage.get(v.name) || []).map((id) => `card ${cardNo.get(id)}`);
+    const usedTxt = usedIn.length
+      ? `Usado: ${listPt(usedIn)}`
+      : `<span class="fb-var-unused">ainda não usada</span>`;
+    return `<div class="fb-var-row">
+      <button type="button" class="fb-var" data-var="${escapeHtml(v.name)}"
+        title="${escapeHtml(v.hint)}">{{${escapeHtml(v.name)}}}</button>
+      <span class="fb-var-where">Criado: ${createdAt} · ${usedTxt}</span>
+    </div>`;
+  };
+
+  // Em uso primeiro. Sem isso a lista abria com as que NUNCA são usadas
+  // (pushName, last, last_intent, pre_answer, slots_json…), porque as de
+  // sistema são semeadas antes de tudo em varsAvailableAt — nos cards
+  // iniciais a lista inteira era name_greet/pushName/last, duas delas sempre
+  // vazias, e passava a impressão de que "Usado" nunca preenche. Medido nos
+  // fluxos reais: 70% das linhas são "ainda não usada", então o que precisa
+  // de destaque é a minoria que está em uso.
+  const used = vars.filter((v) => (usage.get(v.name) || []).length);
+  const idle = vars.filter((v) => !(usage.get(v.name) || []).length);
+
+  const idleBlock = idle.length
+    ? `<details class="fb-vars-idle">
+         <summary>Disponíveis, ainda sem uso <span class="fb-vars-n">${idle.length}</span></summary>
+         <div class="fb-vars-list">${idle.map(row).join("")}</div>
+       </details>`
+    : "";
+
+  const usedBlock = used.length
+    ? `<div class="fb-vars-list">${used.map(row).join("")}</div>`
+    : `<p class="fb-hint">Nenhuma variável está sendo usada nas mensagens deste fluxo ainda.</p>`;
 
   return `
     <details class="fb-vars" ${unknown.length ? "open" : ""}>
       <summary>Variáveis disponíveis aqui <span class="fb-vars-n">${vars.length}</span></summary>
       ${warn}
-      <div class="fb-vars-list">${rows}</div>
+      ${usedBlock}
+      ${idleBlock}
       <p class="fb-hint">Clique no nome para inserir no campo de texto. Passe o mouse para ver o que cada uma guarda.</p>
     </details>`;
 }
