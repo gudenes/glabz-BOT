@@ -153,7 +153,15 @@ async function runOneCase(
   // Encerrou antes de o cliente conseguir dizer o que queria — o caso mais
   // grave e o mais fácil de passar batido, porque "chegou num Fim" sozinho
   // parece sucesso.
-  if (reachedTerminal && !deliveredTestMessage) {
+  //
+  // Exceção: se um llm_answer chegou a rodar, o fluxo ATENDEU a mensagem do
+  // cliente (respondeu, ou tentou e caiu no fallback humano) — terminar ali é
+  // o desenho, não descaso. É exatamente o caso do fluxo simples, que
+  // responde de cara sem perguntar nada antes. Sem esta exceção a checagem
+  // reprovava todo fluxo simples; com ela, o cenário que a originou (fluxo
+  // que só dá boas-vindas e encerra, sem responder nada) continua reprovando.
+  const answered = trace.some((t) => t.type === "llm_answer");
+  if (reachedTerminal && !deliveredTestMessage && !answered) {
     issues.push({
       severity: "fail",
       message: "o fluxo encerrou logo na saudação, antes de o cliente conseguir dizer o que precisava",

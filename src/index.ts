@@ -118,7 +118,7 @@ import {
   setConversationHuman,
 } from "./flows/store.js";
 import { simulateFlowMessage } from "./flows/engine.js";
-import { generateFlowFromPrompt } from "./flows/from-prompt.js";
+import { generateFlowFromPrompt, type FlowBuildMode } from "./flows/from-prompt.js";
 import { editFlowFromInstruction } from "./flows/edit-flow.js";
 import { validateFlow } from "./flows/validate.js";
 import {
@@ -1021,6 +1021,10 @@ const server = createServer(async (req, res) => {
         action?: "chat" | "build" | "test" | "extract_knowledge";
         phase?: string;
         mode?: "flow" | "knowledge";
+        /** Qual desenho gerar no build: enxuto (5 cards, uma prioridade) ou
+         * completo (tronco + ramos). Default completo — o comportamento que
+         * já existia antes dos modos. */
+        buildMode?: FlowBuildMode;
       }>(await readBody(req));
       const mode: StudioMode = body?.mode === "knowledge" ? "knowledge" : "flow";
       const messages = (body?.messages || []).filter(
@@ -1100,11 +1104,12 @@ const server = createServer(async (req, res) => {
       try {
         const ctx = studioContextFor(client);
         if (action === "build") {
-          const gen = await buildFlowFromStudio(messages, ctx);
+          const buildMode: FlowBuildMode = body?.buildMode === "simples" ? "simples" : "completo";
+          const gen = await buildFlowFromStudio(messages, ctx, buildMode);
           // Reaproveita o fluxo deste modo se já existir, em vez de criar
           // outro — sem isso, gerar de novo empilharia fluxos (é o bug do
           // fluxo duplicado, PR #79, na sua versão por modo).
-          const existingSame = clientId ? findFlowByClientAndMode(clientId, "completo") : null;
+          const existingSame = clientId ? findFlowByClientAndMode(clientId, buildMode) : null;
           const flow = saveFlow({
             id: existingSame?.id,
             name: gen.name,
@@ -1114,7 +1119,7 @@ const server = createServer(async (req, res) => {
             status: "draft",
             nodes: gen.nodes,
             edges: gen.edges,
-            mode: "completo",
+            mode: buildMode,
           });
           json(res, 200, {
             ok: true,
