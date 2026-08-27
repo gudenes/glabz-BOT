@@ -466,12 +466,39 @@ function positionTour() {
   hole.style.width = `${r.width + pad * 2}px`;
   hole.style.height = `${r.height + pad * 2}px`;
 
-  // Balão embaixo do alvo por padrão; sobe se não couber. Clampa nas bordas
-  // horizontais da viewport pra nunca vazar pra fora da tela.
-  const bubbleWidth = 320;
-  const left = Math.max(12, Math.min(r.left, window.innerWidth - bubbleWidth - 12));
-  const spaceBelow = window.innerHeight - r.bottom;
-  const top = spaceBelow > 200 ? r.bottom + pad + 12 : Math.max(12, r.top - 180);
+  // O balão não pode tapar o que ele está explicando. A regra antiga chutava
+  // 180px de altura pra subir o balão: quando ele era mais alto que isso —
+  // sempre, nos passos de texto mais longo — a sobra descia por cima do
+  // próprio alvo. Foi o que aconteceu com os itens da barra lateral, que são
+  // baixos na lista e deixam pouco espaço embaixo.
+  //
+  // Agora mede a altura de verdade e testa posições em ordem de preferência,
+  // ficando na primeira que cabe INTEIRA na tela. Abaixo/acima/ao lado nunca
+  // encostam no alvo por construção.
+  const gap = 12;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const box = bubble.getBoundingClientRect();
+  const bw = box.width || 320;
+  const bh = box.height || 200;
+  const near = pad + gap;
+  const clampX = (v) => Math.max(12, Math.min(v, vw - bw - 12));
+  const clampY = (v) => Math.max(12, Math.min(v, vh - bh - 12));
+  const spots = [
+    { left: clampX(r.left), top: clampY(r.bottom + near) },      // embaixo
+    { left: clampX(r.left), top: clampY(r.top - near - bh) },    // em cima
+    { left: clampX(r.right + near), top: clampY(r.top) },        // à direita
+    { left: clampX(r.left - near - bw), top: clampY(r.top) },    // à esquerda
+  ];
+  // Quanto cada posição tapa do alvo. Alvo pequeno tem várias com zero e vale
+  // a ordem de preferência; alvo GRANDE (o diálogo de onboarding ocupa quase
+  // a tela toda) pode não ter nenhuma limpa — aí fica a que tapa menos, que é
+  // sempre melhor que uma posição fixa escolhida no escuro.
+  const hidden = (s) =>
+    Math.max(0, Math.min(s.left + bw, r.right) - Math.max(s.left, r.left)) *
+    Math.max(0, Math.min(s.top + bh, r.bottom) - Math.max(s.top, r.top));
+  const spot = spots.reduce((best, s) => (hidden(s) < hidden(best) ? s : best), spots[0]);
+  const { left, top } = spot;
   bubble.style.left = `${left}px`;
   bubble.style.top = `${top}px`;
 }
