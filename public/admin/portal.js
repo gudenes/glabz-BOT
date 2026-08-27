@@ -158,6 +158,46 @@ function hasOwnFlows() {
   return (state.portal?.flows || []).length > 0;
 }
 
+/* ── Modos de fluxo (simples · completo · template) ─────────
+ * Os três coexistem salvos; o dono alterna sem perder edição de nenhum.
+ * Fluxo antigo, salvo antes do campo `mode`, lê como "completo" — mesma
+ * regra do backend (flowModeOf em src/flows/types.ts).
+ */
+const FLOW_MODES = ["simples", "completo", "template"];
+
+function flowModeOf(flow) {
+  return FLOW_MODES.includes(flow?.mode) ? flow.mode : "completo";
+}
+
+/** Fluxo do cliente naquele modo, se já existir (mais recente primeiro). */
+function flowForMode(mode) {
+  return (
+    (state.portal?.flows || [])
+      .filter((f) => flowModeOf(f) === mode)
+      .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0] || null
+  );
+}
+
+/** Modo mostrado agora. Preferência: o que o dono escolheu nesta sessão →
+ * o publicado → o único que existe. Guardado por cliente pra sobreviver ao
+ * refresh de 4s e à volta do QR. */
+function activeMode() {
+  const saved = sessionStorage.getItem(`glabs_flow_mode_${state.portal?.client?.id || "anon"}`);
+  if (saved && flowForMode(saved)) return saved;
+  const live = (state.portal?.flows || []).find((f) => f.status === "live");
+  if (live) return flowModeOf(live);
+  const any = FLOW_MODES.find((m) => flowForMode(m));
+  return any || "completo";
+}
+
+function setActiveMode(mode) {
+  sessionStorage.setItem(`glabs_flow_mode_${state.portal?.client?.id || "anon"}`, mode);
+}
+
+function activeModeFlow() {
+  return flowForMode(activeMode());
+}
+
 /**
  * Fluxo "de verdade" = mais do que só o gatilho. provisionClient cria um
  * fluxo inicial vazio no onboarding, então contar fluxos (hasOwnFlows) não
@@ -321,13 +361,17 @@ window.addEventListener(
   true
 );
 
-function openBuilder() {
+function openBuilder(flowId) {
   const frame = $("flow-frame");
   frame?.classList.remove("hidden");
   const cid = sessionStorage.getItem("glabs_client_id") || state.portal?.client?.id || "";
   if (frame) {
     frame.dataset.loaded = "1";
-    frame.src = `/admin/flows.html?embed=1&client=${encodeURIComponent(cid)}&v=16`;
+    // ?flow= diz ao builder QUAL fluxo abrir. Sem isso ele escolhia o mais
+    // recente, que não tem relação com o modo selecionado no painel.
+    const wanted = flowId || activeModeFlow()?.id || "";
+    const q = wanted ? `&flow=${encodeURIComponent(wanted)}` : "";
+    frame.src = `/admin/flows.html?embed=1&client=${encodeURIComponent(cid)}${q}&v=17`;
   }
 }
 
@@ -434,7 +478,45 @@ function syncFlowPane() {
   // (maybeOnboard) — abrir o Studio à força aqui tirava a escolha do usuário
   // e o deixava sem saída.
   if (!hasOwnFlows()) ensureStudioWelcome();
+  renderModeSwitch();
   studioLayout();
+}
+
+/**
+ * Painel de modos: mostra qual fluxo está ativo e deixa trocar. Só aparece
+ * quando há mais de um modo disponível — com um só, seria um seletor de uma
+ * opção. Trocar não regenera nada: cada modo é um fluxo salvo, e alternar só
+ * recarrega o builder apontando pro outro (decisão do usuário, 27/08).
+ */
+function renderModeSwitch() {
+  const box = $("flow-modes");
+  if (!box) return;
+  const available = FLOW_MODES.filter((m) => flowForMode(m));
+  box.classList.toggle("hidden", available.length < 2);
+  if (available.length < 2) return;
+
+  const current = activeMode();
+  box.innerHTML =
+    `<span class="flow-modes-label">${t("portal.flowMode.label")}</span>` +
+    available
+      .map((m) => {
+        const f = flowForMode(m);
+        const live = f?.status === "live" ? ` <span class="flow-mode-live">${t("portal.flowMode.live")}</span>` : "";
+        return `<button type="button" class="flow-mode${m === current ? " on" : ""}" data-mode="${m}"
+          title="${escapeHtml(f?.name || "")}">${t(`portal.flowMode.${m}`)}${live}</button>`;
+      })
+      .join("");
+
+  box.querySelectorAll("[data-mode]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const mode = b.dataset.mode;
+      if (mode === activeMode()) return;
+      setActiveMode(mode);
+      const f = flowForMode(mode);
+      renderModeSwitch();
+      if (f) openBuilder(f.id);
+    });
+  });
 }
 
 function ensureStudioWelcome() {
@@ -1558,7 +1640,11 @@ async function revealBuiltFlow(flow) {
   await refresh();
   state.studio.open = false;
   state.studio.expanded = false;
-  openBuilder();
+  // O fluxo recém-gerado passa a ser o modo ativo — é o que o dono acabou de
+  // mandar montar, seria estranho abrir outro.
+  if (flow?.mode) setActiveMode(flow.mode);
+  renderModeSwitch();
+  openBuilder(flow?.id);
   studioLayout();
   // Bônus pós-build, nunca bloqueia: o dono já viu o fluxo pronto (o momento
   // de recompensa da conversa) antes de qualquer coisa sobre conhecimento
@@ -1929,7 +2015,9 @@ async function useTemplate(kind) {
     toast(t("portal.studio.templateReady"));
     await refresh();
     state.studio.open = false;
-    openBuilder();
+    setActiveMode("template");
+    renderModeSwitch();
+    openBuilder(flowForMode("template")?.id);
     studioLayout();
   } catch (e) {
     toast(e.message, "err");
@@ -2104,6 +2192,7 @@ window.addEventListener("message", async (ev) => {
     }
     ensureStudioWelcome();
   }
+  renderModeSwitch();
   studioLayout();
 });
 
