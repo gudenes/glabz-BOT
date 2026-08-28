@@ -14,12 +14,31 @@
 /** Filtro por número: desligado, lista de permissão, ou lista de bloqueio. */
 export type NumbersMode = "off" | "allow" | "block";
 
+export type BotHours = {
+  enabled: boolean;
+  /** 0=domingo … 6=sábado. Vazio = nenhum dia, o que desliga na prática. */
+  days: number[];
+  /** "HH:MM" no fuso de `timezone`. */
+  start: string;
+  end: string;
+};
+
 export type BotRules = {
   numbers?: {
     mode: NumbersMode;
     list: string[];
   };
+  /**
+   * Fuso IANA ("America/Sao_Paulo"). Guardado junto porque um horário sem
+   * fuso não quer dizer nada: o servidor roda em UTC, e "atende das 8 às 18"
+   * viraria 5h–15h no relógio do dono.
+   */
+  timezone?: string;
+  hours?: BotHours;
 };
+
+/** Fuso assumido quando a conta não escolheu — o do resto do produto. */
+export const DEFAULT_TIMEZONE = "America/Sao_Paulo";
 
 /**
  * Telefone em dígitos, no formato que dá pra comparar.
@@ -118,8 +137,124 @@ export function normalizeBotRules(input: unknown): BotRules | undefined {
   const mode: NumbersMode =
     numbersSrc.mode === "allow" || numbersSrc.mode === "block" ? numbersSrc.mode : "off";
   const list = normalizeNumberList(numbersSrc.list);
+
+  const hoursSrc = (src.hours || {}) as Record<string, unknown>;
+  const start = parseHhMm(String(hoursSrc.start ?? "")) === null ? "08:00" : String(hoursSrc.start);
+  const end = parseHhMm(String(hoursSrc.end ?? "")) === null ? "18:00" : String(hoursSrc.end);
+  const days = Array.isArray(hoursSrc.days)
+    ? [...new Set(hoursSrc.days.map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))]
+        .sort((a, b) => a - b)
+    : [];
+  // Marcar "ligado" sem escolher dia nenhum é engano, não configuração — e
+  // aceitar isso calaria o bot pra sempre. Vale como desligado.
+  const hoursOn = hoursSrc.enabled === true && days.length > 0;
+
+  const tz = typeof src.timezone === "string" && isValidTimezone(src.timezone) ? src.timezone : null;
+
   // Nada configurado = campo ausente, e conta sem o campo se comporta como
   // sempre. Guardar `{mode:"off"}` funcionaria igual, mas suja o registry.
-  if (mode === "off" && !list.length) return undefined;
-  return { numbers: { mode, list } };
+  if (mode === "off" && !list.length && !hoursOn) return undefined;
+
+  const out: BotRules = { numbers: { mode, list } };
+  if (hoursOn) out.hours = { enabled: true, days, start, end };
+  if (tz) out.timezone = tz;
+  return out;
+}
+
+/** Fuso que o Intl deste runtime reconhece — evita gravar lixo digitado. */
+export function isValidTimezone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Que dia e que horas são, agora, no fuso da conta.
+ *
+ * NÃO reaproveita src/br-time.ts de propósito: aquele módulo assume Brasília
+ * com offset FIXO (-03:00, sem horário de verão), o que é correto pro que ele
+ * atende mas não serve pra um fuso escolhido pelo dono. Aqui o Intl resolve
+ * fuso e horário de verão sozinho, sem dependência nova (o Node do projeto
+ * tem ICU completo — 418 fusos, verificado).
+ *
+ * Consequência conhecida: um cliente em Manaus teria o BOT no fuso certo e a
+ * AGENDA ainda em Brasília, que continua usando br-time. Unificar é trabalho
+ * à parte.
+ */
+export function zonedNow(now: Date, timezone: string): { weekday: number; minutes: number } {
+  const tz = timezone || DEFAULT_TIMEZONE;
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+  } catch {
+    // Fuso inválido (dado antigo, digitação): cai no padrão em vez de
+    // estourar. Um erro aqui derrubaria o atendimento inteiro.
+    return zonedNow(now, DEFAULT_TIMEZONE);
+  }
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || "";
+  const WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weekday = WEEK.indexOf(get("weekday"));
+  // "24" aparece à meia-noite em alguns ambientes com hour12:false.
+  const hour = Number(get("hour")) % 24;
+  const minute = Number(get("minute"));
+  return { weekday: weekday < 0 ? 0 : weekday, minutes: hour * 60 + minute };
+}
+
+/** "HH:MM" → minutos desde a meia-noite. Formato inválido devolve null. */
+export function parseHhMm(value: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(value || "").trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+/**
+ * O bot está dentro da janela de atendimento agora?
+ *
+ * Janela que VIRA A NOITE é caso real, não exceção: pizzaria das 18:00 às
+ * 02:00. Quando o fim é menor ou igual ao início, a janela cruza a
+ * meia-noite, e o dia marcado é o dia em que ela COMEÇA — 01:00 de terça
+ * pertence à janela que abriu segunda.
+ */
+export function isWithinHours(rules: BotRules | undefined, now: Date = new Date()): boolean {
+  const h = rules?.hours;
+  if (!h || !h.enabled) return true;
+  const start = parseHhMm(h.start);
+  const end = parseHhMm(h.end);
+  // Horário mal formado não pode calar o bot — o dono não teria como
+  // perceber a causa.
+  if (start === null || end === null) return true;
+  const days = Array.isArray(h.days) ? h.days : [];
+  if (!days.length) return true;
+
+  const { weekday, minutes } = zonedNow(now, rules?.timezone || DEFAULT_TIMEZONE);
+  if (end > start) return days.includes(weekday) && minutes >= start && minutes < end;
+  // Vira a noite: ou é depois da abertura hoje, ou é antes do fechamento e a
+  // janela abriu ontem.
+  const yesterday = (weekday + 6) % 7;
+  if (minutes >= start) return days.includes(weekday);
+  if (minutes < end) return days.includes(yesterday);
+  return false;
+}
+
+/** O bot pode responder agora, a esta pessoa? Junta as duas travas. */
+export function botShouldAnswer(
+  rules: BotRules | undefined,
+  phone: string,
+  now: Date = new Date()
+): { ok: true } | { ok: false; reason: "numbers" | "hours" } {
+  if (!numbersAllow(rules, phone)) return { ok: false, reason: "numbers" };
+  if (!isWithinHours(rules, now)) return { ok: false, reason: "hours" };
+  return { ok: true };
 }
