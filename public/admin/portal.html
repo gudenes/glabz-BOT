@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=42" />
+    <link rel="stylesheet" href="/admin/portal.css?v=43" />
   </head>
   <body class="portal-body">
     <div class="app">
@@ -188,6 +188,11 @@
                 <div class="field">
                   <label for="rules-tz" data-i18n="portal.rules.timezone">Fuso horário</label>
                   <select id="rules-tz"></select>
+                </div>
+                <div class="field">
+                  <label for="rules-away" data-i18n="portal.rules.away">Aviso fora do horário (opcional)</label>
+                  <textarea id="rules-away" rows="2" maxlength="700" placeholder="Estamos fechados agora. Respondemos amanhã a partir das 8h!"></textarea>
+                  <p class="hint-muted" data-i18n="portal.rules.awayHint">Deixe em branco para o bot só ficar quieto. Se preencher, o aviso vai no máximo uma vez por pessoa por dia.</p>
                 </div>
               </div>
               <button type="submit" class="btn-lime" data-i18n="portal.rules.save">Salvar</button>
@@ -589,6 +594,6 @@
       </div>
     </div>
 
-    <script src="/admin/portal.js?v=47" type="module"></script>
+    <script src="/admin/portal.js?v=48" type="module"></script>
   </body>
 </html>

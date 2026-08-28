@@ -21,6 +21,13 @@ export type BotHours = {
   /** "HH:MM" no fuso de `timezone`. */
   start: string;
   end: string;
+  /**
+   * Aviso automático fora do horário. Vazio/ausente = o bot fica calado, que
+   * é o padrão. Mandado no máximo uma vez por pessoa por dia (ver
+   * awayAlreadySent) — repetir a cada mensagem viraria spam justamente com
+   * quem já entendeu que está fechado.
+   */
+  awayMessage?: string | null;
 };
 
 export type BotRules = {
@@ -148,6 +155,8 @@ export function normalizeBotRules(input: unknown): BotRules | undefined {
   // Marcar "ligado" sem escolher dia nenhum é engano, não configuração — e
   // aceitar isso calaria o bot pra sempre. Vale como desligado.
   const hoursOn = hoursSrc.enabled === true && days.length > 0;
+  // Limite generoso, mas limite: isso vai virar mensagem de WhatsApp.
+  const away = String(hoursSrc.awayMessage ?? "").trim().slice(0, 700);
 
   const tz = typeof src.timezone === "string" && isValidTimezone(src.timezone) ? src.timezone : null;
 
@@ -156,7 +165,10 @@ export function normalizeBotRules(input: unknown): BotRules | undefined {
   if (mode === "off" && !list.length && !hoursOn) return undefined;
 
   const out: BotRules = { numbers: { mode, list } };
-  if (hoursOn) out.hours = { enabled: true, days, start, end };
+  if (hoursOn) {
+    out.hours = { enabled: true, days, start, end };
+    if (away) out.hours.awayMessage = away;
+  }
   if (tz) out.timezone = tz;
   return out;
 }
@@ -207,6 +219,40 @@ export function zonedNow(now: Date, timezone: string): { weekday: number; minute
   const hour = Number(get("hour")) % 24;
   const minute = Number(get("minute"));
   return { weekday: weekday < 0 ? 0 : weekday, minutes: hour * 60 + minute };
+}
+
+/** "AAAA-MM-DD" no fuso da conta — chave do "já avisei esta pessoa hoje". */
+export function zonedDateKey(now: Date, timezone: string): string {
+  const tz = timezone || DEFAULT_TIMEZONE;
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+  } catch {
+    return zonedDateKey(now, DEFAULT_TIMEZONE);
+  }
+}
+
+/** Nome da variável que marca o aviso já enviado, no estado da conversa. */
+export const AWAY_SENT_VAR = "__away_sent_on";
+
+/**
+ * Já avisamos esta pessoa hoje que estamos fechados?
+ *
+ * "Uma vez por dia" e não "uma vez por período fechado" é escolha
+ * deliberada: é a regra que dá pra explicar numa frase e que o dono consegue
+ * prever. O preço é conhecido — quem escreve às 23h e de novo à 1h recebe
+ * dois avisos, porque virou o dia. Aceitável perto de avisar a cada mensagem.
+ */
+export function awayAlreadySent(
+  vars: Record<string, string> | undefined,
+  now: Date,
+  timezone: string | undefined
+): boolean {
+  return (vars || {})[AWAY_SENT_VAR] === zonedDateKey(now, timezone || DEFAULT_TIMEZONE);
 }
 
 /** "HH:MM" → minutos desde a meia-noite. Formato inválido devolve null. */

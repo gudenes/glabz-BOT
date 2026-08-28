@@ -16,7 +16,13 @@ import { authDir, botSecret, dataDir, logLevel } from "./config.js";
 import { formatPhoneDisplay, toWhatsAppJid } from "./phone.js";
 import { ingestContacts, type AgendaContact } from "./contacts.js";
 import { getAccount, type AccountRecord } from "./registry.js";
-import { botShouldAnswer } from "./bot-rules.js";
+import {
+  AWAY_SENT_VAR,
+  awayAlreadySent,
+  botShouldAnswer,
+  zonedDateKey,
+  type BotRules,
+} from "./bot-rules.js";
 import { db, hasDatabase } from "./db.js";
 import { sendEmailAlert, sendTelegramAlert } from "./notify.js";
 
@@ -582,6 +588,57 @@ function startTyping(sock: any, jid: string): { stop: () => void } {
   };
 }
 
+/**
+ * Aviso de "estamos fechados", quando o dono configurou um.
+ *
+ * Sem mensagem configurada o bot simplesmente não fala — é o padrão, e é o
+ * que a maioria vai querer. Com mensagem, manda no máximo uma vez por pessoa
+ * por dia: repetir a cada mensagem viraria spam justamente com quem já
+ * entendeu que está fechado.
+ *
+ * O marcador vive no estado da conversa, que é persistido em disco, então
+ * sobrevive a restart e deploy — em memória, um deploy no meio da noite
+ * faria todo mundo receber o aviso de novo.
+ *
+ * Nunca interrompe o resto: qualquer falha aqui não pode impedir a mensagem
+ * do cliente de chegar no inbox, que é o que realmente importa.
+ */
+async function sendAwayMessage(
+  accountId: string,
+  phone: string,
+  rules: BotRules | undefined
+): Promise<void> {
+  const text = rules?.hours?.awayMessage?.trim();
+  if (!text) return;
+  try {
+    const { getConversationState, upsertConversationState } = await import("./flows/store.js");
+    const state = getConversationState(accountId, phone);
+    // Conversa já entregue a um humano não recebe aviso automático — a
+    // pessoa está falando com alguém de verdade.
+    if (state?.mode === "human") return;
+    const now = new Date();
+    if (awayAlreadySent(state?.vars, now, rules?.timezone)) return;
+
+    const { sendTextWithRetry } = await import("./outbox.js");
+    const sent = await sendTextWithRetry(accountId, phone, text);
+    if (!sent.ok) return;
+
+    upsertConversationState({
+      accountId,
+      phoneE164: phone,
+      mode: state?.mode ?? "bot",
+      flowId: state?.flowId ?? null,
+      nodeId: state?.nodeId ?? null,
+      waitingFor: state?.waitingFor ?? null,
+      vars: { ...(state?.vars || {}), [AWAY_SENT_VAR]: zonedDateKey(now, rules?.timezone || "") },
+      updatedAt: now.toISOString(),
+    });
+    console.log(`[wa:${accountId}] aviso de fora do horário enviado para ${phone}`);
+  } catch (e) {
+    console.warn(`[wa:${accountId}] aviso fora do horário falhou:`, (e as Error).message);
+  }
+}
+
 async function handleInbound(accountId: string, m: any, sock: any): Promise<void> {
   try {
     const fromMe = Boolean(m?.key?.fromMe);
@@ -663,6 +720,7 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
     if (!allowed) {
       const motivo = verdict.reason === "hours" ? "fora do horário" : "filtro de números";
       console.log(`[wa:${accountId}] bot calado para ${phone} (${motivo})`);
+      if (verdict.reason === "hours") await sendAwayMessage(accountId, phone, rules);
     }
     const willAnswer = allowed && Boolean(findLiveFlow({ product, accountId }));
     const typing = willAnswer ? startTyping(sock, jid) : null;
