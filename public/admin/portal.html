@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=41" />
+    <link rel="stylesheet" href="/admin/portal.css?v=42" />
   </head>
   <body class="portal-body">
     <div class="app">
@@ -162,6 +162,33 @@
                 <label for="rules-list" data-i18n="portal.rules.list">Números, um por linha</label>
                 <textarea id="rules-list" rows="4" placeholder="(11) 98765-4321"></textarea>
                 <p class="hint-muted" data-i18n="portal.rules.listHint">Pode escrever do jeito que quiser — com DDD, com +55, com parênteses. O nono dígito não faz diferença.</p>
+              </div>
+              <div class="field">
+                <label class="switch-row">
+                  <input type="checkbox" id="rules-hours-on" />
+                  <span data-i18n="portal.rules.hoursOn">Responder só em determinado horário</span>
+                </label>
+              </div>
+              <div class="hidden" id="rules-hours-field">
+                <div class="field">
+                  <span data-i18n="portal.rules.days">Dias</span>
+                  <div class="day-picker" id="rules-days"></div>
+                </div>
+                <div class="time-row">
+                  <div class="field">
+                    <label for="rules-start" data-i18n="portal.rules.start">Das</label>
+                    <input type="time" id="rules-start" value="08:00" />
+                  </div>
+                  <div class="field">
+                    <label for="rules-end" data-i18n="portal.rules.end">Até</label>
+                    <input type="time" id="rules-end" value="18:00" />
+                  </div>
+                </div>
+                <p class="hint-muted" id="rules-overnight" data-i18n="portal.rules.overnight">O fim antes do início vale como madrugada — 18:00 às 02:00 atende noite adentro.</p>
+                <div class="field">
+                  <label for="rules-tz" data-i18n="portal.rules.timezone">Fuso horário</label>
+                  <select id="rules-tz"></select>
+                </div>
               </div>
               <button type="submit" class="btn-lime" data-i18n="portal.rules.save">Salvar</button>
             </form>
@@ -562,6 +589,6 @@
       </div>
     </div>
 
-    <script src="/admin/portal.js?v=46" type="module"></script>
+    <script src="/admin/portal.js?v=47" type="module"></script>
   </body>
 </html>

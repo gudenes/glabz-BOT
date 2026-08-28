@@ -1800,6 +1800,78 @@ $("form-account-billing").addEventListener("submit", async (ev) => {
  * reais achando que está tudo funcionando. Ela diz em voz alta o efeito atual
  * da regra, sempre que ele abre a aba.
  */
+/**
+ * Fusos oferecidos. Os do Brasil primeiro e por extenso — o dono não pensa em
+ * "America/Cuiaba", pensa em "Mato Grosso". O resto do mundo vem depois, cru,
+ * pra não travar quem está fora daqui.
+ */
+const BR_TIMEZONES = [
+  ["America/Sao_Paulo", "Brasília (SP, RJ, MG, Sul, Nordeste)"],
+  ["America/Manaus", "Manaus (AM, RR, RO, MT oeste)"],
+  ["America/Cuiaba", "Cuiabá (MT)"],
+  ["America/Campo_Grande", "Campo Grande (MS)"],
+  ["America/Belem", "Belém (PA, AP)"],
+  ["America/Fortaleza", "Fortaleza (CE, PI, MA, RN, PB, PE, AL, SE)"],
+  ["America/Recife", "Recife (PE)"],
+  ["America/Bahia", "Salvador (BA)"],
+  ["America/Rio_Branco", "Rio Branco (AC)"],
+  ["America/Noronha", "Fernando de Noronha"],
+];
+
+function fillTimezones(selected) {
+  const sel = $("rules-tz");
+  if (!sel || sel.options.length) {
+    if (sel) sel.value = selected || DEFAULT_TZ;
+    return;
+  }
+  const opt = (value, label) => {
+    const o = document.createElement("option");
+    o.value = value;
+    o.textContent = label;
+    return o;
+  };
+  const br = document.createElement("optgroup");
+  br.label = t("portal.rules.tzBrazil");
+  for (const [tz, label] of BR_TIMEZONES) br.appendChild(opt(tz, label));
+  sel.appendChild(br);
+  const brSet = new Set(BR_TIMEZONES.map(([tz]) => tz));
+  let all = [];
+  try {
+    all = Intl.supportedValuesOf("timeZone").filter((tz) => !brSet.has(tz));
+  } catch {
+    // Navegador sem supportedValuesOf: os do Brasil já cobrem o caso real.
+  }
+  if (all.length) {
+    const rest = document.createElement("optgroup");
+    rest.label = t("portal.rules.tzOther");
+    for (const tz of all) rest.appendChild(opt(tz, tz.replace(/_/g, " ")));
+    sel.appendChild(rest);
+  }
+  sel.value = selected || DEFAULT_TZ;
+}
+
+const DEFAULT_TZ = "America/Sao_Paulo";
+/** Domingo primeiro, como no calendário — o índice é o que o backend usa. */
+const WEEK_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+function fillDays(days) {
+  const box = $("rules-days");
+  if (!box) return;
+  box.innerHTML = "";
+  WEEK_KEYS.forEach((key, i) => {
+    const label = document.createElement("label");
+    label.className = "day-chip";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = String(i);
+    cb.checked = days.includes(i);
+    const span = document.createElement("span");
+    span.textContent = t(`portal.rules.day.${key}`);
+    label.append(cb, span);
+    box.appendChild(label);
+  });
+}
+
 function renderBotRules(rules) {
   const mode = rules?.numbers?.mode || "off";
   const list = rules?.numbers?.list || [];
@@ -1808,13 +1880,34 @@ function renderBotRules(rules) {
   sel.value = mode;
   $("rules-list").value = list.join("\n");
   toggleRulesList();
+
+  const hours = rules?.hours;
+  const hoursOn = Boolean(hours?.enabled);
+  $("rules-hours-on").checked = hoursOn;
+  // Dias padrão seg–sex: é o caso mais comum, e uma tela que abre com tudo
+  // desmarcado obriga o dono a clicar cinco vezes só pro básico.
+  fillDays(hoursOn ? hours.days || [] : [1, 2, 3, 4, 5]);
+  $("rules-start").value = hours?.start || "08:00";
+  $("rules-end").value = hours?.end || "18:00";
+  fillTimezones(rules?.timezone || DEFAULT_TZ);
+  toggleRulesHours();
+
   const now = $("bot-rules-now");
-  const active = mode !== "off" && list.length > 0;
-  now.textContent = active
-    ? t(mode === "allow" ? "portal.rules.nowAllow" : "portal.rules.nowBlock", { n: list.length })
-    : t("portal.rules.nowOff");
-  now.classList.toggle("on", active);
+  const numbersOn = mode !== "off" && list.length > 0;
+  const parts = [];
+  if (numbersOn) {
+    parts.push(t(mode === "allow" ? "portal.rules.nowAllow" : "portal.rules.nowBlock", { n: list.length }));
+  }
+  if (hoursOn) parts.push(t("portal.rules.nowHours", { start: hours.start, end: hours.end }));
+  now.textContent = parts.length ? parts.join(" ") : t("portal.rules.nowOff");
+  now.classList.toggle("on", parts.length > 0);
 }
+
+function toggleRulesHours() {
+  $("rules-hours-field")?.classList.toggle("hidden", !$("rules-hours-on")?.checked);
+}
+
+$("rules-hours-on")?.addEventListener("change", toggleRulesHours);
 
 /** Lista de números só faz sentido com um filtro escolhido. */
 function toggleRulesList() {
@@ -1838,10 +1931,28 @@ $("form-bot-rules")?.addEventListener("submit", async (ev) => {
     toast(t("portal.rules.emptyList"), "err");
     return;
   }
+  const hoursOn = $("rules-hours-on").checked;
+  const days = [...$("rules-days").querySelectorAll("input:checked")].map((c) => Number(c.value));
+  // Mesmo cuidado da lista de números: ligar o horário sem escolher dia
+  // nenhum é engano, e o backend trataria como desligado — o dono sairia
+  // daqui achando que restringiu.
+  if (hoursOn && !days.length) {
+    toast(t("portal.rules.emptyDays"), "err");
+    return;
+  }
   try {
     const data = await api("/v1/portal/whatsapp/rules", {
       method: "PUT",
-      body: JSON.stringify({ numbers: { mode, list } }),
+      body: JSON.stringify({
+        numbers: { mode, list },
+        timezone: $("rules-tz").value,
+        hours: {
+          enabled: hoursOn,
+          days,
+          start: $("rules-start").value,
+          end: $("rules-end").value,
+        },
+      }),
     });
     renderBotRules(data.account?.botRules);
     if (state.portal?.accounts?.[0]?.account) {

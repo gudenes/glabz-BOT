@@ -16,7 +16,7 @@ import { authDir, botSecret, dataDir, logLevel } from "./config.js";
 import { formatPhoneDisplay, toWhatsAppJid } from "./phone.js";
 import { ingestContacts, type AgendaContact } from "./contacts.js";
 import { getAccount, type AccountRecord } from "./registry.js";
-import { numbersAllow } from "./bot-rules.js";
+import { botShouldAnswer } from "./bot-rules.js";
 import { db, hasDatabase } from "./db.js";
 import { sendEmailAlert, sendTelegramAlert } from "./notify.js";
 
@@ -648,7 +648,8 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
     // barata (leitura de arquivo em memória) e o trabalho lento vem depois,
     // dá pra decidir ANTES de gastar a latência.
     const { findLiveFlow } = await import("./flows/store.js");
-    // Regras do dono: filtro de números (ver bot-rules.ts). Barrado aqui, o
+    // Regras do dono: filtro de números e janela de atendimento (ver
+    // bot-rules.ts). Barrado aqui, o
     // bot não responde E não aparece "digitando" — mostrar isso numa conversa
     // que ele vai ignorar seria mentira, o mesmo cuidado do PR #86.
     //
@@ -657,9 +658,11 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
     // dono continua vendo tudo e respondendo na mão — silenciar o bot nunca
     // pode custar a mensagem do cliente.
     const rules = getAccount(accountId)?.botRules;
-    const allowed = numbersAllow(rules, phone);
+    const verdict = botShouldAnswer(rules, phone);
+    const allowed = verdict.ok;
     if (!allowed) {
-      console.log(`[wa:${accountId}] bot calado para ${phone} (filtro de números)`);
+      const motivo = verdict.reason === "hours" ? "fora do horário" : "filtro de números";
+      console.log(`[wa:${accountId}] bot calado para ${phone} (${motivo})`);
     }
     const willAnswer = allowed && Boolean(findLiveFlow({ product, accountId }));
     const typing = willAnswer ? startTyping(sock, jid) : null;

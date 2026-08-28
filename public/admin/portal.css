@@ -1223,3 +1223,22 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .bot-rules textarea:focus { outline: none; border-color: var(--gold); }
 .bot-rules .hint-muted { font-weight: 500; }
 .bot-rules .btn-lime { justify-self: start; }
+.bot-rules .switch-row { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.bot-rules .switch-row input { width: 16px; height: 16px; accent-color: var(--gold); }
+.day-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.day-chip {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 999px; padding: 6px 11px;
+  background: #fafaf7; font-size: 12.5px; font-weight: 600; color: var(--muted);
+}
+.day-chip:has(input:checked) { border-color: var(--gold); background: #fff6d6; color: #6b5200; }
+.day-chip input { accent-color: var(--gold); }
+.time-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; }
+.time-row .field { flex: 0 0 auto; }
+.bot-rules input[type="time"], .bot-rules select {
+  border: 1px solid var(--line); background: #fafaf7; color: var(--ink);
+  border-radius: 12px; padding: 10px 12px; font: inherit;
+}
+.bot-rules input[type="time"]:focus { outline: none; border-color: var(--gold); }
+#rules-hours-field { display: grid; gap: 4px; }
+#rules-overnight { margin: 8px 0 4px; }
