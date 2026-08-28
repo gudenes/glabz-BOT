@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=40" />
+    <link rel="stylesheet" href="/admin/portal.css?v=41" />
   </head>
   <body class="portal-body">
     <div class="app">
@@ -142,6 +142,30 @@
             <article class="stat"><span data-i18n="portal.stat.liveFlow">Fluxo no ar</span><b id="st-live" data-i18n="portal.stat.nonePublished">Nenhum publicado</b></article>
             <article class="stat"><span data-i18n="portal.stat.published">Publicado</span><b id="st-updated">—</b></article>
           </div>
+
+          <section class="card-form bot-rules" id="bot-rules-card">
+            <header class="bot-rules-head">
+              <h3 data-i18n="portal.rules.title">Quem o bot atende</h3>
+              <p class="hint-muted" data-i18n="portal.rules.lead">Por padrão o bot responde a todo mundo. Dá pra restringir enquanto você testa, sem perder mensagem nenhuma — tudo continua chegando em Conversas.</p>
+            </header>
+            <p class="bot-rules-now" id="bot-rules-now" aria-live="polite"></p>
+            <form id="form-bot-rules">
+              <div class="field">
+                <label for="rules-mode" data-i18n="portal.rules.mode">Filtro de números</label>
+                <select id="rules-mode">
+                  <option value="off" data-i18n="portal.rules.mode.off">Responder a todo mundo</option>
+                  <option value="allow" data-i18n="portal.rules.mode.allow">Responder só a estes números</option>
+                  <option value="block" data-i18n="portal.rules.mode.block">Não responder a estes números</option>
+                </select>
+              </div>
+              <div class="field hidden" id="rules-list-field">
+                <label for="rules-list" data-i18n="portal.rules.list">Números, um por linha</label>
+                <textarea id="rules-list" rows="4" placeholder="(11) 98765-4321"></textarea>
+                <p class="hint-muted" data-i18n="portal.rules.listHint">Pode escrever do jeito que quiser — com DDD, com +55, com parênteses. O nono dígito não faz diferença.</p>
+              </div>
+              <button type="submit" class="btn-lime" data-i18n="portal.rules.save">Salvar</button>
+            </form>
+          </section>
 
           <aside class="tip">
             <strong data-i18n="portal.tip.title">Dica</strong>
@@ -538,6 +562,6 @@
       </div>
     </div>
 
-    <script src="/admin/portal.js?v=45" type="module"></script>
+    <script src="/admin/portal.js?v=46" type="module"></script>
   </body>
 </html>

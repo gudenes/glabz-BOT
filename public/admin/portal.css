@@ -1197,3 +1197,29 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .ai-src ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
 .ai-src em { opacity: .7; }
 
+
+/* Filtro de números do bot (aba WhatsApp). Reaproveita o .card-form de "Dados
+   da conta" — campos, foco e botão já vêm de lá. Aqui só o que é próprio.
+
+   A linha de resumo ganha destaque quando há filtro ativo: esquecer o filtro
+   ligado e achar que o bot está atendendo é o pior desfecho desta tela, então
+   ela se anuncia em vez de ficar discreta. */
+.bot-rules-head h3 { margin: 0 0 4px; font-size: 17px; letter-spacing: -0.02em; }
+.bot-rules-head p { margin: 0; font-size: 13px; font-weight: 500; }
+.bot-rules-now {
+  margin: 0; padding: 10px 12px; border-radius: 10px;
+  background: #f2f2ee; color: var(--muted); font-size: 13px;
+}
+.bot-rules-now.on {
+  background: #fff6d6; color: #6b5200; font-weight: 600;
+  border: 1px solid var(--gold);
+}
+.bot-rules form { display: grid; gap: 14px; }
+.bot-rules .field { display: grid; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.bot-rules textarea {
+  border: 1px solid var(--line); background: #fafaf7; color: var(--ink);
+  border-radius: 12px; padding: 10px 12px; font: inherit; resize: vertical;
+}
+.bot-rules textarea:focus { outline: none; border-color: var(--gold); }
+.bot-rules .hint-muted { font-weight: 500; }
+.bot-rules .btn-lime { justify-self: start; }

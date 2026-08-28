@@ -1112,6 +1112,7 @@ function render() {
   const acc = p.accounts[0];
   const sess = acc?.session;
   state.accountId = acc?.account?.id || null;
+  renderBotRules(acc?.account?.botRules);
   const wa = sess?.status || "disconnected";
   const prevWa = state.lastWa;
   if (prevWa && prevWa !== wa) {
@@ -1786,6 +1787,67 @@ $("form-account-billing").addEventListener("submit", async (ev) => {
     });
     if (state.portal && client) state.portal.client = client;
     toast(t("portal.account.saved"));
+  } catch (e) {
+    toast(e.message, "err");
+  }
+});
+
+/**
+ * Filtro de números do bot (aba WhatsApp).
+ *
+ * A linha de resumo existe por um motivo específico: o pior desfecho desta
+ * tela é o dono ativar o filtro, esquecer, e o bot ficar mudo pra clientes
+ * reais achando que está tudo funcionando. Ela diz em voz alta o efeito atual
+ * da regra, sempre que ele abre a aba.
+ */
+function renderBotRules(rules) {
+  const mode = rules?.numbers?.mode || "off";
+  const list = rules?.numbers?.list || [];
+  const sel = $("rules-mode");
+  if (!sel) return;
+  sel.value = mode;
+  $("rules-list").value = list.join("\n");
+  toggleRulesList();
+  const now = $("bot-rules-now");
+  const active = mode !== "off" && list.length > 0;
+  now.textContent = active
+    ? t(mode === "allow" ? "portal.rules.nowAllow" : "portal.rules.nowBlock", { n: list.length })
+    : t("portal.rules.nowOff");
+  now.classList.toggle("on", active);
+}
+
+/** Lista de números só faz sentido com um filtro escolhido. */
+function toggleRulesList() {
+  const off = $("rules-mode")?.value === "off";
+  $("rules-list-field")?.classList.toggle("hidden", off);
+}
+
+$("rules-mode")?.addEventListener("change", toggleRulesList);
+
+$("form-bot-rules")?.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const mode = $("rules-mode").value;
+  const list = $("rules-list").value
+    .split(/[\n,;]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  // Avisa em vez de salvar em silêncio: escolher um filtro e deixar a lista
+  // vazia é sempre engano, e o backend trataria como "sem filtro" — o dono
+  // sairia daqui achando que restringiu.
+  if (mode !== "off" && !list.length) {
+    toast(t("portal.rules.emptyList"), "err");
+    return;
+  }
+  try {
+    const data = await api("/v1/portal/whatsapp/rules", {
+      method: "PUT",
+      body: JSON.stringify({ numbers: { mode, list } }),
+    });
+    renderBotRules(data.account?.botRules);
+    if (state.portal?.accounts?.[0]?.account) {
+      state.portal.accounts[0].account = data.account;
+    }
+    toast(t("portal.rules.saved"));
   } catch (e) {
     toast(e.message, "err");
   }
