@@ -1889,6 +1889,7 @@ function renderBotRules(rules) {
   fillDays(hoursOn ? hours.days || [] : [1, 2, 3, 4, 5]);
   $("rules-start").value = hours?.start || "08:00";
   $("rules-end").value = hours?.end || "18:00";
+  $("rules-away").value = hours?.awayMessage || "";
   fillTimezones(rules?.timezone || DEFAULT_TZ);
   toggleRulesHours();
 
@@ -1898,7 +1899,10 @@ function renderBotRules(rules) {
   if (numbersOn) {
     parts.push(t(mode === "allow" ? "portal.rules.nowAllow" : "portal.rules.nowBlock", { n: list.length }));
   }
-  if (hoursOn) parts.push(t("portal.rules.nowHours", { start: hours.start, end: hours.end }));
+  if (hoursOn) {
+    parts.push(t("portal.rules.nowHours", { start: hours.start, end: hours.end }));
+    if (hours.awayMessage) parts.push(t("portal.rules.nowAway"));
+  }
   now.textContent = parts.length ? parts.join(" ") : t("portal.rules.nowOff");
   now.classList.toggle("on", parts.length > 0);
 }
@@ -1951,6 +1955,7 @@ $("form-bot-rules")?.addEventListener("submit", async (ev) => {
           days,
           start: $("rules-start").value,
           end: $("rules-end").value,
+          awayMessage: $("rules-away").value,
         },
       }),
     });
