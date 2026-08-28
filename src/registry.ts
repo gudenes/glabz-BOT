@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { registryPath } from "./config.js";
+import { normalizeBotRules, type BotRules } from "./bot-rules.js";
 
 export type ProductRecord = {
   slug: string;
@@ -27,6 +28,16 @@ export type AccountRecord = {
   webhookUrl: string;
   label: string | null;
   clientId?: string | null;
+  /**
+   * Quando e para quem o bot responde (ver bot-rules.ts). Fica na CONTA e não
+   * no cliente porque é comportamento deste número: um cliente com dois
+   * números pode querer regras diferentes em cada um, e o gate roda no
+   * handleInbound, que já tem o accountId em mãos.
+   *
+   * Ausente = responde sempre, que é o comportamento de toda conta criada
+   * antes deste campo. Arquivo JSON tolera campo novo opcional — sem migração.
+   */
+  botRules?: BotRules;
   createdAt: string;
   updatedAt: string;
 };
@@ -250,7 +261,7 @@ export function ensureAccount(input: {
 
 export function updateAccount(
   accountId: string,
-  patch: { webhookUrl?: string; label?: string | null }
+  patch: { webhookUrl?: string; label?: string | null; botRules?: BotRules | undefined }
 ): AccountRecord | null {
   const reg = load();
   const acc = reg.accounts.find((a) => a.id === accountId);
@@ -261,6 +272,19 @@ export function updateAccount(
     acc.webhookUrl = u;
   }
   if (patch.label !== undefined) acc.label = patch.label?.trim() || null;
+  // `undefined` aqui é valor de verdade, não "não mexer": é assim que o dono
+  // desliga o filtro. Por isso o campo sai do registro em vez de virar
+  // `{mode:"off"}` — ver normalizeBotRules.
+  //
+  // Saneia AQUI, e não só em quem chama: o PATCH de admin repassa o corpo da
+  // requisição direto pra esta função, então esta é a única fronteira por onde
+  // todo mundo passa. normalizeBotRules é idempotente, então normalizar de
+  // novo o que o portal já normalizou não custa nada.
+  if ("botRules" in patch) {
+    const rules = normalizeBotRules(patch.botRules);
+    if (rules) acc.botRules = rules;
+    else delete acc.botRules;
+  }
   acc.updatedAt = new Date().toISOString();
   save(reg);
   return acc;

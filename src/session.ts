@@ -16,6 +16,7 @@ import { authDir, botSecret, dataDir, logLevel } from "./config.js";
 import { formatPhoneDisplay, toWhatsAppJid } from "./phone.js";
 import { ingestContacts, type AgendaContact } from "./contacts.js";
 import { getAccount, type AccountRecord } from "./registry.js";
+import { numbersAllow } from "./bot-rules.js";
 import { db, hasDatabase } from "./db.js";
 import { sendEmailAlert, sendTelegramAlert } from "./notify.js";
 
@@ -647,29 +648,43 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
     // barata (leitura de arquivo em memória) e o trabalho lento vem depois,
     // dá pra decidir ANTES de gastar a latência.
     const { findLiveFlow } = await import("./flows/store.js");
-    const willAnswer = Boolean(findLiveFlow({ product, accountId }));
+    // Regras do dono: filtro de números (ver bot-rules.ts). Barrado aqui, o
+    // bot não responde E não aparece "digitando" — mostrar isso numa conversa
+    // que ele vai ignorar seria mentira, o mesmo cuidado do PR #86.
+    //
+    // Barrar NÃO descarta a mensagem: a execução cai no caminho "sem fluxo
+    // live" logo abaixo, que grava no inbox e manda pro app como sempre. O
+    // dono continua vendo tudo e respondendo na mão — silenciar o bot nunca
+    // pode custar a mensagem do cliente.
+    const rules = getAccount(accountId)?.botRules;
+    const allowed = numbersAllow(rules, phone);
+    if (!allowed) {
+      console.log(`[wa:${accountId}] bot calado para ${phone} (filtro de números)`);
+    }
+    const willAnswer = allowed && Boolean(findLiveFlow({ product, accountId }));
     const typing = willAnswer ? startTyping(sock, jid) : null;
 
-    try {
-      const { processInboundFlow } = await import("./flows/engine.js");
-      const flowResult = await processInboundFlow({
-        accountId,
-        product,
-        phoneE164: phone,
-        text: bodyText,
-        pushName: m?.pushName ?? null,
-      });
-      typing?.stop();
+    if (allowed) {
+      try {
+        const { processInboundFlow } = await import("./flows/engine.js");
+        const flowResult = await processInboundFlow({
+          accountId,
+          product,
+          phoneE164: phone,
+          text: bodyText,
+          pushName: m?.pushName ?? null,
+        });
+        typing?.stop();
 
-      if (flowResult) {
-        for (const reply of flowResult.replies) {
-          try {
-            // sendTextWithRetry (não sendText direto): se a sessão estiver
-            // instável na hora, a resposta do bot cai na fila (Fase 2) em vez
-            // de simplesmente sumir — era exatamente esse o risco identificado
-            // no diagnóstico ("mensagem que falha no envio some silenciosamente").
-            const { sendTextWithRetry } = await import("./outbox.js");
-            await sendTextWithRetry(accountId, phone, reply);
+        if (flowResult) {
+          for (const reply of flowResult.replies) {
+            try {
+              // sendTextWithRetry (não sendText direto): se a sessão estiver
+              // instável na hora, a resposta do bot cai na fila (Fase 2) em vez
+              // de simplesmente sumir — era exatamente esse o risco identificado
+              // no diagnóstico ("mensagem que falha no envio some silenciosamente").
+              const { sendTextWithRetry } = await import("./outbox.js");
+              await sendTextWithRetry(accountId, phone, reply);
           } catch (e) {
             console.warn(`[wa:${accountId}] flow reply failed:`, (e as Error).message);
           }
@@ -713,12 +728,13 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
         );
         return;
       }
-    } catch (e) {
-      typing?.stop();
-      console.warn(`[wa:${accountId}] flow engine:`, (e as Error).message);
+      } catch (e) {
+        typing?.stop();
+        console.warn(`[wa:${accountId}] flow engine:`, (e as Error).message);
+      }
     }
 
-    // ── Sem fluxo live: só webhook (comportamento clássico) ─
+    // ── Bot calado (sem fluxo live, ou barrado pelo filtro): só webhook ─
     await postWebhook(accountId, {
       type: "message",
       phoneE164: phone,

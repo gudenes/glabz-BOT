@@ -94,6 +94,7 @@ import {
   updateAccount,
   upsertProduct,
 } from "./registry.js";
+import { normalizeBotRules } from "./bot-rules.js";
 import {
   connect,
   disconnect,
@@ -709,6 +710,30 @@ const server = createServer(async (req, res) => {
       try {
         const client = await updateClientBizProfile(clientId, body ?? {});
         json(res, client ? 200 : 404, { ok: Boolean(client), client });
+      } catch (e) {
+        json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "invalid" });
+      }
+      return;
+    }
+
+    // Regras do bot (filtro de números por enquanto). Grava na CONTA, não no
+    // cliente — ver AccountRecord.botRules. A leitura não tem endpoint próprio:
+    // GET /v1/portal já devolve `accounts[].account` inteiro.
+    if (method === "PUT" && path === "/v1/portal/whatsapp/rules") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const acc = listAccounts({ clientId })[0];
+      if (!acc) {
+        json(res, 404, { ok: false, reason: "conta de WhatsApp não encontrada" });
+        return;
+      }
+      const body = parseJson<Record<string, unknown>>(await readBody(req));
+      try {
+        const account = updateAccount(acc.id, { botRules: normalizeBotRules(body) });
+        json(res, account ? 200 : 404, { ok: Boolean(account), account });
       } catch (e) {
         json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "invalid" });
       }
