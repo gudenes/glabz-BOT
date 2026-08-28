@@ -1872,11 +1872,49 @@ function fillDays(days) {
   });
 }
 
-function renderBotRules(rules) {
+/**
+ * O formulário está sendo mexido agora?
+ *
+ * render() roda a cada 4 segundos (o poller do boot), e repintar os campos
+ * ali no meio apagava o que o dono estava fazendo: marcar "responder só em
+ * determinado horário" e ver o painel fechar sozinho 4s depois, ou digitar
+ * números e vê-los sumirem. Enquanto ele está editando, o que está na tela
+ * vence o que está salvo.
+ *
+ * O `focus` conta junto com o `dirty`: repintar um campo focado mexe no
+ * cursor mesmo quando o valor é idêntico.
+ */
+let botRulesDirty = false;
+
+function botRulesBusy() {
+  const form = $("form-bot-rules");
+  if (!form) return false;
+  return botRulesDirty || form.contains(document.activeElement);
+}
+
+$("form-bot-rules")?.addEventListener("input", () => {
+  botRulesDirty = true;
+});
+$("form-bot-rules")?.addEventListener("change", () => {
+  botRulesDirty = true;
+});
+
+function renderBotRules(rules, { force = false } = {}) {
   const mode = rules?.numbers?.mode || "off";
   const list = rules?.numbers?.list || [];
+  if (!$("rules-mode")) return;
+  // A linha de resumo continua atualizando: ela mostra o que está SALVO, e é
+  // justamente o contraste com o formulário que diz "você ainda não salvou".
+  //
+  // `force` é o retorno do salvamento: ali o formulário PRECISA ser repintado
+  // mesmo com o botão ainda focado, senão o dono não vê o que o servidor
+  // normalizou (número sem dígito descartado, texto cortado).
+  if (force || !botRulesBusy()) fillBotRulesForm(rules, mode, list);
+  paintBotRulesSummary(rules, mode, list);
+}
+
+function fillBotRulesForm(rules, mode, list) {
   const sel = $("rules-mode");
-  if (!sel) return;
   sel.value = mode;
   $("rules-list").value = list.join("\n");
   toggleRulesList();
@@ -1892,7 +1930,11 @@ function renderBotRules(rules) {
   $("rules-away").value = hours?.awayMessage || "";
   fillTimezones(rules?.timezone || DEFAULT_TZ);
   toggleRulesHours();
+}
 
+function paintBotRulesSummary(rules, mode, list) {
+  const hours = rules?.hours;
+  const hoursOn = Boolean(hours?.enabled);
   const now = $("bot-rules-now");
   const numbersOn = mode !== "off" && list.length > 0;
   const parts = [];
@@ -1959,7 +2001,10 @@ $("form-bot-rules")?.addEventListener("submit", async (ev) => {
         },
       }),
     });
-    renderBotRules(data.account?.botRules);
+    // Salvou: o que está no servidor volta a ser a verdade, e o formulário
+    // pode ser repintado com o que ele devolveu.
+    botRulesDirty = false;
+    renderBotRules(data.account?.botRules, { force: true });
     if (state.portal?.accounts?.[0]?.account) {
       state.portal.accounts[0].account = data.account;
     }
