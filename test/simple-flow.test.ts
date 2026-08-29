@@ -22,8 +22,14 @@ function assertEsqueletoValido(flow: ReturnType<typeof buildSimpleFlow>, context
   const alvo = (id: string, label?: string) =>
     byId.get(out(id).find((x) => (x.label || undefined) === label)?.to || "");
 
-  assert.equal(nodes.length, 7, `${contexto}: 7 cards`);
-  assert.equal(edges.length, 7, `${contexto}: 7 ligações`);
+  // Compara o CONJUNTO de cards, não a quantidade: se a forma mudar, o teste
+  // diz exatamente o que entrou ou saiu em vez de só "8 !== 7".
+  assert.deepEqual(
+    nodes.map((x) => x.id).sort(),
+    Object.values(SIMPLE_IDS).slice().sort(),
+    `${contexto}: exatamente os cards do esqueleto`
+  );
+  assert.equal(edges.length, nodes.length, `${contexto}: uma ligação por card`);
 
   // Espera o cliente falar antes de acionar a IA — só `ask` faz o motor parar.
   assert.equal(byId.get(SIMPLE_IDS.opening)?.type, "ask", `${contexto}: abertura é pergunta`);
@@ -40,7 +46,9 @@ function assertEsqueletoValido(flow: ReturnType<typeof buildSimpleFlow>, context
 
   // O laço fecha E tem saída.
   assert.equal(alvo(SIMPLE_IDS.followUp)?.id, SIMPLE_IDS.decide, `${contexto}: continua → decisão`);
-  assert.equal(alvo(SIMPLE_IDS.decide, "true")?.id, SIMPLE_IDS.end, `${contexto}: despediu → fim`);
+  // Despedida ANTES do fim: sem ela o bot emudecia quando o cliente encerrava.
+  assert.equal(alvo(SIMPLE_IDS.decide, "true")?.id, SIMPLE_IDS.bye, `${contexto}: despediu → despedida`);
+  assert.equal(alvo(SIMPLE_IDS.bye)?.id, SIMPLE_IDS.end, `${contexto}: despedida → fim`);
   assert.equal(
     alvo(SIMPLE_IDS.decide, "false")?.id,
     SIMPLE_IDS.answer,
@@ -101,7 +109,7 @@ test("respostas ruins da LLM continuam produzindo o esqueleto", () => {
     assertEsqueletoValido(flow, nome);
     assert.ok(flow.name.length > 0, `${nome}: nome nunca vazio`);
     assert.ok(String(flow.nodes[1].data.prompt).length > 0, `${nome}: abertura nunca vazia`);
-    assert.ok(String(flow.nodes[5].data.message).length > 0, `${nome}: handoff nunca vazio`);
+    assert.ok(String(flow.nodes.find((x) => x.id === SIMPLE_IDS.handoff)?.data.message).length > 0, `${nome}: handoff nunca vazio`);
   }
 });
 

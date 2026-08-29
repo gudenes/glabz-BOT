@@ -19,7 +19,7 @@ test("todo template é o esqueleto simples, com forma idêntica à do fluxo gera
 
   for (const flow of catalogFlows()) {
     const nome = flow.seedSlug || flow.name;
-    assert.equal(flow.nodes.length, 7, `${nome}: 7 cards`);
+    assert.equal(flow.nodes.length, ref.nodes.length, `${nome}: mesmo tamanho do esqueleto`);
     assert.deepEqual(
       flow.edges.map((e) => `${e.from}-${e.label || ""}->${e.to}`).sort(),
       refForma,
@@ -61,7 +61,7 @@ test("nenhum template rotulado simples é grande", () => {
     const flow = porSlug.get(meta.slug);
     assert.ok(flow, `${meta.slug}: template existe`);
     if (meta.complexity === "simples") {
-      assert.ok(flow.nodes.length <= 7, `${meta.slug}: rotulado simples e tem ${flow.nodes.length} cards`);
+      assert.ok(flow.nodes.length <= 8, `${meta.slug}: rotulado simples e tem ${flow.nodes.length} cards`);
       assert.ok(
         !flow.nodes.some((n) => n.type === "llm_intent"),
         `${meta.slug}: rotulado simples não pode ramificar por intenção`

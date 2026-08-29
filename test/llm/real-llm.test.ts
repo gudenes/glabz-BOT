@@ -45,7 +45,12 @@ const asFlow = (g: Awaited<ReturnType<typeof generateFlowFromPrompt>>): Flow => 
 test("o modelo real produz o esqueleto, com textos do negócio", { skip }, async () => {
   const g = await generateFlowFromPrompt(BRIEFING, "simples");
 
-  assert.equal(g.nodes.length, 7, "a forma vem do código, não do modelo");
+  // Compara com o esqueleto, não com um número solto.
+  assert.deepEqual(
+    g.nodes.map((n) => n.id).sort(),
+    Object.values(SIMPLE_IDS).slice().sort(),
+    "a forma vem do código, não do modelo"
+  );
   const abertura = String(g.nodes.find((n) => n.id === SIMPLE_IDS.opening)?.data.prompt || "");
   const contexto = String(g.nodes.find((n) => n.id === SIMPLE_IDS.answer)?.data.context || "");
   const handoff = String(g.nodes.find((n) => n.id === SIMPLE_IDS.handoff)?.data.message || "");
@@ -66,12 +71,6 @@ test("o modelo real produz o esqueleto, com textos do negócio", { skip }, async
     `apresentação não cumprimenta de novo: "${depois}"`
   );
 
-  // E nada do que ele escreveu pode virar card: a forma é do código.
-  assert.deepEqual(
-    g.nodes.map((n) => n.id).sort(),
-    Object.values(SIMPLE_IDS).slice().sort(),
-    "os ids são os do esqueleto"
-  );
 });
 
 test("o fluxo gerado pelo modelo real passa na validação", { skip }, async () => {
@@ -112,9 +111,35 @@ test("briefing vazio não quebra a geração", { skip }, async () => {
   // O dono que pula o onboarding: o modelo tem pouco a dizer, e mesmo assim
   // o fluxo tem que sair utilizável.
   const g = await generateFlowFromPrompt("Não sei descrever meu negócio.", "simples");
-  assert.equal(g.nodes.length, 7);
+  assert.equal(g.nodes.length, Object.keys(SIMPLE_IDS).length);
   const abertura = String(g.nodes.find((n) => n.id === SIMPLE_IDS.opening)?.data.prompt || "");
   assert.ok(abertura.length > 12, `abertura utilizável: "${abertura}"`);
   const r = await validateFlow(asFlow(g));
   assert.equal(r.passed, r.total, "e continua válido");
+});
+
+test("modelo real: pergunta fora do contexto transborda pra uma pessoa", { skip }, async () => {
+  // O bug que isto tranca: a IA escrevia "não tenho essa informação, vou
+  // chamar alguém da equipe" e o fluxo seguia em frente — o bot PROMETIA o
+  // atendente e não entregava. Só o modelo real prova que ele obedece à
+  // sentinela; com IA falsa eu estaria testando a minha própria suposição.
+  const flow = asFlow(await generateFlowFromPrompt(BRIEFING, "simples"));
+  const parado = {
+    nodeId: SIMPLE_IDS.followUp,
+    waitingFor: SIMPLE_IDS.followUp,
+    vars: {},
+    mode: "bot" as const,
+  };
+
+  const fora = await runFlowStep({
+    flow, state: parado, text: "vocês têm day use pra visitante e estacionamento coberto?", simulate: true,
+  });
+  assert.equal(fora.mode, "human", `deveria transbordar — falas: ${JSON.stringify(fora.replies)}`);
+  assert.ok(!fora.replies.join(" ").includes("NAO_SEI"), "a sentinela não vaza pro cliente");
+
+  // E o contrário: pergunta coberta pelo briefing continua sendo respondida
+  // pela IA. Transbordar à toa esvazia o produto.
+  const dentro = await runFlowStep({ flow, state: parado, text: "quanto custa a aula?", simulate: true });
+  assert.notEqual(dentro.mode, "human", `não deveria transbordar — falas: ${JSON.stringify(dentro.replies)}`);
+  assert.match(dentro.replies.join(" "), /50/, "respondeu pelo contexto");
 });

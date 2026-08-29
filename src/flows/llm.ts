@@ -298,6 +298,30 @@ export function normalizeTone(raw: unknown): AnswerTone {
   return t === "direta" || t === "cordial" ? t : "mediana";
 }
 
+/** O que o modelo deve responder quando a informação não está no contexto. */
+export const UNKNOWN_TOKEN = "NAO_SEI";
+
+/**
+ * A IA está dizendo que NÃO SABE?
+ *
+ * O token é o caminho principal, mas prompt não garante nada — então há a
+ * rede de frases, medida contra o modelo real, que escrevia coisas como "Não
+ * tenho essa informação aqui. Vou chamar alguém da equipe".
+ *
+ * O cuidado que importa: distinguir "a IA não sabe" de "a resposta É não".
+ * "Não temos piscina" é resposta legítima vinda do contexto e NÃO pode virar
+ * transbordo; as frases abaixo falam do CONHECIMENTO da IA, não do negócio.
+ */
+const UNKNOWN_PHRASES =
+  /(n[ãa]o (tenho|possuo|encontrei|consta|disponho|localizei)[^.]{0,30}(informa|dado|detalhe)|n[ãa]o (sei|tenho como saber)\b|n[ãa]o (est[áa]|consta) no contexto|sem essa informa[çc][ãa]o)/i;
+
+export function isUnknownAnswer(answer: string): boolean {
+  const t = String(answer || "").trim();
+  if (!t) return false;
+  if (t.toUpperCase().replace(/[^A-Z_]/g, "").startsWith(UNKNOWN_TOKEN)) return true;
+  return UNKNOWN_PHRASES.test(t);
+}
+
 export async function answerFreeform(opts: {
   question: string;
   /** O que a IA sabe sobre este negócio — escrito pelo dono no builder. */
@@ -321,7 +345,11 @@ export async function answerFreeform(opts: {
     // forma. Sem essa separação o modelo tendia a devolver quase literal o
     // que estava gravado na base, em vez de responder com o registro pedido.
     "Use SOMENTE as informações do contexto abaixo — mas escreva com as SUAS palavras, no tom pedido, em vez de copiar o texto do contexto.",
-    "Se a resposta não estiver no contexto, diga que vai chamar alguém da equipe;",
+    // Sentinela em vez de frase livre: antes o modelo escrevia "não tenho essa
+    // informação, vou chamar alguém" e o código não tinha como saber — a
+    // chamada voltava com sucesso, o fluxo seguia pela saída "ok" e o
+    // transbordo prometido NUNCA acontecia. O bot mentia pro cliente.
+    `Se a resposta NÃO estiver no contexto, responda exatamente ${UNKNOWN_TOKEN} e mais nada — sem explicação, sem desculpa, sem oferecer ajuda.`,
     "NUNCA invente preço, horário, prazo, endereço ou disponibilidade.",
     "Não use markdown além de *negrito* eventual.",
     "",
@@ -352,6 +380,9 @@ export async function answerFreeform(opts: {
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const answer = (data.choices?.[0]?.message?.content || "").trim();
     if (!answer) return { ok: false, reason: "resposta_vazia" };
+    // "Não sei" não é resposta: é motivo pra chamar uma pessoa. Devolver
+    // ok:false leva o fluxo pela saída "erro", que é o transbordo.
+    if (isUnknownAnswer(answer)) return { ok: false, reason: "fora_do_contexto" };
     return { ok: true, answer: answer.slice(0, maxChars) };
   } catch (e) {
     console.warn("[flow/llm] answer failed", (e as Error).message);
