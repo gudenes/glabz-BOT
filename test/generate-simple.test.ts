@@ -37,7 +37,9 @@ after(() => {
 
 /** O esqueleto tem forma fixa: 7 cards e o laço voltando pra IA. */
 function assertEsqueleto(flow: { nodes: { id: string; type: string }[]; edges: { from: string; to: string; label?: string }[] }) {
-  assert.equal(flow.nodes.length, 7);
+  // Tamanho vem do esqueleto; comparar com ele evita ficar caçando número
+  // mágico toda vez que a forma muda de propósito.
+  assert.equal(flow.nodes.length, Object.keys(SIMPLE_IDS).length);
   const volta = flow.edges.find((e) => e.from === SIMPLE_IDS.decide && e.label === "false");
   assert.equal(volta?.to, SIMPLE_IDS.answer, "o laço volta pra IA");
   const ok = flow.edges.find((e) => e.from === SIMPLE_IDS.answer && e.label === "ok");

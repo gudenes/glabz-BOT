@@ -55,6 +55,7 @@ export const SIMPLE_IDS = {
   followUp: "s_mais",
   decide: "s_dec",
   handoff: "s_hum",
+  bye: "s_tchau",
   end: "s_fim",
 } as const;
 
@@ -74,6 +75,7 @@ const FALLBACK = {
   name: "Atendimento",
   apresentacao: "Como posso te ajudar hoje?",
   handoff: "Vou chamar alguém da equipe pra te ajudar. Só um instante!",
+  bye: "Perfeito{{name_greet}}! Qualquer coisa é só chamar por aqui. Até logo 👋",
 };
 
 const clean = (v: string | undefined, max: number): string =>
@@ -95,13 +97,13 @@ const e = (from: string, to: string, label?: string): FlowEdge => ({
 });
 
 /**
- * Monta o fluxo simples: 7 cards, sempre os mesmos, sempre ligados igual.
+ * Monta o fluxo simples: 8 cards, sempre os mesmos, sempre ligados igual.
  *
  * A conversa que isso produz:
  *   cliente "oi" → bot cumprimenta e PERGUNTA o que a pessoa precisa, e espera
  *   cliente pergunta → IA responde pela base de conhecimento
  *   bot "mais alguma coisa?" → se a pessoa perguntar outra coisa, VOLTA pra IA;
- *                              se ela se despedir, encerra
+ *                              se ela se despedir, o bot se despede e encerra
  *   IA não soube → passa pra uma pessoa
  *
  * Duas decisões que a forma carrega:
@@ -159,6 +161,10 @@ export function buildSimpleFlow(texts: SimpleFlowTexts | null | undefined): {
       value: CLOSING_REGEX,
     }),
     n(id.handoff, "handoff", { message: clean(t.handoff, 400) || FALLBACK.handoff }),
+    // Despedida antes do fim. Sem ela o bot emudecia: o cliente dizia "não,
+    // obrigado" e não recebia mais nada — some no meio da conversa, o que é
+    // pior do que não ter tido bot nenhum.
+    n(id.bye, "message", { text: FALLBACK.bye }),
     n(id.end, "end", { label: "Fim" }),
   ];
 
@@ -168,7 +174,8 @@ export function buildSimpleFlow(texts: SimpleFlowTexts | null | undefined): {
     e(id.answer, id.followUp, "ok"),
     e(id.answer, id.handoff, "erro"),
     e(id.followUp, id.decide),
-    e(id.decide, id.end, "true"),
+    e(id.decide, id.bye, "true"),
+    e(id.bye, id.end),
     e(id.decide, id.answer, "false"),
   ];
 
