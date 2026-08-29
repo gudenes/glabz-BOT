@@ -27,7 +27,7 @@ export type RawFlowEdge = { from?: string; to?: string; label?: string };
 
 /** Tetos declarados nos prompts. Usados só pra registrar estouro — ver
  * generateFlowFromPrompt. */
-export const MAX_NODES_SIMPLES = 5;
+export const MAX_NODES_SIMPLES = 7;
 export const MAX_NODES_COMPLETO = 14;
 
 /** Qual desenho de fluxo gerar. Ver SYSTEM x SYSTEM_SIMPLES. */
@@ -53,21 +53,31 @@ Responda APENAS um JSON válido, sem markdown:
 }
 
 Regras (todas obrigatórias):
-1. NO MÁXIMO 5 cards no total, contando o trigger e o fim. Menos é melhor.
+1. NO MÁXIMO 7 cards no total, contando o trigger e o fim. Menos é melhor.
 2. Logo depois do trigger vem um card "ask" de ABERTURA, que cumprimenta e pergunta o que a pessoa
-   precisa (ex.: "Oi! Aqui é do {negócio}. Como posso te ajudar?"). É OBRIGATÓRIO e é sempre o
-   card 2. Motivo: a primeira mensagem do cliente quase sempre é só "oi", e sem esse card de espera
-   o llm_answer gastaria a resposta cumprimentando de volta e o atendimento acabaria antes de a
-   pessoa dizer o que queria. Não pergunte o NOME — só o que ela precisa.
+   precisa. É OBRIGATÓRIO e é sempre o card 2. Motivo: a primeira mensagem do cliente quase sempre é
+   só "oi", e sem esse card de espera o llm_answer gastaria a resposta cumprimentando de volta e o
+   atendimento acabaria antes de a pessoa dizer o que queria. Não pergunte o NOME — só o que ela
+   precisa.
+   Use {{name_greet}} logo depois do cumprimento: "Oi{{name_greet}}! Aqui é da {negócio}. Como posso
+   te ajudar?". Esse token vira ", João" quando o WhatsApp informa o nome do contato, e some quando
+   não informa — então funciona nos dois casos sem frase quebrada.
 3. TEM que existir um card llm_answer: é ele que responde de verdade, usando a base de conhecimento
    do negócio, e é o que dá valor ao fluxo. Preencha "context" com os fatos que JÁ apareceram no
    briefing (horário, preço, endereço, política) — nunca invente; se nada foi dito, deixe "" mesmo,
    o card continua funcionando pela base de conhecimento em tempo real.
 4. llm_answer SEMPRE tem duas saídas: edge label "ok" e edge label "erro". A "erro" vai pra um
    handoff (atendente humano) — é a rede de segurança quando a IA não sabe responder.
-5. NÃO use llm_intent, condition nem action. Este fluxo não ramifica por intenção: ele atende UMA
-   necessidade principal, a que o dono indicou como mais relevante.
-6. NÓ linear (trigger, message, ask, handoff, end) tem no máximo 1 saída.
+5. A saída "ok" NÃO vai direto pro fim. Ela vai pra um card "ask" de continuação ("Consigo te
+   ajudar com mais alguma coisa?"), e desse ask sai um "condition" que decide:
+   - saída "true" → end (a pessoa disse que não precisa de mais nada);
+   - saída "false" → VOLTA pro mesmo llm_answer, pra ela poder perguntar outra coisa.
+   No condition use exatamente: field "last", op "regex", value
+   "^\\s*(n[ãa]o|nada|s[óo] isso|era s[óo]( isso)?|valeu|obrigad\\w*|tudo (certo|bem))\\b.{0,12}$"
+   Sem esse laço o atendimento morre depois de UMA pergunta, que é o erro mais comum aqui.
+6. NÃO use llm_intent nem action. Este fluxo não ramifica por intenção: ele atende UMA necessidade
+   principal, a que o dono indicou como mais relevante. O único condition permitido é o da regra 5.
+7. NÓ linear (trigger, message, ask, handoff, end) tem no máximo 1 saída.
 Textos em português, naturais, prontos para WhatsApp (*negrito* ok).`;
 
 const SYSTEM = `Você monta fluxos de atendimento WhatsApp da GLABZ.
@@ -324,6 +334,85 @@ export function ensureOpeningAsk(
   );
   nextEdges.push({ id: `e_${askId}`, from: trigger.id, to: askId });
   return { nodes: [...nodes, opening], edges: nextEdges, repaired: true };
+}
+
+/**
+ * Expressão que reconhece "não preciso de mais nada".
+ *
+ * Ancorada no INÍCIO e limitada no fim de propósito: "não" solto, "só isso",
+ * "valeu" encerram, mas "não sei quanto custa" e "não entendi o preço" NÃO —
+ * são perguntas de verdade, e encerrar nelas seria pior do que perguntar de
+ * novo. Por isso o limite de caracteres depois da palavra: despedida é curta,
+ * pergunta não é.
+ */
+export const CLOSING_REGEX =
+  "^\\s*(n[ãa]o|nada|s[óo] isso|era s[óo]( isso)?|valeu|obrigad\\w*|tudo (certo|bem))\\b.{0,12}$";
+
+/**
+ * Garante que o atendimento CONTINUE depois da primeira resposta.
+ *
+ * Sem isso o fluxo simples é: pergunta → resposta → fim. O cliente tira uma
+ * dúvida e o atendimento acaba, mesmo que ele tenha outras — foi o que o
+ * usuário viu ("ele respondeu com base no conhecimento e encerrou").
+ *
+ * O laço é: llm_answer --ok--> ask("mais alguma coisa?") --> condition, que
+ * volta pro MESMO llm_answer quando a pessoa ainda quer algo e vai pro end
+ * quando se despede. Voltar pro llm_answer em vez de duplicar o card é o que
+ * mantém o fluxo pequeno e faz a base de conhecimento valer pra toda pergunta
+ * seguinte, não só pra primeira.
+ *
+ * O condition é o que dá SAÍDA ao laço. Sem ele o bot responderia até um
+ * "não, obrigado" e perguntaria de novo, para sempre.
+ */
+export function ensureFollowUpLoop(
+  nodes: FlowNode[],
+  edges: FlowEdge[]
+): { nodes: FlowNode[]; edges: FlowEdge[]; repaired: boolean } {
+  const answer = nodes.find((n) => n.type === "llm_answer");
+  if (!answer) return { nodes, edges, repaired: false };
+  const okEdge = edges.find((e) => e.from === answer.id && e.label === "ok");
+  if (!okEdge) return { nodes, edges, repaired: false };
+
+  const target = nodes.find((n) => n.id === okEdge.to);
+  // Já continua a conversa (o "ok" leva a uma pergunta): nada a fazer.
+  if (!target || target.type === "ask") return { nodes, edges, repaired: false };
+  // Só repara o caso conhecido — "ok" indo direto pro fim. Qualquer outro
+  // desenho é escolha de quem montou, e reescrever seria passar por cima.
+  if (target.type !== "end") return { nodes, edges, repaired: false };
+
+  const usedIds = new Set(nodes.map((n) => n.id));
+  const freshId = (base: string) => {
+    let id = base;
+    let i = 2;
+    while (usedIds.has(id)) id = `${base}${i++}`;
+    usedIds.add(id);
+    return id;
+  };
+  const askId = freshId("n_mais");
+  const condId = freshId("n_encerrou");
+
+  const followUp: FlowNode = {
+    id: askId,
+    type: "ask",
+    x: 0,
+    y: 0,
+    data: { prompt: "Consigo te ajudar com mais alguma coisa?", varName: "mais_algo" },
+  };
+  const decide: FlowNode = {
+    id: condId,
+    type: "condition",
+    x: 0,
+    y: 0,
+    data: { field: "last", op: "regex", value: CLOSING_REGEX },
+  };
+
+  const nextEdges = edges.map((e) => (e === okEdge ? { ...e, to: askId } : e));
+  nextEdges.push(
+    { id: `e_${askId}`, from: askId, to: condId },
+    { id: `e_${condId}_sim`, from: condId, to: okEdge.to, label: "true" },
+    { id: `e_${condId}_nao`, from: condId, to: answer.id, label: "false" }
+  );
+  return { nodes: [...nodes, followUp, decide], edges: nextEdges, repaired: true };
 }
 
 /** Cria o nó llm_answer padrão do reparo, com id que não colide. */
@@ -620,9 +709,18 @@ export async function generateFlowFromPrompt(
       `[from-prompt] llm_answer sem saída completa — reparado: ${branched.repaired.join(", ")}`
     );
   }
+  // Quarta, e só no modo enxuto: o atendimento continua depois da primeira
+  // resposta. O completo já tem o próprio laço, pelo llm_intent (regra 10).
+  const looped = simples
+    ? ensureFollowUpLoop(branched.nodes, branched.edges)
+    : { nodes: branched.nodes, edges: branched.edges, repaired: false };
+  if (looped.repaired) {
+    console.warn("[from-prompt] fluxo encerrava após uma resposta — laço de continuação inserido");
+  }
+
   const finalEdges =
-    guaranteed.repaired || opened.repaired || branched.repaired.length
-      ? sanitizeEdges(branched.nodes, branched.edges)
+    guaranteed.repaired || opened.repaired || branched.repaired.length || looped.repaired
+      ? sanitizeEdges(looped.nodes, looped.edges)
       : edges;
 
   // Teto de tamanho: o prompt pede no máximo 5 (simples) ou 14 (completo)
@@ -631,15 +729,15 @@ export async function generateFlowFromPrompt(
   // grafo, então aqui só REGISTRA: o dono continua com o fluxo que a IA fez,
   // e a gente fica sabendo que o teto não está sendo respeitado.
   const cap = simples ? MAX_NODES_SIMPLES : MAX_NODES_COMPLETO;
-  if (branched.nodes.length > cap) {
+  if (looped.nodes.length > cap) {
     console.warn(
-      `[from-prompt] fluxo ${mode} veio com ${branched.nodes.length} nós (teto do prompt: ${cap})`
+      `[from-prompt] fluxo ${mode} veio com ${looped.nodes.length} nós (teto do prompt: ${cap})`
     );
   }
 
   return {
     name: parsed.name?.trim() || "Atendimento",
-    nodes: layoutFlow(branched.nodes, finalEdges),
+    nodes: layoutFlow(looped.nodes, finalEdges),
     edges: finalEdges,
   };
 }
