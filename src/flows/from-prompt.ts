@@ -1,4 +1,5 @@
 import { llmApiKey, llmBaseUrl, llmModel } from "../config.js";
+import { buildSimpleFlow, CLOSING_REGEX, parseSimpleFlowTexts } from "./simple-flow.js";
 import type { FlowEdge, FlowNode } from "./types.js";
 
 export type GeneratedFlow = {
@@ -40,45 +41,24 @@ export type FlowBuildMode = "simples" | "completo";
  * completo, e num fluxo de 5 cards elas consumiriam quase tudo sem entregar
  * a resposta que o cliente veio buscar.
  */
-const SYSTEM_SIMPLES = `Você monta fluxos de atendimento WhatsApp da GLABZ, no modo ENXUTO.
-Responda APENAS um JSON válido, sem markdown:
+const SYSTEM_SIMPLES = `Você escreve os TEXTOS de um atendimento no WhatsApp, para a GLABZ.
+
+Você NÃO desenha o fluxo. A estrutura (quais cards existem e como se ligam) é montada pelo sistema e
+é sempre a mesma. Seu trabalho é só escrever o que o negócio diz.
+
+Responda APENAS um JSON válido, sem markdown, com estas quatro chaves e nada mais:
 {
-  "name": "nome curto do fluxo",
-  "nodes": [
-    { "id": "n1", "type": "trigger|message|ask|llm_answer|handoff|end", "text": "texto visível", "varName": "opcional", "context": "opcional, só pra llm_answer" }
-  ],
-  "edges": [
-    { "from": "n1", "to": "n2", "label": "opcional" }
-  ]
+  "name": "nome curto do fluxo, pra lista do dono (ex.: Atendimento C3 Pilates)",
+  "apresentacao": "apresenta o negócio e pergunta o que a pessoa precisa. NÃO cumprimente ('oi',
+     'olá', 'bom dia') — o sistema já põe o cumprimento e o nome do contato antes deste texto.
+     Ex.: 'Aqui é da C3 Pilates. Como posso te ajudar?'",
+  "context": "fatos do briefing que a IA usa pra responder: preço, horário, endereço, política,
+     o que está incluso. NUNCA invente — se o briefing não disse, deixe de fora. String vazia é
+     válida: a base de conhecimento do cliente supre em tempo real.",
+  "handoff": "o que o bot diz ao passar a conversa pra uma pessoa da equipe"
 }
 
-Regras (todas obrigatórias):
-1. NO MÁXIMO 7 cards no total, contando o trigger e o fim. Menos é melhor.
-2. Logo depois do trigger vem um card "ask" de ABERTURA, que cumprimenta e pergunta o que a pessoa
-   precisa. É OBRIGATÓRIO e é sempre o card 2. Motivo: a primeira mensagem do cliente quase sempre é
-   só "oi", e sem esse card de espera o llm_answer gastaria a resposta cumprimentando de volta e o
-   atendimento acabaria antes de a pessoa dizer o que queria. Não pergunte o NOME — só o que ela
-   precisa.
-   Use {{name_greet}} logo depois do cumprimento: "Oi{{name_greet}}! Aqui é da {negócio}. Como posso
-   te ajudar?". Esse token vira ", João" quando o WhatsApp informa o nome do contato, e some quando
-   não informa — então funciona nos dois casos sem frase quebrada.
-3. TEM que existir um card llm_answer: é ele que responde de verdade, usando a base de conhecimento
-   do negócio, e é o que dá valor ao fluxo. Preencha "context" com os fatos que JÁ apareceram no
-   briefing (horário, preço, endereço, política) — nunca invente; se nada foi dito, deixe "" mesmo,
-   o card continua funcionando pela base de conhecimento em tempo real.
-4. llm_answer SEMPRE tem duas saídas: edge label "ok" e edge label "erro". A "erro" vai pra um
-   handoff (atendente humano) — é a rede de segurança quando a IA não sabe responder.
-5. A saída "ok" NÃO vai direto pro fim. Ela vai pra um card "ask" de continuação ("Consigo te
-   ajudar com mais alguma coisa?"), e desse ask sai um "condition" que decide:
-   - saída "true" → end (a pessoa disse que não precisa de mais nada);
-   - saída "false" → VOLTA pro mesmo llm_answer, pra ela poder perguntar outra coisa.
-   No condition use exatamente: field "last", op "regex", value
-   "^\\s*(n[ãa]o|nada|s[óo] isso|era s[óo]( isso)?|valeu|obrigad\\w*|tudo (certo|bem))\\b.{0,12}$"
-   Sem esse laço o atendimento morre depois de UMA pergunta, que é o erro mais comum aqui.
-6. NÃO use llm_intent nem action. Este fluxo não ramifica por intenção: ele atende UMA necessidade
-   principal, a que o dono indicou como mais relevante. O único condition permitido é o da regra 5.
-7. NÓ linear (trigger, message, ask, handoff, end) tem no máximo 1 saída.
-Textos em português, naturais, prontos para WhatsApp (*negrito* ok).`;
+Textos em português, naturais, prontos para WhatsApp (*negrito* ok). Curtos.`;
 
 const SYSTEM = `Você monta fluxos de atendimento WhatsApp da GLABZ.
 Responda APENAS um JSON válido, sem markdown:
@@ -335,18 +315,6 @@ export function ensureOpeningAsk(
   nextEdges.push({ id: `e_${askId}`, from: trigger.id, to: askId });
   return { nodes: [...nodes, opening], edges: nextEdges, repaired: true };
 }
-
-/**
- * Expressão que reconhece "não preciso de mais nada".
- *
- * Ancorada no INÍCIO e limitada no fim de propósito: "não" solto, "só isso",
- * "valeu" encerram, mas "não sei quanto custa" e "não entendi o preço" NÃO —
- * são perguntas de verdade, e encerrar nelas seria pior do que perguntar de
- * novo. Por isso o limite de caracteres depois da palavra: despedida é curta,
- * pergunta não é.
- */
-export const CLOSING_REGEX =
-  "^\\s*(n[ãa]o|nada|s[óo] isso|era s[óo]( isso)?|valeu|obrigad\\w*|tudo (certo|bem))\\b.{0,12}$";
 
 /**
  * Garante que o atendimento CONTINUE depois da primeira resposta.
@@ -663,6 +631,20 @@ export async function generateFlowFromPrompt(
   }
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   const raw = data.choices?.[0]?.message?.content || "";
+
+  // Modo enxuto: o sistema monta o grafo e a IA só escreveu os textos. Nada
+  // aqui pode produzir um fluxo com forma inválida — é o que fecha a classe
+  // de bugs que as garantias abaixo vinham remendando um formato por vez
+  // (ver simple-flow.ts).
+  if (simples) {
+    const built = buildSimpleFlow(parseSimpleFlowTexts(raw));
+    return {
+      name: built.name,
+      nodes: layoutFlow(built.nodes, built.edges),
+      edges: built.edges,
+    };
+  }
+
   const jsonText = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   const parsed = JSON.parse(jsonText) as {
     name?: string;
@@ -709,14 +691,10 @@ export async function generateFlowFromPrompt(
       `[from-prompt] llm_answer sem saída completa — reparado: ${branched.repaired.join(", ")}`
     );
   }
-  // Quarta, e só no modo enxuto: o atendimento continua depois da primeira
-  // resposta. O completo já tem o próprio laço, pelo llm_intent (regra 10).
-  const looped = simples
-    ? ensureFollowUpLoop(branched.nodes, branched.edges)
-    : { nodes: branched.nodes, edges: branched.edges, repaired: false };
-  if (looped.repaired) {
-    console.warn("[from-prompt] fluxo encerrava após uma resposta — laço de continuação inserido");
-  }
+  // ensureFollowUpLoop não entra aqui: só valia pro modo enxuto, que agora sai
+  // pronto do buildSimpleFlow acima e nunca chega nesta parte. A função
+  // continua exportada porque a validação a usa pra checar fluxo editado à mão.
+  const looped = { nodes: branched.nodes, edges: branched.edges, repaired: false };
 
   const finalEdges =
     guaranteed.repaired || opened.repaired || branched.repaired.length || looped.repaired

@@ -14,8 +14,19 @@
  *
  * Mesmo princípio que `commonTrunk()` em catalog.ts já usava pros templates.
  */
-import { CLOSING_REGEX } from "./from-prompt.js";
 import type { FlowEdge, FlowNode } from "./types.js";
+
+/**
+ * Expressão que reconhece "não preciso de mais nada".
+ *
+ * Ancorada no INÍCIO e limitada no fim de propósito: "não" solto, "só isso",
+ * "valeu" encerram, mas "não sei quanto custa" e "não entendi o preço" NÃO —
+ * são perguntas de verdade, e encerrar nelas seria pior do que perguntar de
+ * novo. Por isso o limite de caracteres depois da palavra: despedida é curta,
+ * pergunta não é.
+ */
+export const CLOSING_REGEX =
+  "^\\s*(n[ãa]o|nada|s[óo] isso|era s[óo]( isso)?|valeu|obrigad\\w*|tudo (certo|bem))\\b.{0,12}$";
 
 /** Ids fixos: o esqueleto é sempre o mesmo, então não precisam ser gerados. */
 export const SIMPLE_IDS = {
