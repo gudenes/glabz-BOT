@@ -2,6 +2,7 @@ import { flowModeOf, type Flow, type FlowNode } from "./types.js";
 import { isClosingSlug, runFlowStep, type FlowSimState, type FlowTraceStep } from "./engine.js";
 import { judgeAnswerQuality } from "./llm.js";
 import { ensureFollowUpLoop, ensureOpeningAsk } from "./from-prompt.js";
+import { CLOSING_REPLY } from "./simple-flow.js";
 
 /**
  * Validação automática de um fluxo: dirige uma conversa sintética por cada
@@ -53,7 +54,10 @@ function classificationSlug(step: FlowTraceStep): string | null {
  * driver de teste repetindo a si mesmo). Recusar aqui exercita de brinde o
  * próprio caminho de encerramento gracioso. */
 function syntheticAnswerFor(askNode: FlowNode | undefined, testMessage: string): string {
-  if (askNode?.data?.capturesIntent) return "Não, obrigado, só isso mesmo.";
+  // A despedida vem do mesmo lugar que a expressão que a reconhece — ver
+  // CLOSING_REPLY. Duplicar a frase aqui já fez a validação reprovar um
+  // fluxo saudável, porque a expressão não casava com ela.
+  if (askNode?.data?.capturesIntent) return CLOSING_REPLY;
   const varName = String(askNode?.data?.varName || "");
   const v = varName.toLowerCase();
   if (v.includes("nome") || v.includes("name")) return "Cliente Teste";

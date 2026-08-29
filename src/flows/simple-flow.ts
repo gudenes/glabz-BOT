@@ -19,14 +19,33 @@ import type { FlowEdge, FlowNode } from "./types.js";
 /**
  * Expressão que reconhece "não preciso de mais nada".
  *
- * Ancorada no INÍCIO e limitada no fim de propósito: "não" solto, "só isso",
- * "valeu" encerram, mas "não sei quanto custa" e "não entendi o preço" NÃO —
- * são perguntas de verdade, e encerrar nelas seria pior do que perguntar de
- * novo. Por isso o limite de caracteres depois da palavra: despedida é curta,
- * pergunta não é.
+ * Reconhece por COMPOSIÇÃO, não por tamanho: a despedida tem que ser feita
+ * só de palavras de encerramento, em qualquer combinação. Qualquer palavra de
+ * conteúdo no meio ("sei", "quero", "quanto") desqualifica.
+ *
+ * A versão anterior limitava o que vinha DEPOIS da primeira palavra a 12
+ * caracteres, e por isso "Não, obrigado, só isso mesmo." não era reconhecido —
+ * justamente a frase que a validação usa como cliente sintético, o que fazia
+ * o laço rodar até o limite e reprovar um fluxo saudável.
+ *
+ * O caso que importa continuar: "não sei quanto custa" e "não, quero saber o
+ * horário" são PERGUNTAS. Encerrar nelas é pior do que perguntar de novo.
  */
-export const CLOSING_REGEX =
-  "^\\s*(n[ãa]o|nada|s[óo] isso|era s[óo]( isso)?|valeu|obrigad\\w*|tudo (certo|bem))\\b.{0,12}$";
+const CLOSING_WORD =
+  "(n[ãa]o|nada|s[óo] isso|era s[óo]( isso)?|isso mesmo|mesmo|valeu|vlw|obrigad\\w*|brigad\\w*|" +
+  "tudo (certo|bem|ok)|ok|por (enquanto|agora)|é isso|de nada|at[ée] mais|tchau|falou|abra[çc]o)";
+
+export const CLOSING_REGEX = `^\\s*${CLOSING_WORD}([\\s,.!;]+${CLOSING_WORD})*[\\s,.!]*$`;
+
+/**
+ * A despedida que a validação põe na boca do cliente sintético.
+ *
+ * Mora aqui, e não em validate.ts, de propósito: se a frase e a expressão
+ * acima vivessem em arquivos diferentes elas poderiam divergir em silêncio —
+ * foi exatamente o que aconteceu, e o sintoma foi um fluxo correto sendo
+ * reprovado por "preso num ciclo". Há um teste amarrando as duas.
+ */
+export const CLOSING_REPLY = "Não, obrigado, só isso mesmo.";
 
 /** Ids fixos: o esqueleto é sempre o mesmo, então não precisam ser gerados. */
 export const SIMPLE_IDS = {
@@ -120,10 +139,17 @@ export function buildSimpleFlow(texts: SimpleFlowTexts | null | undefined): {
     n(id.followUp, "ask", {
       prompt: "Consigo te ajudar com mais alguma coisa?",
       varName: "mais_algo",
+      // Marca que a resposta a esta pergunta é um NOVO pedido do cliente, e
+      // não um dado solto. No motor a marca só é lida junto de um llm_intent,
+      // que este fluxo não tem — então aqui ela é inerte. Quem depende dela é
+      // a validação: sem isso o cliente sintético nunca se despede, o laço
+      // roda até o limite de passos e um fluxo saudável é reprovado por
+      // "preso num ciclo".
+      capturesIntent: true,
     }),
     // Dá SAÍDA ao laço. Sem ele o bot responderia até um "não, obrigado" e
-    // perguntaria de novo, pra sempre. A expressão é ancorada no início e
-    // curta no fim: "não" e "valeu" encerram, "não sei quanto custa" não.
+    // perguntaria de novo, pra sempre. Ver CLOSING_REGEX: "não" e "valeu"
+    // encerram, "não sei quanto custa" não.
     n(id.decide, "condition", { field: "last", op: "regex", value: CLOSING_REGEX }),
     n(id.handoff, "handoff", { message: clean(t.handoff, 400) || FALLBACK.handoff }),
     n(id.end, "end", { label: "Fim" }),
