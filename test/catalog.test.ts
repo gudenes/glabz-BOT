@@ -103,3 +103,23 @@ test("cards posicionados: sem x/y todos empilhariam no canto do canvas", () => {
     assert.equal(posicoes.size, flow.nodes.length, `${flow.seedSlug}: nenhum card sobreposto`);
   }
 });
+
+test("nenhum cartão mostra regra técnica no lugar do nome", () => {
+  // O dono do negócio chegou a ver `last regex "^\s*(n[ãa]o|nada|..."` no meio
+  // do fluxo dele. Regra crua vive no painel lateral; no cartão vai o que a
+  // decisão significa.
+  const feio = /regex|\^\\s\*|\{\{\s*\}\}|undefined|\[object/i;
+  for (const flow of catalogFlows()) {
+    for (const node of flow.nodes) {
+      const label = String((node.data as { label?: string }).label ?? "");
+      if (!label) continue;
+      assert.doesNotMatch(label, feio, `${flow.seedSlug}/${node.id}: nome legível`);
+    }
+    const cond = flow.nodes.find((n) => n.type === "condition");
+    assert.ok(cond, `${flow.seedSlug}: tem a decisão de encerramento`);
+    assert.ok(
+      String((cond.data as { label?: string }).label || "").length > 3,
+      `${flow.seedSlug}: a decisão tem nome escrito, senão o cartão cai na regra crua`
+    );
+  }
+});

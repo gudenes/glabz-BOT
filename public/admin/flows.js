@@ -186,8 +186,13 @@ function nodeTitle(node) {
   if (node.type === "llm_intent") return cardLabel(d.label, "Entender intenção");
   if (node.type === "llm_extract") return cardLabel(d.label, "Extrair data");
   if (node.type === "llm_answer") return cardLabel(d.label, "Responder com IA");
+  // Nome escrito vence a regra crua. Um card de condição mostrava a expressão
+  // inteira no canvas — o dono do negócio via `last regex "^\s*(n[ãa]o|nada|
+  // s[óo] isso..."` no meio do fluxo dele e não tinha como saber o que era.
+  // A regra continua visível e editável no painel lateral, que é onde ela faz
+  // sentido; no cartão fica o que a decisão SIGNIFICA.
   if (node.type === "condition")
-    return `${d.field || "texto"} ${d.op || "contém"} “${d.value || ""}”`;
+    return cardLabel(d.label, `${d.field || "texto"} ${d.op || "contém"} “${d.value || ""}”`);
   if (node.type === "action") {
     return (
       cardLabel(d.label, "") ||
