@@ -54,7 +54,11 @@ Responda APENAS um JSON válido, sem markdown:
 
 Regras (todas obrigatórias):
 1. NO MÁXIMO 5 cards no total, contando o trigger e o fim. Menos é melhor.
-2. Comece pelo trigger. NÃO use boas-vindas nem pergunte o nome — esse fluxo vai direto ao ponto.
+2. Logo depois do trigger vem um card "ask" de ABERTURA, que cumprimenta e pergunta o que a pessoa
+   precisa (ex.: "Oi! Aqui é do {negócio}. Como posso te ajudar?"). É OBRIGATÓRIO e é sempre o
+   card 2. Motivo: a primeira mensagem do cliente quase sempre é só "oi", e sem esse card de espera
+   o llm_answer gastaria a resposta cumprimentando de volta e o atendimento acabaria antes de a
+   pessoa dizer o que queria. Não pergunte o NOME — só o que ela precisa.
 3. TEM que existir um card llm_answer: é ele que responde de verdade, usando a base de conhecimento
    do negócio, e é o que dá valor ao fluxo. Preencha "context" com os fatos que JÁ apareceram no
    briefing (horário, preço, endereço, política) — nunca invente; se nada foi dito, deixe "" mesmo,
@@ -257,6 +261,70 @@ export const KNOWN_NODE_TYPES = new Set([
   "action",
   "condition",
 ]);
+
+/**
+ * Garante que o fluxo ESPERE o cliente dizer o que quer antes de acionar a IA.
+ *
+ * Sem isso, o fluxo simples nasce como trigger → llm_answer, e a primeira
+ * mensagem — que quase sempre é só "oi" — é consumida pela IA, que responde
+ * "olá, como posso ajudar?" e ENCERRA. O cliente nunca chega a perguntar
+ * nada dentro daquela passada. Foi exatamente o que o usuário viu: "só dou
+ * Olá e ele já encerra o fluxo".
+ *
+ * Só um card `ask` faz o motor parar e aguardar a próxima mensagem; um
+ * `message` envia e segue em frente na mesma passada, então não resolve.
+ *
+ * A regra 2 do SYSTEM_SIMPLES já pede esse card, mas prompt não garante nada
+ * — é a mesma lição dos PRs #74/#76/#96.
+ */
+export function ensureOpeningAsk(
+  nodes: FlowNode[],
+  edges: FlowEdge[]
+): { nodes: FlowNode[]; edges: FlowEdge[]; repaired: boolean } {
+  const trigger = nodes.find((n) => n.type === "trigger");
+  if (!trigger) return { nodes, edges, repaired: false };
+
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const firstOut = (id: string) => edges.find((e) => e.from === id);
+
+  // Caminha pelo tronco a partir do trigger até achar quem espera (ask) ou
+  // quem aciona a IA (llm_answer/llm_intent), o que vier primeiro.
+  const seen = new Set<string>([trigger.id]);
+  let edge = firstOut(trigger.id);
+  let reachesAiUnguarded = false;
+  while (edge) {
+    const node = byId.get(edge.to);
+    if (!node || seen.has(node.id)) break;
+    seen.add(node.id);
+    if (node.type === "ask") return { nodes, edges, repaired: false };
+    if (node.type === "llm_answer" || node.type === "llm_intent") {
+      reachesAiUnguarded = true;
+      break;
+    }
+    edge = firstOut(node.id);
+  }
+  if (!reachesAiUnguarded) return { nodes, edges, repaired: false };
+
+  const usedIds = new Set(nodes.map((n) => n.id));
+  let askId = "n_abertura";
+  let i = 2;
+  while (usedIds.has(askId)) askId = `n_abertura${i++}`;
+
+  const opening: FlowNode = {
+    id: askId,
+    type: "ask",
+    x: 0,
+    y: 0,
+    data: { prompt: "Oi! Como posso te ajudar hoje?", varName: "pedido" },
+  };
+  // Entra ENTRE o trigger e o que quer que viesse depois dele.
+  const outOfTrigger = firstOut(trigger.id);
+  const nextEdges = edges.map((e) =>
+    e === outOfTrigger ? { ...e, from: askId } : e
+  );
+  nextEdges.push({ id: `e_${askId}`, from: trigger.id, to: askId });
+  return { nodes: [...nodes, opening], edges: nextEdges, repaired: true };
+}
 
 /** Cria o nó llm_answer padrão do reparo, com id que não colide. */
 function makeAnswerNode(nodes: FlowNode[]): FlowNode {
@@ -538,16 +606,22 @@ export async function generateFlowFromPrompt(
   }
   // sanitizeEdges de novo: as edges novas precisam passar pelas mesmas
   // regras (llm_answer com 2 saídas, sem duplicata) que as do modelo.
-  // Segunda garantia: llm_answer com as duas saídas. Roda DEPOIS da primeira,
-  // que pode acabar de criar o card.
-  const branched = ensureAnswerBranches(guaranteed.nodes, guaranteed.edges);
+  // Segunda garantia: o fluxo tem que ESPERAR o cliente dizer o que quer
+  // antes de acionar a IA (ver ensureOpeningAsk).
+  const opened = ensureOpeningAsk(guaranteed.nodes, guaranteed.edges);
+  if (opened.repaired) {
+    console.warn("[from-prompt] fluxo sem card de abertura — ask inserido após o trigger");
+  }
+  // Terceira: llm_answer com as duas saídas. Roda DEPOIS das anteriores, que
+  // podem acabar de criar cards.
+  const branched = ensureAnswerBranches(opened.nodes, opened.edges);
   if (branched.repaired.length) {
     console.warn(
       `[from-prompt] llm_answer sem saída completa — reparado: ${branched.repaired.join(", ")}`
     );
   }
   const finalEdges =
-    guaranteed.repaired || branched.repaired.length
+    guaranteed.repaired || opened.repaired || branched.repaired.length
       ? sanitizeEdges(branched.nodes, branched.edges)
       : edges;
 
