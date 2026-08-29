@@ -1,6 +1,7 @@
 import type { Flow, FlowNode } from "./types.js";
 import { isClosingSlug, runFlowStep, type FlowSimState, type FlowTraceStep } from "./engine.js";
 import { judgeAnswerQuality } from "./llm.js";
+import { ensureOpeningAsk } from "./from-prompt.js";
 
 /**
  * Validação automática de um fluxo: dirige uma conversa sintética por cada
@@ -186,6 +187,32 @@ async function runOneCase(
  * quanto não ter validação. Aqui é `fail`, não `warn` — um llm_answer sem a
  * saída de sucesso torna o card inútil no melhor caso e enganoso no pior.
  */
+/**
+ * O fluxo aciona a IA sem nunca esperar o cliente falar?
+ *
+ * Reusa a MESMA função que repara a geração (ensureOpeningAsk): se ela diz
+ * que repararia este fluxo, é porque falta a espera. Uma regra só, um
+ * comportamento só — se o reparo mudar, a validação acompanha sozinha.
+ *
+ * A validação por conversa não pega isto sozinha: ela manda "Oi" e depois o
+ * pedido de teste, e um fluxo que responde de cara ao "Oi" e encerra parece
+ * ter atendido. Foi assim que passou o fluxo que o usuário viu encerrar
+ * logo no "Olá".
+ */
+function openingAskIssues(flow: Flow): ValidationIssue[] {
+  const { repaired } = ensureOpeningAsk(flow.nodes, flow.edges);
+  if (!repaired) return [];
+  return [
+    {
+      severity: "fail",
+      message:
+        "O fluxo aciona a IA sem antes perguntar o que o cliente precisa: a primeira " +
+        "mensagem (quase sempre um \"oi\") vira a pergunta, e o atendimento acaba antes de " +
+        "a pessoa dizer o que queria.",
+    },
+  ];
+}
+
 function answerBranchIssues(flow: Flow): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   for (const node of flow.nodes) {
@@ -241,7 +268,7 @@ export async function validateFlow(flow: Flow): Promise<ValidationReport> {
   // Defeito de grafo vale pro fluxo inteiro, então entra em TODO caso: o
   // relatório mostra caso a caso, e um problema estrutural invisível em
   // metade deles esconderia a causa real.
-  const structural = answerBranchIssues(flow);
+  const structural = [...openingAskIssues(flow), ...answerBranchIssues(flow)];
   if (structural.length) {
     for (const c of cases) {
       c.issues = [...structural, ...c.issues];
