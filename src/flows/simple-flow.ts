@@ -150,7 +150,14 @@ export function buildSimpleFlow(texts: SimpleFlowTexts | null | undefined): {
     // Dá SAÍDA ao laço. Sem ele o bot responderia até um "não, obrigado" e
     // perguntaria de novo, pra sempre. Ver CLOSING_REGEX: "não" e "valeu"
     // encerram, "não sei quanto custa" não.
-    n(id.decide, "condition", { field: "last", op: "regex", value: CLOSING_REGEX }),
+    n(id.decide, "condition", {
+      // O rótulo é o que aparece no cartão. Sem ele o dono via a expressão
+      // crua no meio do fluxo dele, sem nenhuma pista do que aquilo decidia.
+      label: "O cliente se despediu?",
+      field: "last",
+      op: "regex",
+      value: CLOSING_REGEX,
+    }),
     n(id.handoff, "handoff", { message: clean(t.handoff, 400) || FALLBACK.handoff }),
     n(id.end, "end", { label: "Fim" }),
   ];
