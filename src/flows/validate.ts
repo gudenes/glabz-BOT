@@ -1,7 +1,7 @@
-import type { Flow, FlowNode } from "./types.js";
+import { flowModeOf, type Flow, type FlowNode } from "./types.js";
 import { isClosingSlug, runFlowStep, type FlowSimState, type FlowTraceStep } from "./engine.js";
 import { judgeAnswerQuality } from "./llm.js";
-import { ensureOpeningAsk } from "./from-prompt.js";
+import { ensureFollowUpLoop, ensureOpeningAsk } from "./from-prompt.js";
 
 /**
  * Validação automática de um fluxo: dirige uma conversa sintética por cada
@@ -213,6 +213,27 @@ function openingAskIssues(flow: Flow): ValidationIssue[] {
   ];
 }
 
+/**
+ * O atendimento acaba depois de UMA resposta?
+ *
+ * Mesmo padrão das outras duas: reusa a função que repara a geração, então
+ * regra e conserto não podem divergir. Só vale pro fluxo enxuto — o completo
+ * fecha o laço pelo llm_intent, com a intenção reservada de encerramento.
+ */
+function followUpIssues(flow: Flow): ValidationIssue[] {
+  if (flowModeOf(flow) !== "simples") return [];
+  const { repaired } = ensureFollowUpLoop(flow.nodes, flow.edges);
+  if (!repaired) return [];
+  return [
+    {
+      severity: "warn",
+      message:
+        "Depois de responder, o atendimento encerra: o cliente não consegue fazer uma segunda " +
+        "pergunta na mesma conversa.",
+    },
+  ];
+}
+
 function answerBranchIssues(flow: Flow): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   for (const node of flow.nodes) {
@@ -268,11 +289,21 @@ export async function validateFlow(flow: Flow): Promise<ValidationReport> {
   // Defeito de grafo vale pro fluxo inteiro, então entra em TODO caso: o
   // relatório mostra caso a caso, e um problema estrutural invisível em
   // metade deles esconderia a causa real.
-  const structural = [...openingAskIssues(flow), ...answerBranchIssues(flow)];
+  const structural = [
+    ...openingAskIssues(flow),
+    ...answerBranchIssues(flow),
+    ...followUpIssues(flow),
+  ];
   if (structural.length) {
+    // Só `fail` reprova. Um `warn` estrutural (o fluxo funciona, mas é curto
+    // demais) tem que aparecer no relatório SEM derrubar o placar — inverter
+    // isso é o mesmo erro de severidade do PR #74, só que pro outro lado:
+    // ali um `warn` escondeu um fluxo quebrado, aqui um `warn` reprovaria um
+    // fluxo que funciona.
+    const reprova = structural.some((i) => i.severity === "fail");
     for (const c of cases) {
       c.issues = [...structural, ...c.issues];
-      c.ok = false;
+      if (reprova) c.ok = false;
     }
   }
 
