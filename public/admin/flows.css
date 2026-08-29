@@ -1496,3 +1496,24 @@
   margin: 6px 4px;
   background: rgba(15, 23, 42, 0.08);
 }
+
+/* Menu da ligação (clique numa seta): trocar o rótulo ou remover. Sai do
+   fluxo do canvas de propósito — é ação pontual, não merece painel. */
+.edge-menu {
+  position: fixed; z-index: 90; min-width: 168px;
+  background: var(--panel, #12161d); border: 1px solid var(--line, #232a35);
+  border-radius: 12px; padding: 6px; box-shadow: 0 18px 44px rgba(0,0,0,0.45);
+}
+.edge-menu-title {
+  margin: 4px 8px 6px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted, #8b95a5);
+}
+.edge-menu-item {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  background: transparent; border: 0; border-radius: 8px;
+  padding: 8px 10px; font: inherit; font-size: 13px; color: var(--ink, #e8edf5);
+}
+.edge-menu-item:hover { background: rgba(255,255,255,0.07); }
+.edge-menu-item.on { color: var(--gold, #f0c014); font-weight: 700; }
+.edge-menu-item.danger { color: #ff6b6b; }
+.edge-path { pointer-events: stroke; }

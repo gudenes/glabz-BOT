@@ -833,6 +833,14 @@ function renderCanvas() {
         (isHot ? " sim-hot" : "")
     );
     path.dataset.edgeId = e.id;
+    // Ligação clicável: até agora ela era só desenho, e um rótulo errado ou
+    // uma ligação a mais não tinham como ser desfeitos sem apagar o card
+    // inteiro. Foi o que travou o usuário tentando refazer a saída "ok".
+    path.style.cursor = "pointer";
+    path.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      openEdgeMenu(e.id, ev.clientX, ev.clientY);
+    });
     path.setAttribute(
       "marker-end",
       isHot ? "url(#arrowhead-hot)" : "url(#arrowhead)"
@@ -949,20 +957,110 @@ function openAddMenu(parentNode, anchorBtn) {
  * Um `condition` precisa saber qual saída é o "sim"; um `action`, qual é o erro.
  * Vale tanto pra passo novo quanto pra ligação arrastada até um card existente.
  */
-function defaultEdgeLabel(parentNode, siblings) {
+/**
+ * Menu da ligação: trocar o rótulo (entre as saídas que o card tem) ou
+ * remover. Fica num popover simples ancorado no clique — um painel dedicado
+ * seria mais do que o caso precisa.
+ */
+function openEdgeMenu(edgeId, clientX, clientY) {
+  closeEdgeMenu();
+  const edge = state.flow?.edges.find((x) => x.id === edgeId);
+  if (!edge) return;
+  const from = state.flow.nodes.find((n) => n.id === edge.from);
+  const box = document.createElement("div");
+  box.className = "edge-menu";
+  box.id = "edge-menu";
+  box.style.left = `${clientX}px`;
+  box.style.top = `${clientY}px`;
+
+  const title = document.createElement("p");
+  title.className = "edge-menu-title";
+  title.textContent = t("builder.edge.title");
+  box.appendChild(title);
+
+  // Só oferece troca em card que ramifica, e só entre os rótulos que o tipo
+  // dele conhece: rótulo livre viraria ramo morto que o motor nunca segue.
+  const wanted = BRANCH_LABELS[from?.type] || [];
+  for (const label of wanted) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "edge-menu-item" + (edge.label === label ? " on" : "");
+    b.textContent = friendlyEdgeLabel(label);
+    b.addEventListener("click", () => {
+      const clash = state.flow.edges.find((x) => x.from === edge.from && x.label === label && x.id !== edge.id);
+      // Trocar por um rótulo já usado devolveria duas saídas iguais e o motor
+      // não saberia qual seguir — então troca com a outra em vez de duplicar.
+      if (clash) clash.label = edge.label;
+      edge.label = label;
+      closeEdgeMenu();
+      renderCanvas();
+    });
+    box.appendChild(b);
+  }
+
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "edge-menu-item danger";
+  del.textContent = t("builder.edge.remove");
+  del.addEventListener("click", () => {
+    state.flow.edges = state.flow.edges.filter((x) => x.id !== edge.id);
+    closeEdgeMenu();
+    renderCanvas();
+    renderProps();
+  });
+  box.appendChild(del);
+
+  document.body.appendChild(box);
+  setTimeout(() => document.addEventListener("click", closeEdgeMenu, { once: true }), 0);
+}
+
+function closeEdgeMenu() {
+  document.getElementById("edge-menu")?.remove();
+}
+
+/** Saídas que cada tipo ramificado tem, na ordem em que devem ser criadas. */
+const BRANCH_LABELS = {
+  condition: ["true", "false"],
+  action: ["ok", "erro"],
+  llm_answer: ["ok", "erro"],
+  llm_extract: ["ok", "ambiguous", "unclear"],
+};
+
+/**
+ * Rótulo da ligação nova: a primeira saída que AINDA NÃO EXISTE.
+ *
+ * Antes isso era contado por quantidade de saídas ("a 1ª é ok, o resto é
+ * erro"), o que quebrava assim que o card já tinha as duas: uma terceira
+ * ligação virava um segundo "erro", duplicado, e não havia como corrigir.
+ * Foi o que travou o usuário tentando ligar o "ok" do Responder com IA a um
+ * card de pergunta.
+ *
+ * Contar o que falta também deixa a ordem de criação livre: apagar o "ok" e
+ * recriá-lo devolve "ok", não "erro".
+ */
+function defaultEdgeLabel(parentNode, existingLabels = []) {
   if (parentNode.type === "llm_intent") {
     return (
       prompt(
         t("builder.prompt.intentLabel"),
-        siblings === 0 ? "marcar_consulta" : "default"
+        existingLabels.length === 0 ? "marcar_consulta" : "default"
       )?.trim() || "default"
     );
   }
-  if (parentNode.type === "condition") return siblings === 0 ? "true" : "false";
-  if (parentNode.type === "action") return siblings === 0 ? "ok" : "erro";
-  if (parentNode.type === "llm_extract") return ["ok", "ambiguous", "unclear"][siblings] || "ok";
-  if (parentNode.type === "llm_answer") return siblings === 0 ? "ok" : "erro";
-  return undefined;
+  const wanted = BRANCH_LABELS[parentNode.type];
+  if (!wanted) return undefined;
+  const used = new Set(existingLabels);
+  // Todas já existem: sem rótulo, e o motor avisa que a ligação está sobrando
+  // em vez de criar uma duplicata silenciosa.
+  return wanted.find((l) => !used.has(l));
+}
+
+/** Rótulos já usados nas saídas de um card. */
+function outLabels(nodeId) {
+  return (state.flow?.edges || [])
+    .filter((e) => e.from === nodeId)
+    .map((e) => e.label)
+    .filter(Boolean);
 }
 
 /**
@@ -984,12 +1082,11 @@ function connectNodes(fromNode, toNode) {
     toast(t("builder.toast.linkDuplicate"), "err");
     return false;
   }
-  const siblings = state.flow.edges.filter((e) => e.from === fromNode.id).length;
   state.flow.edges.push({
     id: uid("e"),
     from: fromNode.id,
     to: toNode.id,
-    label: defaultEdgeLabel(fromNode, siblings),
+    label: defaultEdgeLabel(fromNode, outLabels(fromNode.id)),
   });
   state.selectedNodeId = toNode.id;
   renderCanvas();
@@ -1147,7 +1244,7 @@ function addChildNode(parentNode, type) {
   };
   state.flow.nodes.push(child);
 
-  const edgeLabel = defaultEdgeLabel(parentNode, siblings);
+  const edgeLabel = defaultEdgeLabel(parentNode, outLabels(parentNode.id));
 
   state.flow.edges.push({
     id: uid("e"),
