@@ -6,6 +6,7 @@
  * significaria a farmácia lendo conversa do estúdio de pilates.
  */
 import { randomUUID } from "node:crypto";
+import { ACENTOS, searchPattern } from "./answer-log.js";
 import { db, hasDatabase, isVectorReady } from "../db.js";
 import { extractQAPairs, type QAPair } from "./extract.js";
 import { embedTexts, pairToText, toPgVector, embeddingsConfigured } from "./embeddings.js";
@@ -221,13 +222,39 @@ export async function suppressAllKnowledge(clientId: string): Promise<number> {
   return rows.length;
 }
 
-export async function listKnowledge(clientId: string, limit = 100): Promise<KnowledgeHit[]> {
+export type ListKnowledgeOpts = {
+  limit?: number;
+  /** Palavra buscada na pergunta E na resposta. */
+  search?: string | null;
+  /** Quantos pular — a ordem aqui é por relevância, não por data, então
+   *  cursor por tempo não serve e OFFSET é o certo. */
+  offset?: number;
+};
+
+export async function listKnowledge(
+  clientId: string,
+  optsOrLimit: ListKnowledgeOpts | number = 100
+): Promise<KnowledgeHit[]> {
   if (!hasDatabase() || !isVectorReady()) return [];
+  const opts: ListKnowledgeOpts =
+    typeof optsOrLimit === "number" ? { limit: optsOrLimit } : optsOrLimit;
+  const limit = Math.min(Math.max(Number(opts.limit) || 100, 1), 200);
+  const offset = Math.max(Number(opts.offset) || 0, 0);
+  const padrao = searchPattern(opts.search);
+
   return (await db()`
     SELECT id, question, answer, occurrences, origin, 0 AS score
     FROM knowledge_chunks
     WHERE client_id = ${clientId} AND NOT suppressed
+      ${
+        padrao
+          ? db()`AND (
+              translate(lower(question), ${ACENTOS.com}, ${ACENTOS.sem}) LIKE ${padrao}
+              OR translate(lower(answer), ${ACENTOS.com}, ${ACENTOS.sem}) LIKE ${padrao}
+            )`
+          : db()``
+      }
     ORDER BY occurrences DESC, updated_at DESC
-    LIMIT ${limit}
+    LIMIT ${limit} OFFSET ${offset}
   `) as unknown as KnowledgeHit[];
 }
