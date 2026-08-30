@@ -95,10 +95,29 @@ npm run dev   # :3099 → http://127.0.0.1:3099/admin
 
 Admin visual: **`/admin/flows.html`**
 
-- Builder drag-and-drop (mensagem, perguntar, condição, **LLM intenção**, handoff)
+- Builder drag-and-drop (mensagem, perguntar, condição, **LLM intenção**, **Responder com IA**, handoff)
 - Runtime no inbound: se houver fluxo `live`, o bot responde e pode transferir para humano
-- Demo seed: **“Demo · Marcar consulta”** (publicada no 1º boot)
+- **Fluxo simples**: montado por código (`buildSimpleFlow`) — a IA escreve só os textos. Ver
+  [docs/decisoes-atendimento-automatico.md](./docs/decisoes-atendimento-automatico.md) antes de mexer.
+- **Catálogo**: 5 templates, todos sobre o mesmo esqueleto do fluxo simples
+- **Travas por conta** (aba WhatsApp do portal): filtro de números, janela de atendimento, ritmo do
+  "digitando…" e retorno automático ao bot depois de X sem contato
 - LLM opcional via `XAI_API_KEY` / `GLABS_LLM_API_KEY` (senão keywords)
+
+## Testes
+
+| comando | o quê | precisa de |
+|---|---|---|
+| `npm test` | lógica, com IA falsa — rápido e sem custo | nada |
+| `npm run test:ui` | portal real em Chrome headless | Chrome no sistema |
+| `npm run test:db` | SQL contra Postgres | `TEST_DATABASE_URL` (base descartável) |
+| `npm run test:llm` | modelo real — **gasta crédito** | chave de IA |
+
+Os três últimos se **pulam** quando o que precisam não existe, em vez de falhar.
+
+⚠️ **Sem chave de IA, o card "Responder com IA" sempre falha** e o fluxo sai pela saída de erro — a
+saída de sucesso não é exercitada. Todo teste que passa por ele tem que usar
+`test/helpers/fake-llm.ts`. Uma suíte inteira já ficou verde por esse motivo.
 
 ## Env
 
