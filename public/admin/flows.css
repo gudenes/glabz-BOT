@@ -1517,3 +1517,18 @@
 .edge-menu-item.on { color: var(--gold, #f0c014); font-weight: 700; }
 .edge-menu-item.danger { color: #ff6b6b; }
 .edge-path { pointer-events: stroke; }
+
+/* ── Rolagem que não arrasta a página ────────────────────────
+   `overscroll-behavior: contain` impede o encadeamento: ao chegar no fim de
+   uma lista rolável, o navegador continuava rolando a PÁGINA atrás dela. Em
+   Conversas era o mais visível — rolar a lista de conversas levava a tela
+   junto — mas vale pra toda área com rolagem própria, e por isso está aqui
+   como regra única em vez de repetida em cada seletor. */
+.fb-props,
+.fb-canvas-wrap,
+.sim-chat,
+.history-list,
+.fb-var-menu,
+textarea {
+  overscroll-behavior: contain;
+}

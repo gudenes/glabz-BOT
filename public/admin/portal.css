@@ -1252,3 +1252,21 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .bot-rules input[type="time"]:focus { outline: none; border-color: var(--gold); }
 #rules-hours-field { display: grid; gap: 4px; }
 #rules-overnight { margin: 8px 0 4px; }
+
+/* ── Rolagem que não arrasta a página ────────────────────────
+   `overscroll-behavior: contain` impede o encadeamento: ao chegar no fim de
+   uma lista rolável, o navegador continuava rolando a PÁGINA atrás dela. Em
+   Conversas era o mais visível — rolar a lista de conversas levava a tela
+   junto — mas vale pra toda área com rolagem própria, e por isso está aqui
+   como regra única em vez de repetida em cada seletor. */
+.side,
+.kr-list,
+.studio-log,
+.chat-log,
+.thread-list,
+/* textarea rola sozinho quando o texto passa da altura — e arrastava a página
+   igual. Não estavam na minha lista; foi o teste que os encontrou varrendo o
+   documento em vez de conferir seletores escritos à mão. */
+textarea {
+  overscroll-behavior: contain;
+}
