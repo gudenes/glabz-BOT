@@ -26,10 +26,18 @@ documentos primeiro.
 - **[estudo-casos-de-uso-e-integracoes.md](./estudo-casos-de-uso-e-integracoes.md)** — estudo
   (23/08/2026) de 8 casos de uso reais por segmento, catálogo proposto de 10 templates
   (5 simples + 5 complexos), matriz de integrações priorizada e lacunas técnicas que os cenários
-  revelam. Base pra decidir o que construir no builder/connectors.
+  revelam. Base pra decidir o que construir no builder/connectors. ⚠️ O catálogo de 10 não vingou:
+  hoje são 5, todos simples (ver decisoes-atendimento-automatico.md).
 - **[rag-desenho.md](./rag-desenho.md)** — desenho da busca semântica no histórico de
   atendimento (23/08/2026): o que indexar, qual modelo de embedding, como filtrar, privacidade
-  e qualidade da fonte. Decisões com base em teste empírico. Desenhado, não implementado.
+  e qualidade da fonte. Decisões com base em teste empírico. ⚠️ O texto se diz "desenhado, não
+  implementado" — desatualizado: o RAG está em produção (ver decisoes-atendimento-automatico.md).
+- **[decisoes-atendimento-automatico.md](./decisoes-atendimento-automatico.md)** — POR QUE o
+  atendimento automático é do jeito que é (27–31/08/2026): o fluxo simples montado por código e não
+  desenhado pela IA, por que a IA nunca aprende sozinha de conversa, o transbordo quando ela não
+  sabe, onde vivem as travas do bot, e a estratégia de testes com a armadilha do falso verde. Cada
+  decisão registrada existe porque a contrária JÁ falhou em produção — leia antes de desfazer
+  qualquer uma. Também lista as divergências que criou nos documentos abaixo.
 - **[roadmap-ux-builder.md](./roadmap-ux-builder.md)** — frente de usabilidade do builder
   (registrada, não iniciada): variáveis visíveis/sugeridas, teste de trecho isolado, blocos
   reutilizáveis, transcrição de áudio, histórico de versões. Motivada pelo objetivo de o usuário
