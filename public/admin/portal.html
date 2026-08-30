@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=46" />
+    <link rel="stylesheet" href="/admin/portal.css?v=47" />
   </head>
   <body class="portal-body">
     <div class="app">
@@ -483,7 +483,22 @@
 
         <!-- Conhecimento (RAG) -->
         <section id="view-knowledge" class="view hidden">
-          <div class="card-form">
+          <nav class="kb-tabs" id="kb-tabs" role="tablist">
+            <button type="button" class="kb-tab on" data-kb-tab="base" role="tab" data-i18n="portal.knowledge.tab.base">Base</button>
+            <button type="button" class="kb-tab" data-kb-tab="gaps" role="tab">
+              <span data-i18n="portal.knowledge.tab.gaps">Não soube responder</span>
+              <b class="kb-badge hidden" id="kb-gaps-count"></b>
+            </button>
+            <button type="button" class="kb-tab" data-kb-tab="log" role="tab" data-i18n="portal.knowledge.tab.log">Histórico</button>
+          </nav>
+
+          <section class="card-form kb-pane" id="kb-pane-gaps" hidden>
+            <h2 data-i18n="portal.gaps.title">O bot não soube responder</h2>
+            <p class="hint-muted" data-i18n="portal.gaps.sub">Perguntas de clientes que a IA não conseguiu responder pela base. Ensine e ela passa a responder sozinha na próxima.</p>
+            <div id="kb-gaps-list" class="kb-list"></div>
+          </section>
+
+          <div class="card-form kb-pane" id="kb-pane-base">
             <h2 data-i18n="portal.knowledge.title">O que a IA aprendeu com sua equipe</h2>
             <p class="hint-muted" data-i18n="portal.knowledge.sub">Perguntas que seus clientes fizeram e que alguém da equipe respondeu. A IA usa isso pra responder sozinha da próxima vez.</p>
             <div class="kb-actions">
@@ -535,13 +550,25 @@
                 <button type="button" class="btn-text kb-danger-text" id="btn-kb-clear-all" data-i18n="portal.knowledge.clearAll">Remover tudo</button>
               </div>
             </div>
+            <div class="kb-search">
+              <input type="search" id="kb-search" placeholder="Buscar por palavra…" data-i18n-placeholder="portal.knowledge.searchPlaceholder" />
+            </div>
             <div id="kb-list" class="kb-list"></div>
+            <div class="kb-more">
+              <button type="button" class="btn-ghost hidden" id="btn-kb-more" data-i18n="portal.knowledge.loadMore">Carregar mais</button>
+            </div>
           </div>
 
-          <div class="card-form" style="margin-top:16px">
+          <div class="card-form kb-pane" id="kb-pane-log" hidden>
             <h2 data-i18n="portal.answers.title">Respostas que a IA deu</h2>
             <p class="hint-muted" data-i18n="portal.answers.sub">O que foi perguntado, o que ela respondeu e no que ela se baseou. Útil pra entender uma resposta estranha.</p>
+            <div class="kb-search">
+              <input type="search" id="log-search" placeholder="Buscar por palavra…" data-i18n-placeholder="portal.knowledge.searchPlaceholder" />
+            </div>
             <div id="ai-log" class="ai-log"></div>
+            <div class="kb-more">
+              <button type="button" class="btn-ghost hidden" id="btn-log-more" data-i18n="portal.knowledge.loadMore">Carregar mais</button>
+            </div>
           </div>
         </section>
       </main>
@@ -614,6 +641,6 @@
       </div>
     </div>
 
-    <script src="/admin/portal.js?v=52" type="module"></script>
+    <script src="/admin/portal.js?v=53" type="module"></script>
   </body>
 </html>

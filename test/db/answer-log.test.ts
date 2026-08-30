@@ -125,3 +125,45 @@ test("o motivo da falha sobrevive à ida e volta do banco", { skip }, async () =
   assert.equal(mod.classifyFailure(semResposta?.failReason), "sabe_nao");
   assert.equal(mod.classifyFailure(comResposta?.failReason), "nenhuma");
 });
+
+test("pendências: agrupa repetições e ignora falha técnica", { skip }, async () => {
+  await sql()`DELETE FROM ai_answer_log WHERE client_id = 't1'`;
+  await sql()`DELETE FROM knowledge_gap_dismissed WHERE client_id = 't1'`;
+  const gravar = (question: string, failReason: string | null, simulated = false) =>
+    mod.logAiAnswer({ clientId: "t1", question, answer: null, failReason, ragStatus: "ok", simulated });
+
+  // A mesma dúvida, escrita de três formas — tem que virar UMA linha com 3.
+  await gravar("Vocês têm ração para cachorro de grande porte?", "fora_do_contexto");
+  await gravar("voces tem racao para cachorro de grande porte", "fora_do_contexto");
+  await gravar("VOCÊS TÊM RAÇÃO PARA CACHORRO DE GRANDE PORTE!!!", "fora_do_contexto");
+  await gravar("tem estacionamento?", "fora_do_contexto");
+  // Estas NÃO podem aparecer:
+  await gravar("a API caiu aqui", "http_500");
+  await gravar("teste do próprio dono", "fora_do_contexto", true);
+  await mod.logAiAnswer({ clientId: "t1", question: "essa foi respondida", answer: "sim", ragStatus: "ok" });
+
+  const gaps = await mod.listKnowledgeGaps("t1");
+  assert.equal(gaps.length, 2, `só as duas ensináveis: ${JSON.stringify(gaps.map((g) => g.question))}`);
+  assert.equal(gaps[0].times, 3, "as três formas da ração viraram uma linha com 3");
+  assert.match(gaps[0].question, /ração/i, "mostra a forma mais recente, com acento");
+  assert.equal(gaps[1].times, 1);
+  assert.ok(!gaps.some((g) => /API caiu/.test(g.question)), "falha técnica fica de fora");
+  assert.ok(!gaps.some((g) => /próprio dono/.test(g.question)), "teste do simulador fica de fora");
+});
+
+test("ensinar tira da caixa de entrada; desfazer devolve", { skip }, async () => {
+  await sql()`DELETE FROM ai_answer_log WHERE client_id = 't1'`;
+  await sql()`DELETE FROM knowledge_gap_dismissed WHERE client_id = 't1'`;
+  await mod.logAiAnswer({ clientId: "t1", question: "tem banho e tosa?", answer: null, failReason: "fora_do_contexto" });
+
+  const antes = await mod.listKnowledgeGaps("t1");
+  assert.equal(antes.length, 1);
+
+  await mod.dismissGap("t1", antes[0].key);
+  assert.equal((await mod.listKnowledgeGaps("t1")).length, 0, "saiu da lista");
+  // Idempotente: clicar duas vezes não pode estourar.
+  await mod.dismissGap("t1", antes[0].key);
+
+  await mod.undismissGap("t1", antes[0].key);
+  assert.equal((await mod.listKnowledgeGaps("t1")).length, 1, "o desfazer devolveu");
+});

@@ -120,7 +120,12 @@ function setView(view) {
   if (view === "dashboard") void loadDashboard();
   if (view === "account") loadAccount();
   if (view === "integrations") void loadIntegrationsStatus();
-  if (view === "knowledge") { void loadKnowledge(); void loadAiAnswers(); }
+  if (view === "knowledge") {
+    setKbTab(kbTab);
+    // A contagem do selo vem sempre, mesmo fora da aba de pendências — é ela
+    // que avisa que há o que fazer.
+    void atualizarContadorGaps();
+  }
 }
 
 /**
@@ -1363,16 +1368,84 @@ function loadAccount() {
  * como não há aprovação prévia (não escalaria), precisa haver um jeito simples
  * de dizer "não use isso" quando alguém perceber um erro.
  */
-async function loadKnowledge() {
+/**
+ * Abas internas de Conhecimento.
+ *
+ * Três listas longas empilhadas viravam uma página sem fim, e lado a lado cada
+ * uma ficaria com metade da largura justo quando o volume cresce. Cada aba usa
+ * a largura toda e tem busca e paginação próprias.
+ */
+const KB_TABS = ["base", "gaps", "log"];
+let kbTab = "base";
+
+function setKbTab(aba) {
+  if (!KB_TABS.includes(aba)) return;
+  kbTab = aba;
+  for (const btn of document.querySelectorAll("[data-kb-tab]")) {
+    btn.classList.toggle("on", btn.dataset.kbTab === aba);
+  }
+  for (const nome of KB_TABS) {
+    const painel = $(`kb-pane-${nome}`);
+    if (painel) painel.hidden = nome !== aba;
+  }
+  // Carrega só o que está à vista: abrir Conhecimento não precisa buscar as
+  // três listas de uma vez.
+  if (aba === "base") void loadKnowledge();
+  if (aba === "gaps") void loadGaps();
+  if (aba === "log") void loadAiAnswers();
+}
+
+for (const btn of document.querySelectorAll("[data-kb-tab]")) {
+  btn.addEventListener("click", () => setKbTab(btn.dataset.kbTab));
+}
+
+/** Quantos itens por página em cada lista. */
+const KB_PAGE = 30;
+
+/** Estado da paginação da base: quantos já vieram e se ainda há mais. */
+let kbOffset = 0;
+let kbItems = [];
+
+async function loadKnowledge({ mais = false } = {}) {
   const box = $("kb-list");
   if (!box) return;
-  box.innerHTML = `<p class="hint-muted">${t("portal.knowledge.loading")}</p>`;
+  const busca = $("kb-search")?.value.trim() || "";
+  if (!mais) {
+    kbOffset = 0;
+    kbItems = [];
+    box.innerHTML = `<p class="hint-muted">${t("portal.knowledge.loading")}</p>`;
+  }
   try {
-    const data = await api("/v1/rag/knowledge");
-    renderKnowledge(data.chunks || []);
+    const q = new URLSearchParams({ limit: String(KB_PAGE), offset: String(kbOffset) });
+    if (busca) q.set("q", busca);
+    const data = await api(`/v1/rag/knowledge?${q}`);
+    const vieram = data.chunks || [];
+    kbItems = mais ? [...kbItems, ...vieram] : vieram;
+    kbOffset = kbItems.length;
+    // Página cheia = provavelmente há mais. Página incompleta = acabou.
+    $("btn-kb-more")?.classList.toggle("hidden", vieram.length < KB_PAGE);
+    renderKnowledge(kbItems);
   } catch (e) {
     box.innerHTML = `<p class="hint-muted">${escapeHtml(e.message)}</p>`;
   }
+}
+
+$("btn-kb-more")?.addEventListener("click", () => void loadKnowledge({ mais: true }));
+$("kb-search")?.addEventListener("input", debounceBusca(() => void loadKnowledge()));
+$("log-search")?.addEventListener("input", debounceBusca(() => void loadAiAnswers()));
+
+/**
+ * Espera o dono parar de digitar antes de buscar.
+ *
+ * A busca é no servidor; disparar a cada tecla mandaria uma consulta por
+ * letra e faria a lista piscar enquanto ele escreve.
+ */
+function debounceBusca(fn, ms = 300) {
+  let timer = null;
+  return () => {
+    clearTimeout(timer);
+    timer = setTimeout(fn, ms);
+  };
 }
 
 // De onde um item da Base de Conhecimento veio — usado só pra exibir a tag
@@ -1556,18 +1629,170 @@ const RAG_TAG_MIN_SCORE = 0.4;
  * NÃO usou a base (e por quê), que é o caso mais difícil de diagnosticar
  * olhando só a resposta.
  */
-async function loadAiAnswers() {
-  const box = $("ai-log");
+/**
+ * Caixa de entrada: o que a IA não soube responder.
+ *
+ * Ordenada pelas mais frequentes, porque a dúvida que volta é a que mais custa
+ * deixar sem resposta. Ensinar tira da lista; o "desfazer" devolve.
+ */
+async function loadGaps() {
+  const box = $("kb-gaps-list");
   if (!box) return;
+  box.innerHTML = `<p class="hint-muted">${t("portal.knowledge.loading")}</p>`;
   try {
-    const data = await api("/v1/rag/answers?limit=30");
-    const items = data.answers || [];
-    if (!items.length) {
-      box.innerHTML = `<p class="hint-muted">${t("portal.answers.empty")}</p>`;
+    const data = await api("/v1/rag/gaps?limit=50");
+    const gaps = data.gaps || [];
+    pintarContadorGaps(gaps.length);
+    if (!gaps.length) {
+      box.innerHTML = `<p class="hint-muted">${t("portal.gaps.empty")}</p>`;
       return;
     }
-    box.innerHTML = items
-      .map((a) => {
+    box.innerHTML = agruparPorDia(gaps, (g) => g.lastAt, (g) => `
+      <div class="kb-item gap-item" data-gap-key="${escapeHtml(g.key)}">
+        <div class="kb-q">
+          <b>${escapeHtml(g.question)}</b>
+          ${g.times > 1 ? `<span class="ai-tag off">${t("portal.gaps.times", { n: g.times })}</span>` : ""}
+        </div>
+        <div class="kb-actions">
+          <button type="button" class="btn-lime gap-teach">${t("portal.gaps.teach")}</button>
+          <button type="button" class="btn-text gap-dismiss">${t("portal.gaps.dismiss")}</button>
+        </div>
+      </div>`);
+
+    for (const el of box.querySelectorAll(".gap-item")) {
+      const key = el.dataset.gapKey;
+      const pergunta = el.querySelector("b").textContent;
+      el.querySelector(".gap-teach").addEventListener("click", () => ensinarPendencia(key, pergunta));
+      el.querySelector(".gap-dismiss").addEventListener("click", () => dispensarPendencia(key, pergunta));
+    }
+  } catch (e) {
+    box.innerHTML = `<p class="hint-muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+/** Só a contagem, sem pintar a lista — pra o selo aparecer em qualquer aba. */
+async function atualizarContadorGaps() {
+  try {
+    const data = await api("/v1/rag/gaps?limit=50");
+    pintarContadorGaps((data.gaps || []).length);
+  } catch {
+    // Selo é informativo: falhar aqui não pode atrapalhar a tela.
+  }
+}
+
+/** O contador ao lado da aba — é o que faz o dono voltar aqui. */
+function pintarContadorGaps(n) {
+  const badge = $("kb-gaps-count");
+  if (!badge) return;
+  badge.textContent = String(n);
+  badge.classList.toggle("hidden", n === 0);
+}
+
+/**
+ * Leva pra Base com o formulário de ensino já preenchido.
+ *
+ * Não ensina sozinho de propósito: o bot não sabe a resposta — quem sabe é o
+ * dono. Aprender de conversa sem confirmação humana foi o que, em agosto,
+ * gravou "Não foi mencionado." como resposta na base.
+ */
+function ensinarPendencia(key, pergunta) {
+  setKbTab("base");
+  $("kb-teach")?.classList.remove("hidden");
+  $("kb-q").value = pergunta;
+  $("kb-a").value = "";
+  $("kb-a").focus();
+  // Guarda a chave: ao salvar, a pendência sai da caixa de entrada.
+  gapPendente = key;
+}
+
+let gapPendente = null;
+
+async function dispensarPendencia(key, pergunta, { avisar = true } = {}) {
+  try {
+    await api("/v1/rag/gaps/dismiss", { method: "POST", body: JSON.stringify({ key }) });
+    await loadGaps();
+    if (avisar) {
+      toast(t("portal.gaps.dismissed", { q: pergunta.slice(0, 40) }), "ok", {
+        acao: { texto: t("portal.gaps.undo"), fn: () => void desfazerDispensa(key) },
+      });
+    }
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
+async function desfazerDispensa(key) {
+  try {
+    await api("/v1/rag/gaps/dismiss", { method: "POST", body: JSON.stringify({ key, undo: true }) });
+    await loadGaps();
+    toast(t("portal.gaps.restored"));
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
+/**
+ * Agrupa uma lista por dia, com cabeçalho Hoje / Ontem / 30/08.
+ *
+ * "Quando isso foi perguntado" costuma importar tanto quanto o quê — uma
+ * lista corrida de N dias não deixa perceber que a mesma dúvida voltou.
+ *
+ * O dia é o de Brasília, mesmo critério que o resto do produto usa
+ * (ver AT TIME ZONE em inbox.ts).
+ */
+function agruparPorDia(itens, quando, render) {
+  const FUSO = "America/Sao_Paulo";
+  const diaDe = (iso) => new Date(iso).toLocaleDateString("en-CA", { timeZone: FUSO });
+  const hoje = diaDe(new Date().toISOString());
+  const ontem = diaDe(new Date(Date.now() - 86400000).toISOString());
+
+  const rotulo = (dia) => {
+    if (dia === hoje) return t("portal.knowledge.today");
+    if (dia === ontem) return t("portal.knowledge.yesterday");
+    const [a, m, d] = dia.split("-");
+    return `${d}/${m}/${a}`;
+  };
+
+  let html = "";
+  let atual = null;
+  for (const item of itens) {
+    const dia = diaDe(quando(item));
+    if (dia !== atual) {
+      atual = dia;
+      html += `<h4 class="kb-day">${escapeHtml(rotulo(dia))}</h4>`;
+    }
+    html += render(item);
+  }
+  return html;
+}
+
+let logItems = [];
+let logCursor = null;
+
+async function loadAiAnswers({ mais = false } = {}) {
+  const box = $("ai-log");
+  if (!box) return;
+  const busca = $("log-search")?.value.trim() || "";
+  if (!mais) {
+    logItems = [];
+    logCursor = null;
+    box.innerHTML = `<p class="hint-muted">${t("portal.knowledge.loading")}</p>`;
+  }
+  try {
+    const q = new URLSearchParams({ limit: String(KB_PAGE) });
+    if (busca) q.set("q", busca);
+    if (mais && logCursor) q.set("before", logCursor);
+    const data = await api(`/v1/rag/answers?${q}`);
+    const vieram = data.answers || [];
+    logItems = mais ? [...logItems, ...vieram] : vieram;
+    logCursor = logItems.length ? logItems[logItems.length - 1].createdAt : null;
+    $("btn-log-more")?.classList.toggle("hidden", vieram.length < KB_PAGE);
+    const items = logItems;
+    if (!items.length) {
+      box.innerHTML = `<p class="hint-muted">${busca ? t("portal.knowledge.noResults") : t("portal.answers.empty")}</p>`;
+      return;
+    }
+    box.innerHTML = agruparPorDia(items, (a) => a.createdAt, (a) => {
         const quando = new Date(a.createdAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
         const ragHits = Array.isArray(a.ragHits) ? a.ragHits : [];
         const strongHits = ragHits.filter((h) => Number(h.score) >= RAG_TAG_MIN_SCORE);
@@ -1593,8 +1818,7 @@ async function loadAiAnswers() {
             <div class="ai-tags">${cardTag}${baseTag}</div>
             ${base}
           </div>`;
-      })
-      .join("");
+    });
   } catch (e) {
     box.innerHTML = `<p class="hint-muted">${escapeHtml(e.message)}</p>`;
   }
@@ -1612,6 +1836,16 @@ $("kb-teach")?.addEventListener("submit", async (ev) => {
   if (!q || !a) return;
   try {
     await api("/v1/rag/teach", { method: "POST", body: JSON.stringify({ question: q, answer: a }) });
+    // Veio da caixa de entrada: ensinou, sai de lá. O "desfazer" fica no
+    // aviso, caso tenha ensinado a pergunta errada.
+    if (gapPendente) {
+      const key = gapPendente;
+      gapPendente = null;
+      await dispensarPendencia(key, q, { avisar: false });
+      toast(t("portal.gaps.taught"), "ok", {
+        acao: { texto: t("portal.gaps.undo"), fn: () => void desfazerDispensa(key) },
+      });
+    }
     toast(t("portal.knowledge.taught"));
     $("kb-q").value = "";
     $("kb-a").value = "";
