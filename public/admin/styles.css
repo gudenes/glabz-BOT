@@ -670,3 +670,14 @@ code {
     padding: 16px;
   }
 }
+
+/* ── Rolagem que não arrasta a página ────────────────────────
+   `overscroll-behavior: contain` impede o encadeamento: ao chegar no fim de
+   uma lista rolável, o navegador continuava rolando a PÁGINA atrás dela. Em
+   Conversas era o mais visível — rolar a lista de conversas levava a tela
+   junto — mas vale pra toda área com rolagem própria, e por isso está aqui
+   como regra única em vez de repetida em cada seletor. */
+.drawer-body,
+textarea {
+  overscroll-behavior: contain;
+}
