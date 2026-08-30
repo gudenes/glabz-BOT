@@ -17,6 +17,7 @@ import type { Browser, Page } from "puppeteer-core";
 import {
   abrirNavegador,
   caixaDe,
+  esperarLayoutEstavel,
   fecharPagina,
   novaPagina,
   skipSemChrome,
@@ -54,9 +55,8 @@ async function abrirTour(largura = 1280, altura = 800): Promise<Page> {
   return page;
 }
 
-/** Um quadro de pintura, pra medir depois de o navegador posicionar. */
-const esperarQuadro = (page: Page) =>
-  page.evaluate(`new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))`);
+/** Espera o balão parar de se mexer — ver esperarLayoutEstavel. */
+const esperarQuadro = (page: Page) => esperarLayoutEstavel(page, "#tour-bubble");
 
 /** Clica "Próxima" (ou a escolha pedida numa bifurcação) e espera repintar. */
 async function avancar(page: Page, escolha?: number): Promise<void> {

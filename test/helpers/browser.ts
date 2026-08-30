@@ -96,6 +96,33 @@ export async function novaPagina(browser: Browser, largura = 1280, altura = 800)
   return page;
 }
 
+/**
+ * Espera o layout PARAR de mexer antes de medir.
+ *
+ * Dois quadros de animação não bastam: com mais de um Chrome concorrendo pela
+ * CPU, a medição pegava a tela no meio do rearranjo e o teste acusava
+ * sobreposição que não existe. Teste instável é pior que teste nenhum — ele
+ * ensina a ignorar vermelho.
+ *
+ * Espera as fontes carregarem (elas mudam as medidas do texto) e o retângulo
+ * do alvo repetir duas vezes seguidas.
+ */
+export async function esperarLayoutEstavel(page: Page, seletor: string, tentativas = 40): Promise<void> {
+  await page.evaluate(`document.fonts ? document.fonts.ready : Promise.resolve()`);
+  let anterior = "";
+  for (let i = 0; i < tentativas; i += 1) {
+    const atual = await page.evaluate((s) => {
+      const el = document.querySelector(s);
+      if (!el) return "";
+      const r = el.getBoundingClientRect();
+      return `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}`;
+    }, seletor);
+    if (atual && atual === anterior) return;
+    anterior = atual;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
 /** Fecha a página E o contexto isolado dela. */
 export async function fecharPagina(page: Page): Promise<void> {
   const contexto = page.browserContext();
