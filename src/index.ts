@@ -1442,6 +1442,38 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // Perguntas que a IA não soube responder e ainda não foram tratadas.
+    if (method === "GET" && path === "/v1/rag/gaps") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const { listKnowledgeGaps } = await import("./rag/answer-log.js");
+      const gaps = await listKnowledgeGaps(clientId, Number(url.searchParams.get("limit")) || 50);
+      json(res, 200, { ok: true, gaps });
+      return;
+    }
+
+    // Tira da caixa de entrada (ou devolve, com undo:true).
+    if (method === "POST" && path === "/v1/rag/gaps/dismiss") {
+      const clientId = actingClientId(req, auth);
+      if (!clientId) {
+        json(res, 400, { ok: false, reason: "sem cliente no contexto" });
+        return;
+      }
+      const body = parseJson<{ key?: string; undo?: boolean }>(await readBody(req));
+      if (!body?.key) {
+        json(res, 400, { ok: false, reason: "key obrigatória" });
+        return;
+      }
+      const { dismissGap, undismissGap } = await import("./rag/answer-log.js");
+      if (body.undo) await undismissGap(clientId, body.key);
+      else await dismissGap(clientId, body.key);
+      json(res, 200, { ok: true });
+      return;
+    }
+
     if (method === "GET" && path === "/v1/rag/knowledge") {
       const clientId = actingClientId(req, auth);
       if (!clientId) {

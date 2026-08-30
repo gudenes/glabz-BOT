@@ -232,6 +232,21 @@ ALTER TABLE ai_answer_log ADD COLUMN IF NOT EXISTS used_manual_context BOOLEAN N
 -- Nulo em linha antiga e em resposta bem-sucedida.
 ALTER TABLE ai_answer_log ADD COLUMN IF NOT EXISTS fail_reason TEXT;
 CREATE INDEX IF NOT EXISTS idx_ai_log_client ON ai_answer_log(client_id, created_at DESC);
+
+-- Perguntas que o dono já tratou na caixa de entrada de pendências.
+--
+-- Fica em tabela própria, e não numa coluna do log, porque a dispensa é do
+-- GRUPO de perguntas iguais, não de uma linha: a mesma dúvida chega várias
+-- vezes e ensinar uma vez resolve todas. A chave é a pergunta normalizada
+-- (ver questionKey em rag/answer-log.ts).
+--
+-- Apagar a linha é o "desfazer" — por isso não há coluna de estado.
+CREATE TABLE IF NOT EXISTS knowledge_gap_dismissed (
+  client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  question_key TEXT NOT NULL,
+  dismissed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (client_id, question_key)
+);
 `;
 
 /** Dimensões do vetor — ver EMBEDDING_MODEL em src/rag/embeddings.ts. */

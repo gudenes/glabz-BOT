@@ -210,3 +210,78 @@ export async function listAiAnswers(
     createdAt: new Date(r.created_at as string).toISOString(),
   }));
 }
+
+/**
+ * Perguntas que a IA não soube responder e que ainda não foram tratadas.
+ *
+ * Agrupa as repetições e ordena pelas mais frequentes: a que chega várias
+ * vezes é a que mais custa deixar sem resposta. A da ração apareceu 2× e só
+ * dava pra perceber isso lendo o log inteiro.
+ *
+ * Só entra `fora_do_contexto` — falha técnica não se ensina, e misturar as
+ * duas faria o dono aprender a ignorar a lista.
+ *
+ * `simulated` fica de fora: pergunta do simulador é teste do próprio dono,
+ * não dúvida de cliente.
+ */
+export async function listKnowledgeGaps(
+  clientId: string,
+  limit = 50
+): Promise<KnowledgeGap[]> {
+  if (!hasDatabase()) return [];
+  const teto = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  const rows = (await db()`
+    WITH nao_respondidas AS (
+      SELECT question, created_at,
+             -- Mesma normalização do questionKey, feita no banco pra agrupar
+             -- sem trazer tudo pra memória.
+             btrim(regexp_replace(
+               lower(translate(question, ${ACENTOS.com}, ${ACENTOS.sem})),
+               '[^a-z0-9]+', ' ', 'g'
+             )) AS chave
+      FROM ai_answer_log
+      WHERE client_id = ${clientId}
+        AND fail_reason = 'fora_do_contexto'
+        AND NOT simulated
+    )
+    SELECT n.chave AS key,
+           (array_agg(n.question ORDER BY n.created_at DESC))[1] AS question,
+           COUNT(*)::int AS times,
+           MAX(n.created_at) AS last_at
+    FROM nao_respondidas n
+    WHERE n.chave <> ''
+      AND NOT EXISTS (
+        SELECT 1 FROM knowledge_gap_dismissed d
+        WHERE d.client_id = ${clientId} AND d.question_key = n.chave
+      )
+    GROUP BY n.chave
+    ORDER BY COUNT(*) DESC, MAX(n.created_at) DESC
+    LIMIT ${teto}
+  `) as unknown as Record<string, unknown>[];
+
+  return rows.map((r) => ({
+    key: String(r.key),
+    question: String(r.question),
+    times: Number(r.times),
+    lastAt: new Date(r.last_at as string).toISOString(),
+  }));
+}
+
+/** Tira a pergunta da caixa de entrada. Idempotente. */
+export async function dismissGap(clientId: string, key: string): Promise<void> {
+  if (!hasDatabase() || !key.trim()) return;
+  await db()`
+    INSERT INTO knowledge_gap_dismissed (client_id, question_key)
+    VALUES (${clientId}, ${key.trim()})
+    ON CONFLICT (client_id, question_key) DO NOTHING
+  `;
+}
+
+/** Desfaz a dispensa — a pergunta volta pra lista. */
+export async function undismissGap(clientId: string, key: string): Promise<void> {
+  if (!hasDatabase() || !key.trim()) return;
+  await db()`
+    DELETE FROM knowledge_gap_dismissed
+    WHERE client_id = ${clientId} AND question_key = ${key.trim()}
+  `;
+}
