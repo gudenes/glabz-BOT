@@ -797,6 +797,13 @@ $("tour-next")?.addEventListener("click", () => advanceTour());
 window.addEventListener("resize", () => {
   if (!$("tour")?.classList.contains("hidden")) positionTour();
 });
+// Fonte carrega depois do primeiro desenho e muda as medidas do texto — o que
+// desloca o alvo e deixa o balão apontando pro lugar errado. Reposiciona
+// quando elas terminam. Foi um teste medindo a tela no meio do rearranjo que
+// tornou isso visível.
+document.fonts?.ready.then(() => {
+  if (!$("tour")?.classList.contains("hidden")) positionTour();
+});
 window.addEventListener(
   "scroll",
   () => {
@@ -1887,17 +1894,19 @@ function fillDays(days) {
 let botRulesDirty = false;
 
 function botRulesBusy() {
-  const form = $("form-bot-rules");
-  if (!form) return false;
-  return botRulesDirty || form.contains(document.activeElement);
+  const alvos = [$("form-bot-rules"), $("bot-typing-card")].filter(Boolean);
+  if (!alvos.length) return false;
+  return botRulesDirty || alvos.some((el) => el.contains(document.activeElement));
 }
 
-$("form-bot-rules")?.addEventListener("input", () => {
-  botRulesDirty = true;
-});
-$("form-bot-rules")?.addEventListener("change", () => {
-  botRulesDirty = true;
-});
+for (const el of [$("form-bot-rules"), $("bot-typing-card")]) {
+  el?.addEventListener("input", () => {
+    botRulesDirty = true;
+  });
+  el?.addEventListener("change", () => {
+    botRulesDirty = true;
+  });
+}
 
 function renderBotRules(rules, { force = false } = {}) {
   const mode = rules?.numbers?.mode || "off";
@@ -1947,7 +1956,13 @@ function paintBotRulesSummary(rules, mode, list) {
     if (hours.awayMessage) parts.push(t("portal.rules.nowAway"));
   }
   const atraso = Number(rules?.typingDelayMs) || 0;
-  if (atraso) parts.push(t("portal.rules.nowDelay", { s: Math.round(atraso / 1000) }));
+  const agora = $("bot-typing-now");
+  if (agora) {
+    agora.textContent = atraso
+      ? t("portal.rules.nowDelay", { s: Math.round(atraso / 1000) })
+      : t("portal.rules.nowNoDelay");
+    agora.classList.toggle("on", atraso > 0);
+  }
   now.textContent = parts.length ? parts.join(" ") : t("portal.rules.nowOff");
   now.classList.toggle("on", parts.length > 0);
 }
@@ -1966,8 +1981,14 @@ function toggleRulesList() {
 
 $("rules-mode")?.addEventListener("change", toggleRulesList);
 
-$("form-bot-rules")?.addEventListener("submit", async (ev) => {
-  ev.preventDefault();
+/**
+ * Salva as regras do bot.
+ *
+ * Os dois cartões (quem o bot atende + ritmo da conversa) mandam o corpo
+ * INTEIRO: o backend regrava `botRules` de uma vez, então enviar só um pedaço
+ * apagaria o resto.
+ */
+async function salvarRegrasDoBot() {
   const mode = $("rules-mode").value;
   const list = $("rules-list").value
     .split(/[\n,;]+/)
@@ -2016,6 +2037,18 @@ $("form-bot-rules")?.addEventListener("submit", async (ev) => {
   } catch (e) {
     toast(e.message, "err");
   }
+}
+
+$("form-bot-rules")?.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  void salvarRegrasDoBot();
+});
+
+// O ritmo é um campo só, e num cartão sem botão: salva ao escolher. Um
+// "Salvar" solo pra um único select seria cerimônia à toa — e pior, dava pra
+// trocar a opção, sair da tela e achar que estava valendo.
+$("rules-delay")?.addEventListener("change", () => {
+  void salvarRegrasDoBot();
 });
 
 $("form-account-business").addEventListener("submit", async (ev) => {

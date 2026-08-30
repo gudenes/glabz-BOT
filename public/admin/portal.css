@@ -1204,6 +1204,16 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
    A linha de resumo ganha destaque quando há filtro ativo: esquecer o filtro
    ligado e achar que o bot está atendendo é o pior desfecho desta tela, então
    ela se anuncia em vez de ficar discreta. */
+/* Os dois cartões dividem a linha: "quem o bot atende" à esquerda, "ritmo da
+   conversa" à direita. Antes o segundo vivia dentro do primeiro, que ficou
+   pesado, e sobrava tela vazia ao lado. Abaixo de 900px empilha. */
+.rules-row {
+  display: grid; gap: 16px; align-items: start; margin-bottom: 16px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+}
+.rules-row > .card-form { max-width: none; margin-bottom: 0; }
+@media (max-width: 900px) { .rules-row { grid-template-columns: 1fr; } }
+
 .bot-rules-head h3 { margin: 0 0 4px; font-size: 17px; letter-spacing: -0.02em; }
 .bot-rules-head p { margin: 0; font-size: 13px; font-weight: 500; }
 .bot-rules-now {
