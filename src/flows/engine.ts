@@ -499,6 +499,10 @@ export async function runFlowStep(opts: {
             nodeId: answeringNodeId,
             question: text,
             answer: result.ok ? result.answer : null,
+            // O motivo separa "a IA não tem essa informação" (vira pendência
+            // de ensino) de "a chamada falhou" (é infra). Sem ele, `answer`
+            // nulo dizia as duas coisas ao mesmo tempo.
+            failReason: result.ok ? null : result.reason,
             ragStatus: String(ragLog.rag ?? ""),
             ragReason: ragLog.motivo ? String(ragLog.motivo) : null,
             ragHits,

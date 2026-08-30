@@ -224,6 +224,13 @@ CREATE TABLE IF NOT EXISTS ai_answer_log (
 -- Tabela já existia em produção/staging antes deste campo — ALTER cobre quem
 -- já rodou o CREATE TABLE acima sem ele.
 ALTER TABLE ai_answer_log ADD COLUMN IF NOT EXISTS used_manual_context BOOLEAN NOT NULL DEFAULT false;
+-- POR QUE a resposta não veio. Antes só ficava a resposta nula, e isso misturava
+-- duas coisas muito diferentes: a IA não ter a informação (oportunidade de
+-- ensinar) e a chamada ter falhado (problema de infra). Sem separar, a tela de
+-- pendências listaria instabilidade como se fosse pergunta a ensinar — e o dono
+-- aprenderia a ignorá-la.
+-- Nulo em linha antiga e em resposta bem-sucedida.
+ALTER TABLE ai_answer_log ADD COLUMN IF NOT EXISTS fail_reason TEXT;
 CREATE INDEX IF NOT EXISTS idx_ai_log_client ON ai_answer_log(client_id, created_at DESC);
 `;
 
