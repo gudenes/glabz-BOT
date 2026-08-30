@@ -89,11 +89,19 @@ test("o campo de ritmo é alcançável e tem as quatro opções", { skip: skipSe
       dentroDaTela: r.top >= 0 && r.bottom <= window.innerHeight,
       // O rótulo tem que estar traduzido, não a chave crua.
       rotuloTraduzido: !document.querySelector('[for="rules-delay"]').textContent.startsWith("portal."),
+    retorno: [...document.getElementById("rules-return").options].map((o) => o.value),
+    retornoAtual: document.getElementById("rules-return").value,
     };
-  })()`)) as { valores: string[]; rotulos: string[]; dentroDaTela: boolean; rotuloTraduzido: boolean };
+  })()`)) as {
+    valores: string[]; rotulos: string[]; dentroDaTela: boolean; rotuloTraduzido: boolean;
+    retorno: string[]; retornoAtual: string;
+  };
   await fecharPagina(page);
 
   assert.deepEqual(info.valores, ["0", "1000", "3000", "5000"], "responder na hora, 1s, 3s e 5s");
+  assert.deepEqual(info.retorno, ["3600000", "21600000", "86400000", "259200000", "0"], "1h, 6h, 24h, 3d e nunca");
+  // Ligado por padrão: a tela tem que abrir em 24h, não em "nunca".
+  assert.equal(info.retornoAtual, "86400000", "padrão de 24h selecionado");
   assert.ok(info.dentroDaTela, "dá pra chegar nele rolando");
   assert.ok(info.rotuloTraduzido, "o rótulo está traduzido");
   for (const r of info.rotulos) assert.ok(r.length > 3 && !r.startsWith("portal."), `opção traduzida: "${r}"`);

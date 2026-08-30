@@ -48,7 +48,54 @@ export type BotRules = {
    * hora, que é o comportamento de sempre.
    */
   typingDelayMs?: number;
+  /**
+   * Silêncio, em ms, depois do qual uma conversa em atendimento humano volta
+   * pro bot sozinha. Ausente = o padrão de 24h. Zero = nunca volta.
+   */
+  handoffReturnMs?: number;
 };
+
+/**
+ * Quanto tempo de silêncio devolve a conversa ao bot.
+ *
+ * LIGADO por padrão, e é decisão de produto: antes o modo humano era
+ * permanente, então uma conversa resolvida ficava presa pra sempre — ninguém
+ * "devolve" formalmente, o atendente só responde e segue a vida. Semanas
+ * depois o cliente perguntava o horário de funcionamento, algo que a IA
+ * responderia na hora, e não recebia nada.
+ *
+ * 24h porque cobre o caso real (o cliente some e volta noutro dia) sem
+ * atropelar um atendimento em andamento, que se resolve no mesmo dia.
+ */
+export const DEFAULT_HANDOFF_RETURN_MS = 24 * 60 * 60 * 1000;
+
+/** Teto de 30 dias: além disso, "volta sozinho" deixa de ser verdade útil. */
+export const MAX_HANDOFF_RETURN_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * A conversa já pode voltar pro bot?
+ *
+ * O relógio conta do ÚLTIMO CONTATO, não do momento do transbordo: se o
+ * atendente ainda está trocando mensagens, o prazo reinicia. Contar do
+ * transbordo devolveria ao bot no meio de um atendimento demorado.
+ */
+export function shouldReturnToBot(
+  rules: BotRules | undefined,
+  lastActivityIso: string | null | undefined,
+  now: Date = new Date()
+): boolean {
+  const bruto = rules?.handoffReturnMs;
+  // undefined = nunca configurado = usa o padrão. 0 = o dono desligou.
+  const prazo = bruto === undefined || bruto === null ? DEFAULT_HANDOFF_RETURN_MS : Number(bruto);
+  if (!Number.isFinite(prazo) || prazo <= 0) return false;
+  const limite = Math.min(prazo, MAX_HANDOFF_RETURN_MS);
+
+  const ultimo = lastActivityIso ? new Date(lastActivityIso) : null;
+  // Sem data válida não dá pra afirmar que passou o prazo — e devolver ao bot
+  // por engano seria falar por cima de um atendente.
+  if (!ultimo || Number.isNaN(ultimo.getTime())) return false;
+  return now.getTime() - ultimo.getTime() >= limite;
+}
 
 /** Teto do atraso. Além disso o cliente acha que o bot travou. */
 export const MAX_TYPING_DELAY_MS = 5000;
@@ -169,10 +216,17 @@ export function normalizeBotRules(input: unknown): BotRules | undefined {
 
   const tz = typeof src.timezone === "string" && isValidTimezone(src.timezone) ? src.timezone : null;
   const atraso = Math.min(Math.max(Math.round(Number(src.typingDelayMs) || 0), 0), MAX_TYPING_DELAY_MS);
+  // Diferente dos outros campos, aqui 0 é uma ESCOLHA ("nunca volta") e não
+  // "não configurado" — por isso só é ignorado quando a chave nem veio.
+  const retornoBruto = src.handoffReturnMs;
+  const temRetorno = retornoBruto !== undefined && retornoBruto !== null && retornoBruto !== "";
+  const retorno = temRetorno
+    ? Math.min(Math.max(Math.round(Number(retornoBruto) || 0), 0), MAX_HANDOFF_RETURN_MS)
+    : null;
 
   // Nada configurado = campo ausente, e conta sem o campo se comporta como
   // sempre. Guardar `{mode:"off"}` funcionaria igual, mas suja o registry.
-  if (mode === "off" && !list.length && !hoursOn && !atraso) return undefined;
+  if (mode === "off" && !list.length && !hoursOn && !atraso && retorno === null) return undefined;
 
   const out: BotRules = { numbers: { mode, list } };
   if (hoursOn) {
@@ -181,6 +235,9 @@ export function normalizeBotRules(input: unknown): BotRules | undefined {
   }
   if (tz) out.timezone = tz;
   if (atraso) out.typingDelayMs = atraso;
+  // Grava até o zero: é o dono dizendo "nunca devolver sozinho", e omitir
+  // faria cair no padrão de 24h — o oposto do que ele pediu.
+  if (retorno !== null) out.handoffReturnMs = retorno;
   return out;
 }
 
