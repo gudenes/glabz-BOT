@@ -665,6 +665,32 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
     // Mensagem mandada no celular do número conectado — espelha no inbox como outbound.
     // Dedup no app via externalId (o send pela API já grava o mesmo id).
     if (fromMe) {
+      // Também vai pro inbox do portal, e não só pro webhook do app.
+      //
+      // É como a resposta que o atendente dá PELO CELULAR entra em Conversas:
+      // antes só apareciam as mensagens do cliente e as respostas enviadas
+      // pelo portal, então quem atendia pelo WhatsApp deixava a conversa pela
+      // metade — dava pra ver a pergunta e não o que foi respondido.
+      //
+      // O eco do que o BOT enviou também chega aqui, com o mesmo id: o dedup
+      // de recordMessage é o que impede a resposta dele de aparecer duas
+      // vezes. Por isso `source: "human"` não mente — quando o id já existe,
+      // nada é gravado e o registro do bot (gravado no envio) permanece.
+      void import("./inbox.js")
+        .then(({ recordMessage }) =>
+          recordMessage({
+            accountId,
+            phone,
+            direction: "out",
+            source: "human",
+            body: bodyText,
+            authorName: "Atendente",
+            externalId: m?.key?.id ?? null,
+            sentAt: new Date(Number(m?.messageTimestamp || 0) * 1000 || Date.now()),
+          })
+        )
+        .catch(() => undefined);
+
       await postWebhook(accountId, {
         type: "message",
         direction: "out",

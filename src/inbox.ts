@@ -40,10 +40,22 @@ export async function recordMessage(input: {
   const acc = getAccount(input.accountId);
   const id = `msg_${randomBytes(12).toString("hex")}`;
   const sentAt = input.sentAt ? new Date(input.sentAt) : new Date();
+  const externalId = input.externalId || null;
+
+  // Dedup por id do WhatsApp: a mesma mensagem pode chegar por dois caminhos.
+  // O bot envia pela API (grava aqui) e o WhatsApp DEVOLVE esse envio como
+  // um evento `fromMe` — que agora também é gravado, pra capturar o atendente
+  // respondendo pelo celular. Sem isto, toda resposta do bot apareceria duas
+  // vezes na conversa.
+  //
+  // WHERE NOT EXISTS em vez de constraint única: a tabela já está em produção
+  // e pode ter repetições antigas, e criar um índice único que falha no boot
+  // derrubaria o serviço inteiro por causa de um detalhe cosmético.
   await db()`
     INSERT INTO wa_messages (
       id, account_id, client_id, phone_e164, direction, source, body, author_name, external_id, sent_at
-    ) VALUES (
+    )
+    SELECT
       ${id},
       ${input.accountId},
       ${acc?.clientId || acc?.externalTenantId || null},
@@ -52,9 +64,16 @@ export async function recordMessage(input: {
       ${input.source},
       ${input.body.trim().slice(0, 8000)},
       ${input.authorName || null},
-      ${input.externalId || null},
+      ${externalId},
       ${sentAt}
-    )
+    ${
+      externalId
+        ? db()`WHERE NOT EXISTS (
+            SELECT 1 FROM wa_messages
+            WHERE account_id = ${input.accountId} AND external_id = ${externalId}
+          )`
+        : db()``
+    }
   `;
 }
 

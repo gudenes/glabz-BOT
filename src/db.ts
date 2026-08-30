@@ -193,6 +193,11 @@ CREATE INDEX IF NOT EXISTS idx_flows_client ON flows(client_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_wa_msg_thread ON wa_messages(account_id, phone_e164, sent_at);
 CREATE INDEX IF NOT EXISTS idx_wa_msg_client ON wa_messages(client_id, sent_at DESC);
+-- Dedup de mensagem que chega por dois caminhos (envio pela API + eco do
+-- WhatsApp) — ver recordMessage. Não é único de propósito: a tabela já está em
+-- produção e pode ter repetições antigas, e um índice único que falhe no boot
+-- derrubaria o serviço por causa de algo cosmético.
+CREATE INDEX IF NOT EXISTS idx_wa_msg_external ON wa_messages(account_id, external_id);
 
 -- Registro de cada resposta do card de IA: o que foi perguntado, o que a IA
 -- respondeu e QUE TRECHOS ela viu pra chegar lá. Sem isso, "por que a IA
