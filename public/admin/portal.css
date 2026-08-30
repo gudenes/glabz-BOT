@@ -21,7 +21,13 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
 body { font-family: var(--font); color: var(--ink); background: var(--paper); }
-.hidden { display: none !important; }
+/* A CLASSE e o ATRIBUTO. O atributo `hidden` do HTML é escondido pelo estilo
+   padrão do navegador, mas qualquer regra de autor com `display` vence — e os
+   painéis de Conhecimento são `.card-form`, que define `display: grid`. Ficavam
+   marcados como escondidos e apareciam na tela do mesmo jeito, os três de uma
+   vez. Cobrir os dois aqui evita o mesmo tropeço em qualquer elemento futuro. */
+.hidden,
+[hidden] { display: none !important; }
 .err { color: #b42318; font-size: 13px; margin: 0; }
 .hint { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
 

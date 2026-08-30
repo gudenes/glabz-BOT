@@ -82,7 +82,16 @@ test("uma aba por vez, e só a escolhida aparece", { skip: skipSemChrome }, asyn
   for (const aba of ["base", "gaps", "log"]) {
     await trocarAba(page, aba);
     const estado = (await page.evaluate(`(() => {
-      const vis = (id) => { const e = document.getElementById(id); return Boolean(e) && !e.hidden; };
+      // O que a TELA mostra, não a propriedade .hidden. Esta distinção não é
+      // detalhe: os painéis são .card-form, que define display:grid, e isso
+      // ANULA o atributo hidden — a propriedade dizia "escondido" enquanto os
+      // três apareciam. Foi assim que este teste passou verde com a tela
+      // errada. Altura real é o que o dono enxerga.
+      const vis = (id) => {
+        const e = document.getElementById(id);
+        if (!e) return false;
+        return getComputedStyle(e).display !== "none" && e.getBoundingClientRect().height > 1;
+      };
       return { base: vis("kb-pane-base"), gaps: vis("kb-pane-gaps"), log: vis("kb-pane-log"),
                ativa: document.querySelector(".kb-tab.on")?.dataset.kbTab };
     })()`)) as Record<string, unknown>;
