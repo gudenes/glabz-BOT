@@ -1928,6 +1928,7 @@ function fillBotRulesForm(rules, mode, list) {
   $("rules-start").value = hours?.start || "08:00";
   $("rules-end").value = hours?.end || "18:00";
   $("rules-away").value = hours?.awayMessage || "";
+  $("rules-delay").value = String(rules?.typingDelayMs || 0);
   fillTimezones(rules?.timezone || DEFAULT_TZ);
   toggleRulesHours();
 }
@@ -1945,6 +1946,8 @@ function paintBotRulesSummary(rules, mode, list) {
     parts.push(t("portal.rules.nowHours", { start: hours.start, end: hours.end }));
     if (hours.awayMessage) parts.push(t("portal.rules.nowAway"));
   }
+  const atraso = Number(rules?.typingDelayMs) || 0;
+  if (atraso) parts.push(t("portal.rules.nowDelay", { s: Math.round(atraso / 1000) }));
   now.textContent = parts.length ? parts.join(" ") : t("portal.rules.nowOff");
   now.classList.toggle("on", parts.length > 0);
 }
@@ -1992,6 +1995,7 @@ $("form-bot-rules")?.addEventListener("submit", async (ev) => {
       body: JSON.stringify({
         numbers: { mode, list },
         timezone: $("rules-tz").value,
+        typingDelayMs: Number($("rules-delay").value) || 0,
         hours: {
           enabled: hoursOn,
           days,

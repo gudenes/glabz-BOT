@@ -19,6 +19,8 @@ import {
   phoneKey,
   zonedDateKey,
   zonedNow,
+  remainingDelayMs,
+  MAX_TYPING_DELAY_MS,
 } from "../src/bot-rules.ts";
 
 test("o mesmo celular escrito de qualquer jeito bate", () => {
@@ -175,4 +177,34 @@ test("o que o formulário manda é saneado antes de gravar", () => {
     hours: { enabled: true, days: [1], start: "08:00", end: "18:00", awayMessage: "x".repeat(900) },
   });
   assert.equal(grande?.hours?.awayMessage?.length, 700, "texto gigante é cortado");
+});
+
+test("tempo de 'digitando': espera o que FALTA, não soma", () => {
+  // A escolha que importa: é tempo TOTAL mínimo. Se a IA já levou 3s e o dono
+  // pediu 2s, não espera mais nada — somar deixaria a conversa lenta
+  // justamente nas perguntas difíceis, que já são as mais demoradas.
+  const r2s = { typingDelayMs: 2000 };
+  assert.equal(remainingDelayMs(r2s, 0), 2000, "resposta instantânea espera os 2s");
+  assert.equal(remainingDelayMs(r2s, 500), 1500, "meio segundo de IA → falta 1,5s");
+  assert.equal(remainingDelayMs(r2s, 2000), 0, "já levou o tempo todo → não espera");
+  assert.equal(remainingDelayMs(r2s, 5000), 0, "demorou mais que o pedido → não espera");
+
+  // Nada configurado = comportamento de sempre, sem atraso nenhum.
+  assert.equal(remainingDelayMs(undefined, 0), 0);
+  assert.equal(remainingDelayMs({}, 0), 0);
+  assert.equal(remainingDelayMs({ typingDelayMs: 0 }, 0), 0);
+
+  // Lixo não pode virar espera absurda nem negativa.
+  assert.equal(remainingDelayMs({ typingDelayMs: -500 } as never, 0), 0);
+  assert.equal(remainingDelayMs({ typingDelayMs: 999999 }, 0), MAX_TYPING_DELAY_MS, "teto respeitado");
+  assert.equal(remainingDelayMs({ typingDelayMs: Number.NaN }, 0), 0);
+  assert.equal(remainingDelayMs(r2s, -100), 2000, "tempo decorrido negativo não estica a espera");
+});
+
+test("o atraso é saneado antes de gravar", () => {
+  assert.equal(normalizeBotRules({ typingDelayMs: 2000 })?.typingDelayMs, 2000);
+  assert.equal(normalizeBotRules({ typingDelayMs: 0 }), undefined, "zero não suja o registro");
+  assert.equal(normalizeBotRules({ typingDelayMs: 99999 })?.typingDelayMs, MAX_TYPING_DELAY_MS);
+  assert.equal(normalizeBotRules({ typingDelayMs: "abc" })?.typingDelayMs, undefined);
+  assert.equal(normalizeBotRules({ typingDelayMs: 1500.7 })?.typingDelayMs, 1501, "arredonda");
 });

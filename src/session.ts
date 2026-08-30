@@ -20,6 +20,7 @@ import {
   AWAY_SENT_VAR,
   awayAlreadySent,
   botShouldAnswer,
+  remainingDelayMs,
   zonedDateKey,
   type BotRules,
 } from "./bot-rules.js";
@@ -724,6 +725,7 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
     }
     const willAnswer = allowed && Boolean(findLiveFlow({ product, accountId }));
     const typing = willAnswer ? startTyping(sock, jid) : null;
+    const comecou = Date.now();
 
     if (allowed) {
       try {
@@ -735,6 +737,19 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
           text: bodyText,
           pushName: m?.pushName ?? null,
         });
+
+        // Tempo mínimo de "digitando…", quando o dono configurou um. O bot
+        // ficou rápido demais pra ele aparecer: a primeira mensagem responde
+        // em ~0ms (não chama a IA) e as demais em meio segundo. Segurar um
+        // pouco deixa a conversa com cara de gente.
+        //
+        // O `stop` do "digitando" vem DEPOIS da espera, senão o indicador
+        // sumiria justamente durante ela — que é quando ele deveria estar na
+        // tela.
+        const faltam = remainingDelayMs(rules, Date.now() - comecou);
+        if (faltam > 0 && flowResult?.replies.length) {
+          await new Promise((r) => setTimeout(r, faltam));
+        }
         typing?.stop();
 
         if (flowResult) {
