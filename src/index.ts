@@ -1433,7 +1433,11 @@ const server = createServer(async (req, res) => {
         return;
       }
       const { listAiAnswers } = await import("./rag/answer-log.js");
-      const answers = await listAiAnswers(clientId, Number(url.searchParams.get("limit")) || 50);
+      const answers = await listAiAnswers(clientId, {
+        limit: Number(url.searchParams.get("limit")) || 50,
+        search: url.searchParams.get("q"),
+        before: url.searchParams.get("before"),
+      });
       json(res, 200, { ok: true, answers });
       return;
     }
@@ -1445,7 +1449,12 @@ const server = createServer(async (req, res) => {
         return;
       }
       const { listKnowledge } = await import("./rag/index-store.js");
-      json(res, 200, { ok: true, chunks: await listKnowledge(clientId) });
+      const chunks = await listKnowledge(clientId, {
+        limit: Number(url.searchParams.get("limit")) || 100,
+        search: url.searchParams.get("q"),
+        offset: Number(url.searchParams.get("offset")) || 0,
+      });
+      json(res, 200, { ok: true, chunks });
       return;
     }
 

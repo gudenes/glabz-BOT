@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "test:llm": "tsx --test test/llm/*.test.ts",
-    "test:ui": "tsx --test test/ui/*.test.ts"
+    "test:ui": "tsx --test test/ui/*.test.ts",
+    "test:db": "tsx --test test/db/*.test.ts"
   },
   "dependencies": {
     "@hapi/boom": "^10.0.1",

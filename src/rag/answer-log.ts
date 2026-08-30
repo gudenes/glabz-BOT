@@ -50,6 +50,65 @@ export function classifyFailure(failReason: string | null | undefined): FailureK
   return r === "fora_do_contexto" ? "sabe_nao" : "tecnico";
 }
 
+/**
+ * Busca que ignora acento, sem depender de extensão do Postgres.
+ *
+ * `ILIKE` ignora maiúscula mas NÃO ignora acento: procurar "racao" não achava
+ * "ração", e digitar sem acento é o comportamento normal de quem busca com
+ * pressa. `unaccent` resolveria, mas é extensão e pode não existir no Railway
+ * — `translate` é SQL puro e funciona em qualquer instalação.
+ *
+ * Os dois lados passam pela mesma redução: a coluna, no SQL, e o termo
+ * digitado, aqui.
+ */
+export const ACENTOS = {
+  com: "áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ",
+  sem: "aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC",
+};
+
+/** Termo pronto pro LIKE: sem acento, minúsculo e com curingas escapados. */
+export function searchPattern(term: string | null | undefined): string | null {
+  const bruto = String(term || "").trim();
+  if (!bruto) return null;
+  const semAcento = bruto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  // % e _ são curingas do LIKE — sem escapar, digitar "50%" traria tudo.
+  return `%${semAcento.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
+
+/** Uma pergunta que a IA não soube responder, agrupada por texto. */
+export type KnowledgeGap = {
+  /** Chave normalizada — é por ela que as repetições se juntam. */
+  key: string;
+  /** A forma mais recente em que a pergunta foi feita, pra mostrar na tela. */
+  question: string;
+  times: number;
+  lastAt: string;
+};
+
+/**
+ * Normaliza a pergunta pra agrupar repetições.
+ *
+ * Minúsculas, sem acento, sem pontuação, espaços colapsados — assim
+ * "Vocês têm ração?" e "voces tem racao" contam como a mesma.
+ *
+ * NÃO agrupa por semelhança: "ração p/ cão grande" fica separado de "vocês têm
+ * ração para cachorro de grande porte?". Semelhança exigiria embeddings e
+ * pgvector, e erraria junto quando errasse — melhor duas linhas honestas que
+ * uma linha errada.
+ */
+export function questionKey(question: string): string {
+  return String(question || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Grava sem bloquear a resposta — falha aqui nunca pode afetar o atendimento. */
 export async function logAiAnswer(input: {
   clientId: string | null;
@@ -94,12 +153,44 @@ export async function logAiAnswer(input: {
   }
 }
 
-export async function listAiAnswers(clientId: string, limit = 50): Promise<AiLogEntry[]> {
+export type ListAnswersOpts = {
+  limit?: number;
+  /** Palavra buscada na pergunta E na resposta. Vazio = sem filtro. */
+  search?: string | null;
+  /**
+   * Cursor: devolve o que é MAIS ANTIGO que este instante. Paginar por
+   * created_at em vez de OFFSET evita pular ou repetir linha quando chega
+   * pergunta nova entre uma página e a seguinte — e usa o índice que já
+   * existe (idx_ai_log_client).
+   */
+  before?: string | null;
+};
+
+export async function listAiAnswers(
+  clientId: string,
+  optsOrLimit: ListAnswersOpts | number = 50
+): Promise<AiLogEntry[]> {
   if (!hasDatabase()) return [];
+  const opts: ListAnswersOpts =
+    typeof optsOrLimit === "number" ? { limit: optsOrLimit } : optsOrLimit;
+  const limit = Math.min(Math.max(Number(opts.limit) || 50, 1), 200);
+  const padrao = searchPattern(opts.search);
+  const antes = opts.before ? new Date(opts.before) : null;
+  const cursor = antes && !Number.isNaN(antes.getTime()) ? antes : null;
+
   const rows = (await db()`
     SELECT id, flow_id, node_id, question, answer, fail_reason, rag_status, rag_reason, rag_hits, used_manual_context, simulated, created_at
     FROM ai_answer_log
     WHERE client_id = ${clientId}
+      ${cursor ? db()`AND created_at < ${cursor}` : db()``}
+      ${
+        padrao
+          ? db()`AND (
+              translate(lower(question), ${ACENTOS.com}, ${ACENTOS.sem}) LIKE ${padrao}
+              OR translate(lower(coalesce(answer, '')), ${ACENTOS.com}, ${ACENTOS.sem}) LIKE ${padrao}
+            )`
+          : db()``
+      }
     ORDER BY created_at DESC
     LIMIT ${limit}
   `) as unknown as Record<string, unknown>[];
