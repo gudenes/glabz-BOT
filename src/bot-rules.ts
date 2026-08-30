@@ -42,7 +42,16 @@ export type BotRules = {
    */
   timezone?: string;
   hours?: BotHours;
+  /**
+   * Tempo MÍNIMO, em ms, entre a mensagem do cliente e a resposta do bot —
+   * o intervalo em que o "digitando…" fica visível. Ausente/0 = responde na
+   * hora, que é o comportamento de sempre.
+   */
+  typingDelayMs?: number;
 };
+
+/** Teto do atraso. Além disso o cliente acha que o bot travou. */
+export const MAX_TYPING_DELAY_MS = 5000;
 
 /** Fuso assumido quando a conta não escolheu — o do resto do produto. */
 export const DEFAULT_TIMEZONE = "America/Sao_Paulo";
@@ -159,10 +168,11 @@ export function normalizeBotRules(input: unknown): BotRules | undefined {
   const away = String(hoursSrc.awayMessage ?? "").trim().slice(0, 700);
 
   const tz = typeof src.timezone === "string" && isValidTimezone(src.timezone) ? src.timezone : null;
+  const atraso = Math.min(Math.max(Math.round(Number(src.typingDelayMs) || 0), 0), MAX_TYPING_DELAY_MS);
 
   // Nada configurado = campo ausente, e conta sem o campo se comporta como
   // sempre. Guardar `{mode:"off"}` funcionaria igual, mas suja o registry.
-  if (mode === "off" && !list.length && !hoursOn) return undefined;
+  if (mode === "off" && !list.length && !hoursOn && !atraso) return undefined;
 
   const out: BotRules = { numbers: { mode, list } };
   if (hoursOn) {
@@ -170,7 +180,22 @@ export function normalizeBotRules(input: unknown): BotRules | undefined {
     if (away) out.hours.awayMessage = away;
   }
   if (tz) out.timezone = tz;
+  if (atraso) out.typingDelayMs = atraso;
   return out;
+}
+
+/**
+ * Quanto ainda falta esperar antes de responder.
+ *
+ * É tempo TOTAL mínimo, não atraso somado: se a IA já levou 3s e o dono pediu
+ * 2s, não espera mais nada. Somar deixaria a conversa lenta justamente nas
+ * perguntas difíceis, que já são as mais demoradas — e o "digitando…" já
+ * esteve visível esse tempo todo, que é o ponto.
+ */
+export function remainingDelayMs(rules: BotRules | undefined, elapsedMs: number): number {
+  const alvo = Math.min(Math.max(Number(rules?.typingDelayMs) || 0, 0), MAX_TYPING_DELAY_MS);
+  if (!alvo) return 0;
+  return Math.max(0, Math.round(alvo - Math.max(0, elapsedMs)));
 }
 
 /** Fuso que o Intl deste runtime reconhece — evita gravar lixo digitado. */

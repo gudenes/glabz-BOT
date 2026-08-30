@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=43" />
+    <link rel="stylesheet" href="/admin/portal.css?v=44" />
   </head>
   <body class="portal-body">
     <div class="app">
@@ -162,6 +162,16 @@
                 <label for="rules-list" data-i18n="portal.rules.list">Números, um por linha</label>
                 <textarea id="rules-list" rows="4" placeholder="(11) 98765-4321"></textarea>
                 <p class="hint-muted" data-i18n="portal.rules.listHint">Pode escrever do jeito que quiser — com DDD, com +55, com parênteses. O nono dígito não faz diferença.</p>
+              </div>
+              <div class="field">
+                <label for="rules-delay" data-i18n="portal.rules.delay">Tempo de "digitando…" antes de responder</label>
+                <select id="rules-delay">
+                  <option value="0" data-i18n="portal.rules.delay.none">Responder na hora</option>
+                  <option value="1000" data-i18n="portal.rules.delay.1">Esperar 1 segundo</option>
+                  <option value="2000" data-i18n="portal.rules.delay.2">Esperar 2 segundos</option>
+                  <option value="3000" data-i18n="portal.rules.delay.3">Esperar 3 segundos</option>
+                </select>
+                <p class="hint-muted" data-i18n="portal.rules.delayHint">O bot já responde em menos de um segundo, então o "digitando…" mal aparece. Uma espera curta deixa a conversa com cara de gente — mas atrasa toda resposta.</p>
               </div>
               <div class="field">
                 <label class="switch-row">
@@ -594,6 +604,6 @@
       </div>
     </div>
 
-    <script src="/admin/portal.js?v=49" type="module"></script>
+    <script src="/admin/portal.js?v=50" type="module"></script>
   </body>
 </html>
