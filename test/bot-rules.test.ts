@@ -21,6 +21,8 @@ import {
   zonedNow,
   remainingDelayMs,
   MAX_TYPING_DELAY_MS,
+  shouldReturnToBot,
+  MAX_HANDOFF_RETURN_MS,
 } from "../src/bot-rules.ts";
 
 test("o mesmo celular escrito de qualquer jeito bate", () => {
@@ -207,4 +209,46 @@ test("o atraso é saneado antes de gravar", () => {
   assert.equal(normalizeBotRules({ typingDelayMs: 99999 })?.typingDelayMs, MAX_TYPING_DELAY_MS);
   assert.equal(normalizeBotRules({ typingDelayMs: "abc" })?.typingDelayMs, undefined);
   assert.equal(normalizeBotRules({ typingDelayMs: 1500.7 })?.typingDelayMs, 1501, "arredonda");
+});
+
+test("conversa com atendente volta pro bot sozinha, por padrão", () => {
+  // Antes o modo humano era permanente: ninguém "devolve" formalmente, então
+  // uma conversa resolvida ficava presa e o cliente que voltasse semanas
+  // depois não era atendido.
+  const agora = new Date("2026-08-31T12:00:00Z");
+  const hAtras = (h: number) => new Date(agora.getTime() - h * 3600000).toISOString();
+
+  // Sem nada configurado: o padrão de 24h vale.
+  assert.equal(shouldReturnToBot(undefined, hAtras(1), agora), false, "1h ainda é atendimento");
+  assert.equal(shouldReturnToBot(undefined, hAtras(23), agora), false, "23h ainda não");
+  assert.equal(shouldReturnToBot(undefined, hAtras(25), agora), true, "25h volta");
+  assert.equal(shouldReturnToBot({}, hAtras(24 * 30), agora), true, "um mês volta");
+});
+
+test("zero é escolha do dono ('nunca'), não 'não configurado'", () => {
+  const agora = new Date("2026-08-31T12:00:00Z");
+  const anoAtras = new Date(agora.getTime() - 365 * 86400000).toISOString();
+  assert.equal(shouldReturnToBot({ handoffReturnMs: 0 }, anoAtras, agora), false, "nunca volta");
+  // E o zero precisa SOBREVIVER ao salvamento: omitir cairia no padrão de 24h,
+  // o oposto do que ele pediu.
+  assert.equal(normalizeBotRules({ handoffReturnMs: 0 })?.handoffReturnMs, 0);
+  // Já não mandar a chave é "não configurado" — aí o padrão vale.
+  assert.equal(normalizeBotRules({ typingDelayMs: 1000 })?.handoffReturnMs, undefined);
+});
+
+test("prazo escolhido pelo dono, e os limites", () => {
+  const agora = new Date("2026-08-31T12:00:00Z");
+  const hAtras = (h: number) => new Date(agora.getTime() - h * 3600000).toISOString();
+  assert.equal(shouldReturnToBot({ handoffReturnMs: 3600000 }, hAtras(0.5), agora), false);
+  assert.equal(shouldReturnToBot({ handoffReturnMs: 3600000 }, hAtras(2), agora), true);
+  // Teto: pedir mais de 30 dias vale 30 dias.
+  assert.equal(normalizeBotRules({ handoffReturnMs: 999 * 86400000 })?.handoffReturnMs, MAX_HANDOFF_RETURN_MS);
+  assert.equal(normalizeBotRules({ handoffReturnMs: -5 })?.handoffReturnMs, 0);
+});
+
+test("sem data válida, não devolve — falar por cima de um atendente é pior", () => {
+  const agora = new Date("2026-08-31T12:00:00Z");
+  assert.equal(shouldReturnToBot(undefined, null, agora), false);
+  assert.equal(shouldReturnToBot(undefined, "", agora), false);
+  assert.equal(shouldReturnToBot(undefined, "data ruim", agora), false);
 });

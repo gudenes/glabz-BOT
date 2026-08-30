@@ -711,8 +711,26 @@ export async function processInboundFlow(opts: {
       updatedAt: new Date().toISOString(),
     } satisfies FlowConversationState);
 
-  // Já em handoff humano — não intercepta
-  if (state.mode === "human") return null;
+  // Já em handoff humano — não intercepta, EXCETO se a conversa esfriou.
+  //
+  // Antes isso era permanente: ninguém "devolve" a conversa formalmente, o
+  // atendente só responde e segue. Semanas depois o cliente voltava a
+  // perguntar algo simples e não recebia nada, porque continuava marcado como
+  // "com humano". Agora, passado o prazo sem contato, ela volta pro bot.
+  if (state.mode === "human") {
+    const { shouldReturnToBot } = await import("../bot-rules.js");
+    const { getAccount } = await import("../registry.js");
+    const regras = getAccount(opts.accountId)?.botRules;
+    if (!shouldReturnToBot(regras, state.updatedAt)) {
+      // Segue com a pessoa — mas o relógio reinicia. O prazo conta do último
+      // contato, não do transbordo: senão a conversa voltaria pro bot no meio
+      // de um atendimento demorado.
+      upsertConversationState({ ...state, updatedAt: new Date().toISOString() });
+      return null;
+    }
+    console.log(`[flow] conversa ${phone} voltou pro bot após o prazo de silêncio`);
+    state = { ...state, mode: "bot", flowId: null, nodeId: null, waitingFor: null, vars: {} };
+  }
 
   const flow =
     (state.flowId && getFlow(state.flowId)) ||

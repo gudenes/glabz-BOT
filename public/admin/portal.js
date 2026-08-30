@@ -1375,6 +1375,9 @@ function loadAccount() {
  * uma ficaria com metade da largura justo quando o volume cresce. Cada aba usa
  * a largura toda e tem busca e paginação próprias.
  */
+/** Padrão do retorno automático — tem que bater com o backend (bot-rules.ts). */
+const DEFAULT_RETURN_MS = 24 * 60 * 60 * 1000;
+
 const KB_TABS = ["base", "gaps", "log"];
 let kbTab = "base";
 
@@ -2172,6 +2175,9 @@ function fillBotRulesForm(rules, mode, list) {
   $("rules-end").value = hours?.end || "18:00";
   $("rules-away").value = hours?.awayMessage || "";
   $("rules-delay").value = String(rules?.typingDelayMs || 0);
+  // Ausente = nunca configurado = o padrão de 24h. Zero é escolha ("nunca"),
+  // por isso o ?? em vez de ||.
+  $("rules-return").value = String(rules?.handoffReturnMs ?? DEFAULT_RETURN_MS);
   fillTimezones(rules?.timezone || DEFAULT_TZ);
   toggleRulesHours();
 }
@@ -2189,12 +2195,16 @@ function paintBotRulesSummary(rules, mode, list) {
     parts.push(t("portal.rules.nowHours", { start: hours.start, end: hours.end }));
     if (hours.awayMessage) parts.push(t("portal.rules.nowAway"));
   }
+  const retorno = rules?.handoffReturnMs ?? DEFAULT_RETURN_MS;
+  const linhaRetorno = retorno > 0
+    ? t("portal.rules.nowReturn", { h: Math.round(retorno / 3600000) })
+    : t("portal.rules.nowNoReturn");
   const atraso = Number(rules?.typingDelayMs) || 0;
   const agora = $("bot-typing-now");
   if (agora) {
     agora.textContent = atraso
-      ? t("portal.rules.nowDelay", { s: Math.round(atraso / 1000) })
-      : t("portal.rules.nowNoDelay");
+      ? `${t("portal.rules.nowDelay", { s: Math.round(atraso / 1000) })} ${linhaRetorno}`
+      : `${t("portal.rules.nowNoDelay")} ${linhaRetorno}`;
     agora.classList.toggle("on", atraso > 0);
   }
   now.textContent = parts.length ? parts.join(" ") : t("portal.rules.nowOff");
@@ -2251,6 +2261,7 @@ async function salvarRegrasDoBot() {
         numbers: { mode, list },
         timezone: $("rules-tz").value,
         typingDelayMs: Number($("rules-delay").value) || 0,
+        handoffReturnMs: Number($("rules-return").value),
         hours: {
           enabled: hoursOn,
           days,
@@ -2282,6 +2293,9 @@ $("form-bot-rules")?.addEventListener("submit", (ev) => {
 // "Salvar" solo pra um único select seria cerimônia à toa — e pior, dava pra
 // trocar a opção, sair da tela e achar que estava valendo.
 $("rules-delay")?.addEventListener("change", () => {
+  void salvarRegrasDoBot();
+});
+$("rules-return")?.addEventListener("change", () => {
   void salvarRegrasDoBot();
 });
 

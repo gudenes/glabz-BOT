@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/portal.css?v=48" />
+    <link rel="stylesheet" href="/admin/portal.css?v=49" />
   </head>
   <body class="portal-body">
     <div class="app">
@@ -215,6 +215,17 @@
                   <option value="5000" data-i18n="portal.rules.delay.5">Esperar 5 segundos</option>
                 </select>
                 <p class="hint-muted" data-i18n="portal.rules.delayHint">Vale a pena testar: o atraso vale pra toda resposta, inclusive as rápidas.</p>
+              </div>
+              <div class="field">
+                <label for="rules-return" data-i18n="portal.rules.return">Voltar pro bot depois de quanto tempo sem contato</label>
+                <select id="rules-return">
+                  <option value="3600000" data-i18n="portal.rules.return.1h">1 hora</option>
+                  <option value="21600000" data-i18n="portal.rules.return.6h">6 horas</option>
+                  <option value="86400000" data-i18n="portal.rules.return.24h">24 horas</option>
+                  <option value="259200000" data-i18n="portal.rules.return.3d">3 dias</option>
+                  <option value="0" data-i18n="portal.rules.return.never">Nunca — só volta se eu devolver</option>
+                </select>
+                <p class="hint-muted" data-i18n="portal.rules.returnHint">Quando alguém da equipe assume uma conversa, ela fica com a pessoa. Sem isso ficaria assim pra sempre, e o cliente que voltasse semanas depois não seria atendido.</p>
               </div>
             </section>
           </div>
@@ -641,6 +652,6 @@
       </div>
     </div>
 
-    <script src="/admin/portal.js?v=53" type="module"></script>
+    <script src="/admin/portal.js?v=54" type="module"></script>
   </body>
 </html>
