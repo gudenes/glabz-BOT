@@ -55,6 +55,9 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 }
 .btn-lime:hover { filter: brightness(1.04); }
 .btn-lime:disabled { opacity: 0.55; }
+/* Botão sem função no estado atual: apagado e sem cursor de clique, pra não
+   convidar a uma ação que não vai acontecer. */
+.btn-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-ghost {
   border: 1px solid var(--line); background: var(--card); color: var(--ink);
   font: inherit; font-weight: 600; border-radius: 12px;

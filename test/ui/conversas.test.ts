@@ -177,3 +177,52 @@ test("cada conversa da lista diz quando foi a última mensagem", { skip: skipSem
   // E o horário não quebra em duas linhas por falta de espaço.
   assert.ok(!linhas[2].quandoQuebrou, "o horário fica numa linha só");
 });
+
+test("'Desconectar' só fica ativo quando há o que desconectar", { skip: skipSemChrome }, async () => {
+  // Com o número fora do ar o botão convidava a uma ação sem efeito — e a
+  // confirmação ("tem certeza?") fazia parecer que ia acontecer alguma coisa.
+  const casos: [string, boolean][] = [
+    ["disconnected", false],
+    ["connected", true],
+    ["pending_qr", true], // cancela um pareamento em andamento
+    ["error", true], // é justamente a saída pra limpar uma sessão com problema
+  ];
+
+  for (const [status, deveEstarAtivo] of casos) {
+    const srvStatus = await servirPortal(
+      fixturesPadrao({
+        "/v1/portal": {
+          ok: true,
+          client: { id: "c1", name: "C3 Pilates", slug: "c3-pilates" },
+          accounts: [
+            {
+              account: { id: "a1", product: "c3-pilates", clientId: "c1", label: null },
+              session: { accountId: "a1", status, qrDataUrl: null, phoneE164: null },
+            },
+          ],
+          flows: [],
+          liveFlow: null,
+          users: [{ id: "u1", email: "dono@exemplo.com", name: "Carlos" }],
+          llmConfigured: true,
+          impersonating: false,
+        },
+      })
+    );
+    const page = await novaPagina(browser, 1280, 900);
+    await page.goto(`${srvStatus.url}/admin/portal.html`, { waitUntil: "networkidle0" });
+    await page.evaluate(`document.getElementById("tour-skip")?.click()`);
+    const botao = (await page.evaluate(`(() => {
+      const b = document.getElementById("btn-disconnect");
+      return { desabilitado: b.disabled, dica: b.title, cursor: getComputedStyle(b).cursor };
+    })()`)) as { desabilitado: boolean; dica: string; cursor: string };
+    await fecharPagina(page);
+    await srvStatus.close();
+
+    assert.equal(botao.desabilitado, !deveEstarAtivo, `status "${status}"`);
+    if (!deveEstarAtivo) {
+      // Desabilitar sem dizer por quê deixa o dono achando que quebrou.
+      assert.ok(botao.dica.length > 5, `status "${status}": explica por que está apagado`);
+      assert.equal(botao.cursor, "not-allowed", "e o cursor não convida ao clique");
+    }
+  }
+});

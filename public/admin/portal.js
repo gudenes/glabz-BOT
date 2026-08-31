@@ -1205,6 +1205,20 @@ function render() {
   const existingImg = box.querySelector("img");
   if (existingImg) existingImg.remove();
 
+  // "Desconectar" só faz sentido quando há algo a desconectar. Com o número
+  // já fora do ar, o botão convidava a uma ação sem efeito — e a confirmação
+  // ("tem certeza?") fazia parecer que ia acontecer alguma coisa.
+  //
+  // Em `pending_qr` e `error` ele continua ativo de propósito: no primeiro
+  // cancela um pareamento em andamento, no segundo é justamente a saída pra
+  // limpar uma sessão com problema.
+  const podeDesconectar = wa !== "disconnected";
+  const btnSair = $("btn-disconnect");
+  if (btnSair) {
+    btnSair.disabled = !podeDesconectar;
+    btnSair.title = podeDesconectar ? "" : t("portal.qr.nothingToDisconnect");
+  }
+
   const showBoot =
     !state.waBoot.dismissed &&
     (state.waBoot.running || (wa === "connected" && state.waBoot.done));
@@ -2382,6 +2396,9 @@ $("btn-connect").onclick = async () => {
 };
 $("btn-disconnect").onclick = async () => {
   if (!state.accountId) return;
+  // O botão fica desabilitado nesse estado, mas a checagem também vive aqui:
+  // o status pode mudar entre o desenho da tela e o clique.
+  if (state.lastWa === "disconnected") return;
   if (!confirm(t("portal.qr.confirmDisconnect"))) return;
   try {
     await api(`/v1/accounts/${state.accountId}/disconnect`, { method: "POST", body: "{}" });
