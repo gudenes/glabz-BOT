@@ -983,9 +983,17 @@ function quandoCurto(iso) {
     const dia = (x) => x.toLocaleDateString("en-CA");
     const hoje = new Date();
     const ontem = new Date(Date.now() - 86400000);
-    if (dia(d) === dia(hoje)) return horaCurta(iso);
-    if (dia(d) === dia(ontem)) return t("portal.knowledge.yesterday");
-    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    // Dia E hora, sempre. Só a hora — como o WhatsApp faz — deixa a lista
+    // ambígua aqui: quem tem todas as conversas do mesmo dia vê uma coluna de
+    // horários e não sabe se são de hoje ou da semana passada. O rótulo do
+    // dia é justamente o que responde isso.
+    const rotulo =
+      dia(d) === dia(hoje)
+        ? t("portal.knowledge.today")
+        : dia(d) === dia(ontem)
+          ? t("portal.knowledge.yesterday")
+          : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    return `${rotulo} ${horaCurta(iso)}`;
   } catch {
     return "";
   }
