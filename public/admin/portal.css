@@ -880,6 +880,29 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .bub.user { align-self: flex-end; background: var(--gold); color: var(--gold-ink); border-radius: 16px 4px 16px 16px; }
 .bub.bot { align-self: flex-start; background: #fff; color: var(--ink); border: 1px solid var(--line); border-radius: 4px 16px 16px 16px; }
 .bub.sys { align-self: center; background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; }
+/* Resposta de uma PESSOA da equipe. Fica do mesmo lado do bot (as duas saem
+   do negócio) mas com cor própria: agora que a resposta dada pelo celular
+   também é capturada, atendente e bot apareciam idênticos na conversa. */
+.bub.human {
+  align-self: flex-start; background: #f3f0ff; color: var(--ink);
+  border: 1px solid #ded5ff; border-radius: 4px 16px 16px 16px;
+}
+.bub-autor {
+  display: block; font-size: 10.5px; font-weight: 800; letter-spacing: 0.03em;
+  text-transform: uppercase; color: #6b5bb5; margin-bottom: 2px;
+}
+/* A hora fica discreta no rodapé da bolha — a data vem do cabeçalho do dia. */
+.bub-hora {
+  display: block; text-align: right; font-size: 10.5px;
+  color: var(--muted); margin-top: 3px;
+}
+.bub.user .bub-hora { color: rgba(0, 0, 0, 0.45); }
+/* O cabeçalho de dia é o mesmo da aba Conhecimento; dentro do chat, que é uma
+   coluna flex, precisa se centralizar em vez de esticar. */
+.chat-log .kb-day {
+  align-self: center; margin: 14px 0 6px;
+  background: rgba(0, 0, 0, 0.05); border-radius: 999px; padding: 3px 12px;
+}
 .chat-form {
   display: flex; gap: 8px;
   padding: 10px;
