@@ -968,6 +968,15 @@ function ensureStudioWelcome() {
   state.studio.messages.push({ role: "assistant", content: text });
 }
 
+/** Só a hora, no fuso de quem olha — a data vem do cabeçalho do dia. */
+function horaCurta(iso) {
+  try {
+    return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
 function waHtml(text) {
   const esc = escapeHtml(text);
   return esc
@@ -2405,16 +2414,27 @@ async function loadInboxMessages(phone) {
   $("btn-bot-mode").textContent = thread?.mode === "human" ? t("portal.inbox.returnToBot") : t("portal.inbox.answerMyself");
   const data = await api(`/v1/inbox/threads/${encodeURIComponent(phone)}/messages`);
   const log = $("inbox-log");
-  log.innerHTML = "";
-  for (const m of data.messages || []) {
-    const kind = m.direction === "in" ? "user" : "bot";
-    const b = document.createElement("div");
-    b.className = "bub " + kind;
-    b.innerHTML = waHtml(m.body);
-    log.appendChild(b);
-  }
-  if (!data.messages?.length) {
+  const mensagens = data.messages || [];
+  if (!mensagens.length) {
     log.innerHTML = `<div class="chat-empty"><p>${t("portal.inbox.noMessages")}</p></div>`;
+  } else {
+    // Data e hora: sem isso não dava pra saber se a conversa foi agora ou na
+    // semana passada. Reusa o agrupamento por dia da aba Conhecimento — a
+    // pergunta é a mesma ("quando foi isto?") e o formato deve ser o mesmo.
+    log.innerHTML = agruparPorDia(
+      mensagens,
+      (m) => m.sentAt,
+      (m) => {
+        const quem = m.direction === "in" ? "user" : m.source === "human" ? "human" : "bot";
+        // Quem respondeu importa agora que o atendente pelo celular também é
+        // capturado: sem isso, ele e o bot apareciam iguais na conversa.
+        const autor =
+          quem === "human"
+            ? `<span class="bub-autor">${escapeHtml(m.authorName || t("portal.inbox.agent"))}</span>`
+            : "";
+        return `<div class="bub ${quem}">${autor}${waHtml(m.body)}<span class="bub-hora">${horaCurta(m.sentAt)}</span></div>`;
+      }
+    );
   }
   log.scrollTop = log.scrollHeight;
 }
