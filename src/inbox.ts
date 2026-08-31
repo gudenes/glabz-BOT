@@ -79,16 +79,39 @@ export async function recordMessage(input: {
 
 export async function listThreads(accountId: string): Promise<InboxThread[]> {
   if (!hasDatabase()) return [];
+  // O nome da conversa vem da última mensagem DO CLIENTE, não da última
+  // mensagem qualquer. Usar a última de todas fazia a lista virar uma coluna
+  // de "Atendente": assim que alguém respondia, o nome de quem respondeu
+  // substituía o do contato, e cinco atendimentos viravam cinco linhas
+  // iguais, sem dizer com quem eram.
   const rows = await db()`
-    SELECT DISTINCT ON (phone_e164)
-      phone_e164, body, author_name, sent_at, direction, source
-    FROM wa_messages
-    WHERE account_id = ${accountId}
-    ORDER BY phone_e164, sent_at DESC
+    WITH ultima AS (
+      SELECT DISTINCT ON (phone_e164)
+        phone_e164, body, sent_at, direction, source
+      FROM wa_messages
+      WHERE account_id = ${accountId}
+      -- created_at desempata: duas mensagens podem cair no mesmo sent_at (o
+      -- WhatsApp dá precisão de segundo), e aí "a última" ficava indefinida —
+      -- a lista mostrava o preview de uma mensagem antiga.
+      ORDER BY phone_e164, sent_at DESC, created_at DESC
+    ),
+    nome_do_contato AS (
+      SELECT DISTINCT ON (phone_e164) phone_e164, author_name
+      FROM wa_messages
+      WHERE account_id = ${accountId}
+        AND direction = 'in'
+        AND author_name IS NOT NULL
+      ORDER BY phone_e164, sent_at DESC, created_at DESC
+    )
+    SELECT u.phone_e164, u.body, u.sent_at, u.direction, u.source, n.author_name
+    FROM ultima u
+    LEFT JOIN nome_do_contato n USING (phone_e164)
   `;
   return rows
     .map((r) => {
       const phone = String(r.phone_e164);
+      // Sem nome do contato (ele nunca escreveu, ou o WhatsApp não informou),
+      // o telefone formatado identifica melhor que qualquer rótulo.
       const name = (r.author_name as string) || formatPhoneDisplay(phone) || phone;
       const mode = getConversationState(accountId, phone)?.mode || "bot";
       return {

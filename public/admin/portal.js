@@ -2385,7 +2385,7 @@ function renderThreads() {
       (th) => `<button type="button" class="thread ${th.phoneE164 === state.selectedPhone ? "on" : ""}" data-phone="${escapeHtml(th.phoneE164)}">
         <b>${escapeHtml(th.contactName)}</b>
         <small>${escapeHtml(th.lastPreview)}</small>
-        <span class="tag">${th.mode === "human" ? t("portal.inbox.youAnswer") : t("portal.inbox.bot")}</span>
+        <span class="tag ${th.mode === "human" ? "atende" : ""}">${th.mode === "human" ? t("portal.inbox.youAnswer") : t("portal.inbox.bot")}</span>
       </button>`
     )
     .join("");

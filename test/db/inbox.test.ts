@@ -108,3 +108,47 @@ test("o dedup é por conta: números iguais em contas diferentes não se afetam"
   assert.equal((await inbox.listMessages(outra, TEL)).length, 1, "a outra conta gravou a dela");
   await sql()`DELETE FROM wa_messages WHERE account_id = ${outra}`;
 });
+
+test("a conversa é identificada pelo CLIENTE, não por quem respondeu", { skip }, async () => {
+  // O bug: `contactName` vinha da ÚLTIMA mensagem, qualquer que fosse. Assim
+  // que alguém respondia, a lista virava uma coluna de "Atendente" — cinco
+  // atendimentos, cinco linhas iguais, sem dizer com quem eram.
+  await limpar();
+  const cliente = async (tel: string, nome: string | null) => {
+    await inbox.recordMessage({ accountId: CONTA, phone: tel, direction: "in",
+      source: "customer", body: "tem banho e tosa?", authorName: nome });
+    await inbox.recordMessage({ accountId: CONTA, phone: tel, direction: "out",
+      source: "human", body: "Temos sim!", authorName: "Atendente", externalId: `${tel}-h` });
+  };
+  await cliente("5511911111111", "Maria Silva");
+  await cliente("5511922222222", "João Pereira");
+  await cliente("5511933333333", null); // o WhatsApp nem sempre informa o nome
+
+  const conversas = await inbox.listThreads(CONTA);
+  const nomes = conversas.map((c) => c.contactName);
+  assert.ok(nomes.includes("Maria Silva"), `esperava Maria — veio: ${nomes.join(", ")}`);
+  assert.ok(nomes.includes("João Pereira"));
+  assert.ok(!nomes.includes("Atendente"), "nenhuma conversa se chama 'Atendente'");
+  // Sem nome, o telefone identifica melhor que qualquer rótulo.
+  assert.ok(nomes.some((n) => n.includes("93333")), `caiu no telefone: ${nomes.join(", ")}`);
+
+  for (const tel of ["5511911111111", "5511922222222", "5511933333333"]) {
+    await sql()`DELETE FROM wa_messages WHERE account_id = ${CONTA} AND phone_e164 = ${tel}`;
+  }
+});
+
+test("o preview é a última mensagem, mesmo com timestamps iguais", { skip }, async () => {
+  // sent_at vem do WhatsApp com precisão de segundo: duas mensagens seguidas
+  // empatam, e aí "a última" fica indefinida — a lista mostrava o preview de
+  // uma mensagem antiga.
+  await limpar();
+  const mesmo = new Date();
+  await inbox.recordMessage({ accountId: CONTA, phone: TEL, direction: "in",
+    source: "customer", body: "primeira", authorName: "Ana", sentAt: mesmo });
+  await inbox.recordMessage({ accountId: CONTA, phone: TEL, direction: "out",
+    source: "human", body: "última", authorName: "Atendente", externalId: "X1", sentAt: mesmo });
+
+  const [conversa] = await inbox.listThreads(CONTA);
+  assert.equal(conversa.lastPreview, "última");
+  assert.equal(conversa.contactName, "Ana", "e o nome continua sendo o do cliente");
+});

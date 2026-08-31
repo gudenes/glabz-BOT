@@ -1100,7 +1100,17 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); }
 .thread.on { background: #fff8d6; }
 .thread b { display: block; font-size: 14px; }
 .thread small { color: var(--muted); font-size: 12px; display: block; margin-top: 2px; }
-.thread .tag { font-size: 10px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--gold-ink); }
+.thread .tag {
+  display: inline-block; margin-top: 4px;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--muted);
+}
+/* "Você atende" precisa saltar na lista: é a conversa que espera uma pessoa,
+   e ela some no meio das outras quando tem o mesmo peso do selo "Bot". */
+.thread .tag.atende {
+  background: var(--gold); color: var(--gold-ink);
+  border-radius: 999px; padding: 2px 8px;
+}
 .inbox-chat { display: flex; flex-direction: column; min-width: 0; }
 .inbox-head {
   padding: 14px 16px;
