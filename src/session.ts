@@ -640,6 +640,35 @@ async function sendAwayMessage(
   }
 }
 
+/**
+ * Marca a conversa como NÃO LIDA no WhatsApp de quem atende.
+ *
+ * É o sinal que o aplicativo já usa pra "precisa da sua atenção": o contador
+ * verde na lista de conversas. Some sozinho quando a pessoa abre o chat, e
+ * não exige aprender nada novo.
+ *
+ * Só faz sentido porque o bot NUNCA marca nada como lido: uma conversa que
+ * ele resolveu sozinho não fica destacada, então o destaque passa a significar
+ * exatamente "aqui o bot parou e alguém precisa entrar".
+ *
+ * Cosmético por natureza — falhar aqui não pode atrapalhar o atendimento, que
+ * já aconteceu. Por isso engole o erro, como o "digitando…".
+ */
+async function marcarComoNaoLida(sock: any, jid: string, m: any): Promise<void> {
+  try {
+    await sock?.chatModify?.(
+      {
+        markRead: false,
+        // O Baileys precisa saber a partir de qual mensagem marcar.
+        lastMessages: [{ key: m?.key, messageTimestamp: m?.messageTimestamp }],
+      },
+      jid
+    );
+  } catch (e) {
+    console.warn(`[wa] não consegui marcar a conversa como não lida:`, (e as Error).message);
+  }
+}
+
 async function handleInbound(accountId: string, m: any, sock: any): Promise<void> {
   try {
     const fromMe = Boolean(m?.key?.fromMe);
@@ -793,6 +822,11 @@ async function handleInbound(accountId: string, m: any, sock: any): Promise<void
         }
 
         if (flowResult.handoff) {
+          // Destaca no celular de quem atende: vira o contador verde na lista
+          // do WhatsApp. Sem isso, a conversa que o bot passou adiante ficava
+          // visualmente igual às que ele resolveu sozinho.
+          void marcarComoNaoLida(sock, jid, m);
+
           await postWebhook(accountId, {
             type: "handoff",
             phoneE164: phone,

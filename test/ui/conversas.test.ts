@@ -45,6 +45,22 @@ before(async () => {
             lastMessageAt: agora.toISOString(),
             mode: "human",
           },
+          {
+            phoneE164: "5511922222222",
+            phoneDisplay: "+55 (11) 92222-2222",
+            contactName: "João Pereira",
+            lastPreview: "obrigado!",
+            lastMessageAt: ontem.toISOString(),
+            mode: "bot",
+          },
+          {
+            phoneE164: "5511933333333",
+            phoneDisplay: "+55 (11) 93333-3333",
+            contactName: "Cliente com um nome bem comprido que não cabe na coluna",
+            lastPreview: "até mais",
+            lastMessageAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+            mode: "bot",
+          },
         ],
       },
       [`/v1/inbox/threads/${TEL}/messages`]: {
@@ -118,4 +134,38 @@ test("atendente e bot não se confundem na conversa", { skip: skipSemChrome }, a
   const doAtendente = quem.find((b) => b.classe.includes("human"));
   assert.ok(doAtendente, "a do atendente tem aparência própria");
   assert.equal(doAtendente.autor, "Carlos", "e mostra quem respondeu");
+});
+
+test("cada conversa da lista diz quando foi a última mensagem", { skip: skipSemChrome }, async () => {
+  // Sem isto, cinco conversas empilhadas não davam noção nenhuma de quando
+  // cada uma aconteceu.
+  const page = await abrirConversa();
+  const linhas = (await page.evaluate(`(() => [...document.querySelectorAll("#thread-list .thread")].map((el) => {
+    const nome = el.querySelector("b");
+    const quando = el.querySelector("time");
+    const rn = nome.getBoundingClientRect();
+    const rq = quando.getBoundingClientRect();
+    return {
+      quando: quando.textContent,
+      aDireita: rq.left >= rn.right - 1,
+      nomeCortado: nome.scrollWidth > nome.clientWidth,
+      // O horário não pode ser empurrado pra fora por um nome longo.
+      dentroDaLinha: rq.right <= el.getBoundingClientRect().right + 1,
+    };
+  }))()`)) as { quando: string; aDireita: boolean; nomeCortado: boolean; dentroDaLinha: boolean }[];
+  await fecharPagina(page);
+
+  assert.equal(linhas.length, 3);
+  // Hoje mostra a hora; ontem diz "Ontem"; mais atrás vira data — o mesmo que
+  // o WhatsApp faz, porque é o que o dono já lê sem pensar.
+  assert.match(linhas[0].quando, /^\d{2}:\d{2}$/, `hoje mostra a hora: "${linhas[0].quando}"`);
+  assert.equal(linhas[1].quando, "Ontem");
+  assert.match(linhas[2].quando, /^\d{2}\/\d{2}$/, `mais antigo vira data: "${linhas[2].quando}"`);
+
+  for (const [i, l] of linhas.entries()) {
+    assert.ok(l.aDireita, `linha ${i}: o horário fica à direita do nome`);
+    assert.ok(l.dentroDaLinha, `linha ${i}: não vaza da coluna`);
+  }
+  // O nome longo é cortado, e não empurra o horário pra fora.
+  assert.ok(linhas[2].nomeCortado, "nome comprido é cortado com reticências");
 });
