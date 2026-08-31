@@ -968,6 +968,29 @@ function ensureStudioWelcome() {
   state.studio.messages.push({ role: "assistant", content: text });
 }
 
+/**
+ * "Quando foi a última mensagem", curto o bastante pra caber na lista.
+ *
+ * Segue o que o próprio WhatsApp faz, porque é o que o dono já lê sem pensar:
+ * hoje mostra a hora, ontem diz "Ontem", e mais atrás vira data. Numa lista
+ * de cinco conversas, "14:32" e "28/08" respondem de relance o que a data
+ * completa em todas não responderia.
+ */
+function quandoCurto(iso) {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const dia = (x) => x.toLocaleDateString("en-CA");
+    const hoje = new Date();
+    const ontem = new Date(Date.now() - 86400000);
+    if (dia(d) === dia(hoje)) return horaCurta(iso);
+    if (dia(d) === dia(ontem)) return t("portal.knowledge.yesterday");
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
 /** Só a hora, no fuso de quem olha — a data vem do cabeçalho do dia. */
 function horaCurta(iso) {
   try {
@@ -2392,7 +2415,10 @@ function renderThreads() {
   el.innerHTML = list
     .map(
       (th) => `<button type="button" class="thread ${th.phoneE164 === state.selectedPhone ? "on" : ""}" data-phone="${escapeHtml(th.phoneE164)}">
-        <b>${escapeHtml(th.contactName)}</b>
+        <span class="thread-topo">
+          <b>${escapeHtml(th.contactName)}</b>
+          <time datetime="${escapeHtml(th.lastMessageAt)}">${escapeHtml(quandoCurto(th.lastMessageAt))}</time>
+        </span>
         <small>${escapeHtml(th.lastPreview)}</small>
         <span class="tag ${th.mode === "human" ? "atende" : ""}">${th.mode === "human" ? t("portal.inbox.youAnswer") : t("portal.inbox.bot")}</span>
       </button>`
